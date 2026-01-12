@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { Markdown } from "./components/Markdown";
 import { renderer } from "./renderer";
 
 const app = new Hono();
@@ -10,7 +11,11 @@ app.get("/", (c) => {
 });
 
 export function App() {
-  return <p>Hello, world!</p>;
+  return (
+    <Markdown
+      content={"# Markdown Editor\n\nEdit **bold** or *italic* text."}
+    />
+  );
 }
 
 export default app;

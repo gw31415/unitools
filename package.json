@@ -19,6 +19,7 @@
     "@tiptap/core": "^3.15.3",
     "@tiptap/markdown": "^3.15.3",
     "@tiptap/starter-kit": "^3.15.3",
+    "@tiptap/static-renderer": "^3.15.3",
     "hono": "^4.11.3"
   },
   "devDependencies": {
