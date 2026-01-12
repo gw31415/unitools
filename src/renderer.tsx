@@ -7,9 +7,9 @@ export const renderer = jsxRenderer(({ children }) => {
       <head>
         <ViteClient />
         <Link href="/src/style.css" rel="stylesheet" />
+        <Script src="/src/client.tsx" defer />
       </head>
       <body>{children}</body>
-      <Script src="/src/client.tsx" />
     </html>
   );
 });
