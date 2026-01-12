@@ -50,7 +50,7 @@ function MarkdownEditor({
   return <div ref={editorContainerRef} {...props} />;
 }
 
-export function Markdown({
+export default function Markdown({
   content,
   readonly,
   ...props
