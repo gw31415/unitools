@@ -6,12 +6,11 @@ const app = new Hono();
 app.use(renderer);
 
 app.get("/", (c) => {
-  return c.render(
-    <>
-      <h1>Hello, world!</h1>
-      <p>こんにちは、世界！</p>
-    </>,
-  );
+  return c.render(<App />);
 });
+
+export function App() {
+  return <p>Hello, world!</p>;
+}
 
 export default app;
