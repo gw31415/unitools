@@ -32,12 +32,10 @@ function MarkdownEditor(props: { editorOpts?: PartialEditorOptions }) {
   const editorRef = useRef<Editor>(null);
 
   useEffect(() => {
-    (async () => {
-      editorRef.current = useEditor({
-        element: editorContainerRef.current!,
-        ...props.editorOpts,
-      });
-    })();
+    editorRef.current = useEditor({
+      element: { mount: editorContainerRef.current! },
+      ...props.editorOpts,
+    });
 
     return () => {
       if (editorRef.current) {
