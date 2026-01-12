@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import { hydrateRoot } from "hono/jsx/dom/client";
 import { App } from ".";
 
