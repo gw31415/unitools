@@ -47,10 +47,10 @@ function MarkdownEditor(props: { editorOpts?: PartialEditorOptions }) {
   return <div ref={editorContainerRef} />;
 }
 
-export function Markdown(props: { content: string }) {
+export function Markdown(props: { content: string; readonly?: boolean }) {
   return (
     <>
-      {import.meta.env.SSR ? (
+      {import.meta.env.SSR || props.readonly ? (
         <MarkdownView content={props.content} />
       ) : (
         <MarkdownEditor editorOpts={{ content: props.content }} />
