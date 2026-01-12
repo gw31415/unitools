@@ -9,7 +9,7 @@ export const renderer = jsxRenderer(({ children }) => {
         <Link href="/src/style.css" rel="stylesheet" />
       </head>
       <body>{children}</body>
-      <Script src="./src/client.tsx" />
+      <Script src="/src/client.tsx" />
     </html>
   );
 });
