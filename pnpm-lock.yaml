@@ -23,6 +23,9 @@ importers:
       hono:
         specifier: ^4.11.3
         version: 4.11.3
+      zenn-content-css:
+        specifier: ^0.3.0
+        version: 0.3.0
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.3.11
@@ -1313,6 +1316,9 @@ packages:
   youch@4.1.0-beta.10:
     resolution: {integrity: sha512-rLfVLB4FgQneDr0dv1oddCVZmKjcJ6yX6mS4pU82Mq/Dt9a3cLZQ62pDBL4AUO+uVrCvtWz3ZFUL2HFAFJ/BXQ==}
 
+  zenn-content-css@0.3.0:
+    resolution: {integrity: sha512-BRaPTR9PBOVZSau6kVUsMUtGYQ6h8ES3xI0ETG+1MIzuHMMOnbm6P9irqB6KZyPInQUiXqXjAOb2PaSXUfUzZw==}
+
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
@@ -2422,5 +2428,7 @@ snapshots:
       '@speed-highlight/core': 1.2.14
       cookie: 1.1.1
       youch-core: 0.3.3
+
+  zenn-content-css@0.3.0: {}
 
   zod@3.25.76: {}
