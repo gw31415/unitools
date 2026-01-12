@@ -3,7 +3,7 @@ import { Editor } from "@tiptap/core";
 import { Markdown as MarkdownExt } from "@tiptap/markdown";
 import StarterKit from "@tiptap/starter-kit";
 import { renderToHTMLString } from "@tiptap/static-renderer";
-import { useEffect, useRef } from "hono/jsx";
+import { type JSX, useEffect, useRef } from "hono/jsx";
 
 const extensions = [StarterKit];
 
@@ -17,24 +17,27 @@ function useEditor(options: PartialEditorOptions = {}) {
   });
 }
 
-function MarkdownView(props: { content: string }) {
-  const editor = useEditor({
-    element: null,
-    content: props.content,
-  });
-  const content: JSONContent = editor.getJSON();
-  const html = renderToHTMLString({ content, extensions });
-  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+function MarkdownView({
+  content,
+  ...props
+}: { content: string } & JSX.HTMLAttributes) {
+  const editor = useEditor({ element: null, content });
+  const json: JSONContent = editor.getJSON();
+  const html = renderToHTMLString({ content: json, extensions });
+  return <div dangerouslySetInnerHTML={{ __html: html }} {...props} />;
 }
 
-function MarkdownEditor(props: { editorOpts?: PartialEditorOptions }) {
+function MarkdownEditor({
+  editorOpts,
+  ...props
+}: { editorOpts?: PartialEditorOptions } & JSX.HTMLAttributes) {
   const editorContainerRef = useRef<HTMLElement>(null);
   const editorRef = useRef<Editor>(null);
 
   useEffect(() => {
     editorRef.current = useEditor({
       element: { mount: editorContainerRef.current! },
-      ...props.editorOpts,
+      ...editorOpts,
     });
 
     return () => {
@@ -44,16 +47,23 @@ function MarkdownEditor(props: { editorOpts?: PartialEditorOptions }) {
       editorRef.current = null;
     };
   }, []);
-  return <div ref={editorContainerRef} />;
+  return <div ref={editorContainerRef} {...props} />;
 }
 
-export function Markdown(props: { content: string; readonly?: boolean }) {
+export function Markdown({
+  content,
+  readonly,
+  ...props
+}: {
+  content: string;
+  readonly?: boolean;
+} & JSX.HTMLAttributes) {
   return (
     <>
-      {import.meta.env.SSR || props.readonly ? (
-        <MarkdownView content={props.content} />
+      {import.meta.env.SSR || readonly ? (
+        <MarkdownView content={content} {...props} />
       ) : (
-        <MarkdownEditor editorOpts={{ content: props.content }} />
+        <MarkdownEditor editorOpts={{ content }} {...props} />
       )}
     </>
   );
