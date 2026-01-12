@@ -7,9 +7,7 @@ const app = new Hono();
 
 app.use(renderer);
 
-app.get("/", (c) => {
-  return c.render(<App />);
-});
+app.get("/", (c) => c.render(<App />));
 
 export function App() {
   return (
