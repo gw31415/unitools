@@ -21,6 +21,7 @@
     "@tiptap/markdown": "^3.15.3",
     "@tiptap/starter-kit": "^3.15.3",
     "@tiptap/static-renderer": "^3.15.3",
+    "basecoat-css": "^0.3.10",
     "hono": "^4.11.3",
     "tailwindcss": "^4.1.18",
     "zenn-content-css": "^0.3.0"
@@ -29,6 +30,7 @@
     "@biomejs/biome": "^2.3.11",
     "@cloudflare/vite-plugin": "^1.20.0",
     "@hono/cli": "^0.1.6",
+    "basecoat-cli": "^0.3.10",
     "vite": "^6.4.1",
     "vite-ssr-components": "^0.5.2",
     "wrangler": "^4.57.0"
