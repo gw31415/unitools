@@ -1,8 +1,11 @@
-import { hydrateRoot } from "react-dom/client";
-import { App } from ".";
-
 const root = document.querySelector("body");
 
 if (root) {
-  hydrateRoot(root, <App />);
+  (async () => {
+    const [{ App }, { hydrateRoot }] = await Promise.all([
+      import("."),
+      import("react-dom/client"),
+    ]);
+    hydrateRoot(root, <App />);
+  })();
 }
