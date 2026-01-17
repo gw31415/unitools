@@ -1,5 +1,6 @@
 import { reactRenderer } from "@hono/react-renderer";
 import { Link, Script, ViteClient } from "vite-ssr-components/react";
+import Markdown from "@/components/Markdown";
 
 export const renderer = reactRenderer(({ children }) => {
   return (
@@ -15,3 +16,12 @@ export const renderer = reactRenderer(({ children }) => {
     </html>
   );
 });
+
+export function App() {
+  return (
+    <Markdown
+      content={"# Markdown Editor\n\nEdit **bold** or *italic* text."}
+      className="znc min-h-full"
+    />
+  );
+}
