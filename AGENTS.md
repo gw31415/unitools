@@ -13,7 +13,6 @@
   - R2
 - drizzle-orm
 - tailwindcss
-- basecoat UI components
 
 ## Getting started
 
@@ -23,10 +22,6 @@ pnpm run dev
 ```
 
 ## Common commands
-
-```txt
-pnpm basecoat-cli  # You can install basecoat components
-```
 
 ```txt
 pnpm run dev       # local dev server
