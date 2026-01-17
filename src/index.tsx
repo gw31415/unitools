@@ -13,7 +13,7 @@ export function App() {
   return (
     <Markdown
       content={"# Markdown Editor\n\nEdit **bold** or *italic* text."}
-      class="znc"
+      className="znc"
     />
   );
 }

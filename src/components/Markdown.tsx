@@ -3,13 +3,14 @@ import { Editor } from "@tiptap/core";
 import { Markdown as MarkdownExt } from "@tiptap/markdown";
 import StarterKit from "@tiptap/starter-kit";
 import { renderToHTMLString } from "@tiptap/static-renderer";
-import { type JSX, useEffect, useRef } from "hono/jsx";
+import type { HTMLAttributes } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const extensions = [StarterKit];
 
 type PartialEditorOptions = Partial<ConstructorParameters<typeof Editor>[0]>;
 
-function useEditor(options: PartialEditorOptions = {}) {
+function createEditor(options: PartialEditorOptions = {}) {
   return new Editor({
     extensions: [...extensions, MarkdownExt],
     contentType: "markdown",
@@ -20,22 +21,23 @@ function useEditor(options: PartialEditorOptions = {}) {
 function MarkdownView({
   content,
   ...props
-}: { content: string } & JSX.HTMLAttributes) {
-  const editor = useEditor({ element: null, content });
+}: { content: string } & HTMLAttributes<HTMLDivElement>) {
+  const editor = createEditor({ element: null, content });
   const json: JSONContent = editor.getJSON();
   const html = renderToHTMLString({ content: json, extensions });
+  // biome-ignore lint/security/noDangerouslySetInnerHtml: HTML is rendered from TipTap content.
   return <div dangerouslySetInnerHTML={{ __html: html }} {...props} />;
 }
 
 function MarkdownEditor({
   editorOpts,
   ...props
-}: { editorOpts?: PartialEditorOptions } & JSX.HTMLAttributes) {
-  const editorContainerRef = useRef<HTMLElement>(null);
+}: { editorOpts?: PartialEditorOptions } & HTMLAttributes<HTMLDivElement>) {
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Editor>(null);
 
   useEffect(() => {
-    editorRef.current = useEditor({
+    editorRef.current = createEditor({
       element: { mount: editorContainerRef.current! },
       ...editorOpts,
     });
@@ -46,7 +48,7 @@ function MarkdownEditor({
       }
       editorRef.current = null;
     };
-  }, []);
+  }, [editorOpts]);
   return <div ref={editorContainerRef} {...props} />;
 }
 
@@ -57,10 +59,17 @@ export default function Markdown({
 }: {
   content: string;
   readonly?: boolean;
-} & JSX.HTMLAttributes) {
+} & HTMLAttributes<HTMLDivElement>) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const shouldRenderEditor = mounted && !readonly;
   return (
     <>
-      {import.meta.env.SSR || readonly ? (
+      {import.meta.env.SSR || !shouldRenderEditor ? (
         <MarkdownView content={content} {...props} />
       ) : (
         <MarkdownEditor editorOpts={{ content }} {...props} />

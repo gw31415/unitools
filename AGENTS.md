@@ -8,6 +8,7 @@
 ## Available tools
 
 - Hono framework
+- React
 - Cloudflare services
   - D1
   - R2

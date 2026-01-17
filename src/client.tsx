@@ -1,5 +1,4 @@
-/// <reference lib="dom" />
-import { hydrateRoot } from "hono/jsx/dom/client";
+import { hydrateRoot } from "react-dom/client";
 import { App } from ".";
 
 const root = document.querySelector("body");
