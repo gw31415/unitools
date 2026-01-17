@@ -21,7 +21,7 @@ export function App() {
   return (
     <Markdown
       content={"# Markdown Editor\n\nEdit **bold** or *italic* text."}
-      className="znc min-h-full"
+      className="min-h-full"
     />
   );
 }
