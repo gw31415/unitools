@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import Markdown from "./components/Markdown";
 import { renderer } from "./renderer";
-import "zenn-content-css";
 
 const app = new Hono();
 
