@@ -28,6 +28,7 @@ pnpm run dev       # local dev server
 pnpm run build     # production build
 pnpm run preview   # build then preview
 npm run cf-typegen # generate CloudflareBindings types
+pnpm tsc --noEmit  # typecheck only
 
 pnpm run deploy    # DO NOT RUN: build then deploy via wrangler
 ```
