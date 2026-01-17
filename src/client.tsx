@@ -6,6 +6,6 @@ if (root) {
       import("@/app"),
       import("react-dom/client"),
     ]);
-    hydrateRoot(root, <App />);
+    hydrateRoot(root, <App path={window.location.pathname} />);
   })();
 }
