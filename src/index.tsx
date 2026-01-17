@@ -5,6 +5,6 @@ const app = new Hono();
 
 app.use(renderer);
 
-app.get("/", (c) => c.render(<App />));
+app.get("*", (c) => c.render(<App path={c.req.path} />));
 
 export default app;

@@ -17,10 +17,10 @@ export const renderer = reactRenderer(({ children }) => {
   );
 });
 
-export function App() {
+export function App({ path }: { path: string }) {
   return (
     <Markdown
-      content={"# Markdown Editor\n\nEdit **bold** or *italic* text."}
+      content={`# Markdown Editor\n\nEdit **bold** or *italic* text.\n\nYou access this page at path: \`${path}\`.`}
       className="min-h-full"
     />
   );
