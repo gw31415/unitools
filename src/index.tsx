@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import Markdown from "./components/Markdown";
-import { renderer } from "./renderer";
+import Markdown from "@/components/Markdown";
+import { renderer } from "@/renderer";
 
 const app = new Hono();
 
