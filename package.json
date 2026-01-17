@@ -25,8 +25,7 @@
     "hono": "^4.11.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tailwindcss": "^4.1.18",
-    "zenn-content-css": "^0.3.0"
+    "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
