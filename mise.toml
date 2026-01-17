@@ -1,0 +1,5 @@
+[tools]
+pnpm = "10.28.0"
+
+[env]
+'_'.file.path = "./.env"
