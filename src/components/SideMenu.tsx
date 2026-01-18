@@ -12,26 +12,29 @@ import {
 import { cn } from "@/lib/utils";
 
 export function SideMenu(props: { children?: ReactNode; className?: string }) {
-  const { isMobile, openMobile, setOpenMobile } = useSidebar();
-
-  const menuLayout = <SidebarContent {...props} />;
-
-  if (isMobile) {
-    return (
-      <Drawer direction="bottom" open={openMobile} onOpenChange={setOpenMobile}>
-        <DrawerContent className={props.className}>{menuLayout}</DrawerContent>
-      </Drawer>
-    );
-  }
+  const { openMobile, setOpenMobile } = useSidebar();
+  const menuLayout = (
+    <SidebarContent className={props.className}>
+      {props.children}
+    </SidebarContent>
+  );
 
   return (
-    <Sidebar
-      side="left"
-      collapsible="none"
-      className={cn("h-full", props.className)}
-    >
-      {menuLayout}
-    </Sidebar>
+    <>
+      <Drawer direction="bottom" open={openMobile} onOpenChange={setOpenMobile}>
+        <DrawerContent className="md:hidden">{menuLayout}</DrawerContent>
+      </Drawer>
+      <Sidebar
+        side="left"
+        collapsible="none"
+        className={cn(
+          "hidden md:flex md:min-h-svh md:h-full md:w-(--sidebar-width) md:border-r",
+          props.className,
+        )}
+      >
+        {menuLayout}
+      </Sidebar>
+    </>
   );
 }
 
@@ -49,7 +52,7 @@ export function SideMenuProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="flex-col md:flex-row">
       {sideMenus}
       {content.length > 0 ? <SidebarInset>{content}</SidebarInset> : null}
     </SidebarProvider>
