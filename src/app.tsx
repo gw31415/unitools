@@ -61,7 +61,6 @@ export function App({ path }: { path: string }) {
       </div>
       <SideMenu className="md:min-h-svh md:border-r gap-0 overflow-hidden">
         <SidebarHeader className="shrink-0">
-          <div className="text-foreground text-sm font-semibold">Unitools</div>
           <div className="relative">
             <Search className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
             <SidebarInput placeholder="Search articles..." className="pl-9" />
@@ -103,9 +102,7 @@ export function App({ path }: { path: string }) {
                 <SidebarMenuButton asChild>
                   <a href="#article-4">
                     <Clock />
-                    <span>
-                      Jan 06 — Infinite scroll without losing context
-                    </span>
+                    <span>Jan 06 — Infinite scroll without losing context</span>
                   </a>
                 </SidebarMenuButton>
                 <SidebarMenuBadge>4m</SidebarMenuBadge>
