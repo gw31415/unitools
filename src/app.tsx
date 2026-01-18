@@ -47,7 +47,7 @@ function Header() {
           <PanelLeft />
         </Button>
       </SideMenuTrigger>
-      <Logo className="fill-white py-1 h-full" />
+      <Logo className="fill-foreground py-1 h-full" />
     </header>
   );
 }
