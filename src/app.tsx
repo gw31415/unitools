@@ -56,7 +56,7 @@ export function App({ path }: { path: string }) {
         </SideMenuTrigger>
         <Markdown
           content={`# Markdown Editor\n\nEdit **bold** or *italic* text.\n\nYou access this page at path: \`${path}\`.`}
-          className="p-2 size-full pb-15 md:pb-2"
+          className="px-4 py-2 size-full pb-15 md:pb-2"
         />
       </div>
       <SideMenu className="gap-0 overflow-hidden">
