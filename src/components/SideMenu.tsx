@@ -1,6 +1,6 @@
 import { Slot } from "@radix-ui/react-slot";
 import type { ComponentProps, ReactNode } from "react";
-import { Children, isValidElement } from "react";
+import { Children, isValidElement, useEffect } from "react";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import {
   Sidebar,
@@ -18,6 +18,16 @@ export function SideMenu(props: { children?: ReactNode; className?: string }) {
       {props.children}
     </SidebarContent>
   );
+
+  useEffect(() => {
+    const closeMenuOnResize = () => {
+      setOpenMobile(false);
+    };
+    window.addEventListener("resize", closeMenuOnResize);
+    return () => {
+      window.removeEventListener("resize", closeMenuOnResize);
+    };
+  }, [setOpenMobile]);
 
   return (
     <>
