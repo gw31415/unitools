@@ -1,0 +1,1301 @@
+/* GitHub Markdown CSS */
+
+/*
+MIT License
+
+Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+.tiptap {
+  --base-size-4: 0.25rem;
+  --base-size-8: 0.5rem;
+  --base-size-16: 1rem;
+  --base-size-24: 1.5rem;
+  --base-size-40: 2.5rem;
+  --base-text-weight-normal: 400;
+  --base-text-weight-medium: 500;
+  --base-text-weight-semibold: 600;
+  --fontStack-monospace:
+    ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono,
+    monospace;
+  --fgColor-accent: Highlight;
+}
+
+@media (prefers-color-scheme: dark) {
+  .tiptap,
+  [data-theme="dark"] {
+    /* dark */
+    color-scheme: dark;
+    --focus-outlineColor: #1f6feb;
+    --fgColor-default: #f0f6fc;
+    --fgColor-muted: #9198a1;
+    --fgColor-accent: #4493f8;
+    --fgColor-success: #3fb950;
+    --fgColor-attention: #d29922;
+    --fgColor-danger: #f85149;
+    --fgColor-done: #ab7df8;
+    --bgColor-default: #0d1117;
+    --bgColor-muted: #151b23;
+    --bgColor-neutral-muted: #656c7633;
+    --bgColor-attention-muted: #bb800926;
+    --borderColor-default: #3d444d;
+    --borderColor-muted: #3d444db3;
+    --borderColor-neutral-muted: #3d444db3;
+    --borderColor-accent-emphasis: #1f6feb;
+    --borderColor-success-emphasis: #238636;
+    --borderColor-attention-emphasis: #9e6a03;
+    --borderColor-danger-emphasis: #da3633;
+    --borderColor-done-emphasis: #8957e5;
+    --color-prettylights-syntax-comment: #9198a1;
+    --color-prettylights-syntax-constant: #79c0ff;
+    --color-prettylights-syntax-constant-other-reference-link: #a5d6ff;
+    --color-prettylights-syntax-entity: #d2a8ff;
+    --color-prettylights-syntax-storage-modifier-import: #f0f6fc;
+    --color-prettylights-syntax-entity-tag: #7ee787;
+    --color-prettylights-syntax-keyword: #ff7b72;
+    --color-prettylights-syntax-string: #a5d6ff;
+    --color-prettylights-syntax-variable: #ffa657;
+    --color-prettylights-syntax-brackethighlighter-unmatched: #f85149;
+    --color-prettylights-syntax-brackethighlighter-angle: #9198a1;
+    --color-prettylights-syntax-invalid-illegal-text: #f0f6fc;
+    --color-prettylights-syntax-invalid-illegal-bg: #8e1519;
+    --color-prettylights-syntax-carriage-return-text: #f0f6fc;
+    --color-prettylights-syntax-carriage-return-bg: #b62324;
+    --color-prettylights-syntax-string-regexp: #7ee787;
+    --color-prettylights-syntax-markup-list: #f2cc60;
+    --color-prettylights-syntax-markup-heading: #1f6feb;
+    --color-prettylights-syntax-markup-italic: #f0f6fc;
+    --color-prettylights-syntax-markup-bold: #f0f6fc;
+    --color-prettylights-syntax-markup-deleted-text: #ffdcd7;
+    --color-prettylights-syntax-markup-deleted-bg: #67060c;
+    --color-prettylights-syntax-markup-inserted-text: #aff5b4;
+    --color-prettylights-syntax-markup-inserted-bg: #033a16;
+    --color-prettylights-syntax-markup-changed-text: #ffdfb6;
+    --color-prettylights-syntax-markup-changed-bg: #5a1e02;
+    --color-prettylights-syntax-markup-ignored-text: #f0f6fc;
+    --color-prettylights-syntax-markup-ignored-bg: #1158c7;
+    --color-prettylights-syntax-meta-diff-range: #d2a8ff;
+    --color-prettylights-syntax-sublimelinter-gutter-mark: #3d444d;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  .tiptap,
+  [data-theme="light"] {
+    /* light */
+    color-scheme: light;
+    --focus-outlineColor: #0969da;
+    --fgColor-default: #1f2328;
+    --fgColor-muted: #59636e;
+    --fgColor-accent: #0969da;
+    --fgColor-success: #1a7f37;
+    --fgColor-attention: #9a6700;
+    --fgColor-danger: #d1242f;
+    --fgColor-done: #8250df;
+    --bgColor-default: #ffffff;
+    --bgColor-muted: #f6f8fa;
+    --bgColor-neutral-muted: #818b981f;
+    --bgColor-attention-muted: #fff8c5;
+    --borderColor-default: #d1d9e0;
+    --borderColor-muted: #d1d9e0b3;
+    --borderColor-neutral-muted: #d1d9e0b3;
+    --borderColor-accent-emphasis: #0969da;
+    --borderColor-success-emphasis: #1a7f37;
+    --borderColor-attention-emphasis: #9a6700;
+    --borderColor-danger-emphasis: #cf222e;
+    --borderColor-done-emphasis: #8250df;
+    --color-prettylights-syntax-comment: #59636e;
+    --color-prettylights-syntax-constant: #0550ae;
+    --color-prettylights-syntax-constant-other-reference-link: #0a3069;
+    --color-prettylights-syntax-entity: #6639ba;
+    --color-prettylights-syntax-storage-modifier-import: #1f2328;
+    --color-prettylights-syntax-entity-tag: #0550ae;
+    --color-prettylights-syntax-keyword: #cf222e;
+    --color-prettylights-syntax-string: #0a3069;
+    --color-prettylights-syntax-variable: #953800;
+    --color-prettylights-syntax-brackethighlighter-unmatched: #82071e;
+    --color-prettylights-syntax-brackethighlighter-angle: #59636e;
+    --color-prettylights-syntax-invalid-illegal-text: #f6f8fa;
+    --color-prettylights-syntax-invalid-illegal-bg: #82071e;
+    --color-prettylights-syntax-carriage-return-text: #f6f8fa;
+    --color-prettylights-syntax-carriage-return-bg: #cf222e;
+    --color-prettylights-syntax-string-regexp: #116329;
+    --color-prettylights-syntax-markup-list: #3b2300;
+    --color-prettylights-syntax-markup-heading: #0550ae;
+    --color-prettylights-syntax-markup-italic: #1f2328;
+    --color-prettylights-syntax-markup-bold: #1f2328;
+    --color-prettylights-syntax-markup-deleted-text: #82071e;
+    --color-prettylights-syntax-markup-deleted-bg: #ffebe9;
+    --color-prettylights-syntax-markup-inserted-text: #116329;
+    --color-prettylights-syntax-markup-inserted-bg: #dafbe1;
+    --color-prettylights-syntax-markup-changed-text: #953800;
+    --color-prettylights-syntax-markup-changed-bg: #ffd8b5;
+    --color-prettylights-syntax-markup-ignored-text: #d1d9e0;
+    --color-prettylights-syntax-markup-ignored-bg: #0550ae;
+    --color-prettylights-syntax-meta-diff-range: #8250df;
+    --color-prettylights-syntax-sublimelinter-gutter-mark: #818b98;
+  }
+}
+
+.tiptap {
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+  margin: 0;
+  color: var(--fgColor-default);
+  background-color: var(--bgColor-default);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica,
+    Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  font-size: 16px;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+.tiptap .octicon {
+  display: inline-block;
+  fill: currentColor;
+  vertical-align: text-bottom;
+}
+
+.tiptap h1:hover .anchor .octicon-link:before,
+.tiptap h2:hover .anchor .octicon-link:before,
+.tiptap h3:hover .anchor .octicon-link:before,
+.tiptap h4:hover .anchor .octicon-link:before,
+.tiptap h5:hover .anchor .octicon-link:before,
+.tiptap h6:hover .anchor .octicon-link:before {
+  width: 16px;
+  height: 16px;
+  content: " ";
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path fill-rule='evenodd' d='M7.775 3.275a.75.75 0 001.06 1.06l1.25-1.25a2 2 0 112.83 2.83l-2.5 2.5a2 2 0 01-2.83 0 .75.75 0 00-1.06 1.06 3.5 3.5 0 004.95 0l2.5-2.5a3.5 3.5 0 00-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 010-2.83l2.5-2.5a2 2 0 012.83 0 .75.75 0 001.06-1.06 3.5 3.5 0 00-4.95 0l-2.5 2.5a3.5 3.5 0 004.95 4.95l1.25-1.25a.75.75 0 00-1.06-1.06l-1.25 1.25a2 2 0 01-2.83 0z'></path></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path fill-rule='evenodd' d='M7.775 3.275a.75.75 0 001.06 1.06l1.25-1.25a2 2 0 112.83 2.83l-2.5 2.5a2 2 0 01-2.83 0 .75.75 0 00-1.06 1.06 3.5 3.5 0 004.95 0l2.5-2.5a3.5 3.5 0 00-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 010-2.83l2.5-2.5a2 2 0 012.83 0 .75.75 0 001.06-1.06 3.5 3.5 0 00-4.95 0l-2.5 2.5a3.5 3.5 0 004.95 4.95l1.25-1.25a.75.75 0 00-1.06-1.06l-1.25 1.25a2 2 0 01-2.83 0z'></path></svg>");
+}
+
+.tiptap details,
+.tiptap figcaption,
+.tiptap figure {
+  display: block;
+}
+
+.tiptap summary {
+  display: list-item;
+}
+
+.tiptap [hidden] {
+  display: none;
+}
+
+.tiptap a {
+  background-color: transparent;
+  color: var(--fgColor-accent);
+  text-decoration: none;
+}
+
+.tiptap abbr[title] {
+  border-bottom: none;
+  -webkit-text-decoration: underline dotted;
+  text-decoration: underline dotted;
+}
+
+.tiptap b,
+.tiptap strong {
+  font-weight: var(--base-text-weight-semibold, 600);
+}
+
+.tiptap dfn {
+  font-style: italic;
+}
+
+.tiptap h1 {
+  margin: 0.67em 0;
+  font-weight: var(--base-text-weight-semibold, 600);
+  padding-bottom: 0.3em;
+  font-size: 2em;
+  border-bottom: 1px solid var(--borderColor-muted);
+}
+
+.tiptap mark {
+  background-color: var(--bgColor-attention-muted);
+  color: var(--fgColor-default);
+}
+
+.tiptap small {
+  font-size: 90%;
+}
+
+.tiptap sub,
+.tiptap sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+.tiptap sub {
+  bottom: -0.25em;
+}
+
+.tiptap sup {
+  top: -0.5em;
+}
+
+.tiptap img {
+  border-style: none;
+  max-width: 100%;
+  box-sizing: content-box;
+}
+
+.tiptap code,
+.tiptap kbd,
+.tiptap pre,
+.tiptap samp {
+  font-family: monospace;
+  font-size: 1em;
+}
+
+.tiptap figure {
+  margin: 1em var(--base-size-40);
+}
+
+.tiptap hr {
+  box-sizing: content-box;
+  overflow: hidden;
+  background: transparent;
+  border-bottom: 1px solid var(--borderColor-muted);
+  height: 0.25em;
+  padding: 0;
+  margin: var(--base-size-24) 0;
+  background-color: var(--borderColor-default);
+  border: 0;
+}
+
+.tiptap input {
+  font: inherit;
+  margin: 0;
+  overflow: visible;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.tiptap [type="button"],
+.tiptap [type="reset"],
+.tiptap [type="submit"] {
+  -webkit-appearance: button;
+  appearance: button;
+}
+
+.tiptap [type="checkbox"],
+.tiptap [type="radio"] {
+  box-sizing: border-box;
+  padding: 0;
+}
+
+.tiptap [type="number"]::-webkit-inner-spin-button,
+.tiptap [type="number"]::-webkit-outer-spin-button {
+  height: auto;
+}
+
+.tiptap [type="search"]::-webkit-search-cancel-button,
+.tiptap [type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.tiptap ::-webkit-input-placeholder {
+  color: inherit;
+  opacity: 0.54;
+}
+
+.tiptap ::-webkit-file-upload-button {
+  -webkit-appearance: button;
+  appearance: button;
+  font: inherit;
+}
+
+.tiptap a:hover {
+  text-decoration: underline;
+}
+
+.tiptap ::placeholder {
+  color: var(--fgColor-muted);
+  opacity: 1;
+}
+
+.tiptap hr::before {
+  display: table;
+  content: "";
+}
+
+.tiptap hr::after {
+  display: table;
+  clear: both;
+  content: "";
+}
+
+.tiptap table {
+  border-spacing: 0;
+  border-collapse: collapse;
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow: auto;
+  font-variant: tabular-nums;
+}
+
+.tiptap td,
+.tiptap th {
+  padding: 0;
+}
+
+.tiptap details summary {
+  cursor: pointer;
+}
+
+.tiptap a:focus,
+.tiptap [role="button"]:focus,
+.tiptap input[type="radio"]:focus,
+.tiptap input[type="checkbox"]:focus {
+  outline: 2px solid var(--focus-outlineColor);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.tiptap a:focus:not(:focus-visible),
+.tiptap [role="button"]:focus:not(:focus-visible),
+.tiptap input[type="radio"]:focus:not(:focus-visible),
+.tiptap input[type="checkbox"]:focus:not(:focus-visible) {
+  outline: solid 1px transparent;
+}
+
+.tiptap a:focus-visible,
+.tiptap [role="button"]:focus-visible,
+.tiptap input[type="radio"]:focus-visible,
+.tiptap input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--focus-outlineColor);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.tiptap a:not([class]):focus,
+.tiptap a:not([class]):focus-visible,
+.tiptap input[type="radio"]:focus,
+.tiptap input[type="radio"]:focus-visible,
+.tiptap input[type="checkbox"]:focus,
+.tiptap input[type="checkbox"]:focus-visible {
+  outline-offset: 0;
+}
+
+.tiptap kbd {
+  display: inline-block;
+  padding: var(--base-size-4);
+  font: 11px
+    var(
+      --fontStack-monospace,
+      ui-monospace,
+      SFMono-Regular,
+      SF Mono,
+      Menlo,
+      Consolas,
+      Liberation Mono,
+      monospace
+    );
+  line-height: 10px;
+  color: var(--fgColor-default);
+  vertical-align: middle;
+  background-color: var(--bgColor-muted);
+  border: solid 1px var(--borderColor-neutral-muted);
+  border-bottom-color: var(--borderColor-neutral-muted);
+  border-radius: 6px;
+  box-shadow: inset 0 -1px 0 var(--borderColor-neutral-muted);
+}
+
+.tiptap h1,
+.tiptap h2,
+.tiptap h3,
+.tiptap h4,
+.tiptap h5,
+.tiptap h6 {
+  margin-top: var(--base-size-24);
+  margin-bottom: var(--base-size-16);
+  font-weight: var(--base-text-weight-semibold, 600);
+  line-height: 1.25;
+}
+
+.tiptap h2 {
+  font-weight: var(--base-text-weight-semibold, 600);
+  padding-bottom: 0.3em;
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--borderColor-muted);
+}
+
+.tiptap h3 {
+  font-weight: var(--base-text-weight-semibold, 600);
+  font-size: 1.25em;
+}
+
+.tiptap h4 {
+  font-weight: var(--base-text-weight-semibold, 600);
+  font-size: 1em;
+}
+
+.tiptap h5 {
+  font-weight: var(--base-text-weight-semibold, 600);
+  font-size: 0.875em;
+}
+
+.tiptap h6 {
+  font-weight: var(--base-text-weight-semibold, 600);
+  font-size: 0.85em;
+  color: var(--fgColor-muted);
+}
+
+.tiptap p {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.tiptap blockquote {
+  margin: 0;
+  padding: 0 1em;
+  color: var(--fgColor-muted);
+  border-left: 0.25em solid var(--borderColor-default);
+}
+
+.tiptap ul,
+.tiptap ol {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-left: 2em;
+}
+
+.tiptap ol ol,
+.tiptap ul ol {
+  list-style-type: lower-roman;
+}
+
+.tiptap ul ul ol,
+.tiptap ul ol ol,
+.tiptap ol ul ol,
+.tiptap ol ol ol {
+  list-style-type: lower-alpha;
+}
+
+.tiptap dd {
+  margin-left: 0;
+}
+
+.tiptap tt,
+.tiptap code,
+.tiptap samp {
+  font-family: var(
+    --fontStack-monospace,
+    ui-monospace,
+    SFMono-Regular,
+    SF Mono,
+    Menlo,
+    Consolas,
+    Liberation Mono,
+    monospace
+  );
+  font-size: 12px;
+}
+
+.tiptap pre {
+  margin-top: 0;
+  margin-bottom: 0;
+  font-family: var(
+    --fontStack-monospace,
+    ui-monospace,
+    SFMono-Regular,
+    SF Mono,
+    Menlo,
+    Consolas,
+    Liberation Mono,
+    monospace
+  );
+  font-size: 12px;
+  word-wrap: normal;
+}
+
+.tiptap .octicon {
+  display: inline-block;
+  overflow: visible;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.tiptap input::-webkit-outer-spin-button,
+.tiptap input::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.tiptap .mr-2 {
+  margin-right: var(--base-size-8, 8px);
+}
+
+.tiptap::before {
+  display: table;
+  content: "";
+}
+
+.tiptap::after {
+  display: table;
+  clear: both;
+  content: "";
+}
+
+.tiptap > *:first-child {
+  margin-top: 0;
+}
+
+.tiptap > *:last-child {
+  margin-bottom: 0;
+}
+
+.tiptap a:not([href]) {
+  color: inherit;
+  text-decoration: none;
+}
+
+.tiptap .absent {
+  color: var(--fgColor-danger);
+}
+
+.tiptap .anchor {
+  float: left;
+  padding-right: var(--base-size-4);
+  margin-left: -20px;
+  line-height: 1;
+}
+
+.tiptap .anchor:focus {
+  outline: none;
+}
+
+.tiptap p,
+.tiptap blockquote,
+.tiptap ul,
+.tiptap ol,
+.tiptap dl,
+.tiptap table,
+.tiptap pre,
+.tiptap details {
+  margin-top: 0;
+  margin-bottom: var(--base-size-16);
+}
+
+.tiptap blockquote > :first-child {
+  margin-top: 0;
+}
+
+.tiptap blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.tiptap h1 .octicon-link,
+.tiptap h2 .octicon-link,
+.tiptap h3 .octicon-link,
+.tiptap h4 .octicon-link,
+.tiptap h5 .octicon-link,
+.tiptap h6 .octicon-link {
+  color: var(--fgColor-default);
+  vertical-align: middle;
+  visibility: hidden;
+}
+
+.tiptap h1:hover .anchor,
+.tiptap h2:hover .anchor,
+.tiptap h3:hover .anchor,
+.tiptap h4:hover .anchor,
+.tiptap h5:hover .anchor,
+.tiptap h6:hover .anchor {
+  text-decoration: none;
+}
+
+.tiptap h1:hover .anchor .octicon-link,
+.tiptap h2:hover .anchor .octicon-link,
+.tiptap h3:hover .anchor .octicon-link,
+.tiptap h4:hover .anchor .octicon-link,
+.tiptap h5:hover .anchor .octicon-link,
+.tiptap h6:hover .anchor .octicon-link {
+  visibility: visible;
+}
+
+.tiptap h1 tt,
+.tiptap h1 code,
+.tiptap h2 tt,
+.tiptap h2 code,
+.tiptap h3 tt,
+.tiptap h3 code,
+.tiptap h4 tt,
+.tiptap h4 code,
+.tiptap h5 tt,
+.tiptap h5 code,
+.tiptap h6 tt,
+.tiptap h6 code {
+  padding: 0 0.2em;
+  font-size: inherit;
+}
+
+.tiptap summary h1,
+.tiptap summary h2,
+.tiptap summary h3,
+.tiptap summary h4,
+.tiptap summary h5,
+.tiptap summary h6 {
+  display: inline-block;
+}
+
+.tiptap summary h1 .anchor,
+.tiptap summary h2 .anchor,
+.tiptap summary h3 .anchor,
+.tiptap summary h4 .anchor,
+.tiptap summary h5 .anchor,
+.tiptap summary h6 .anchor {
+  margin-left: -40px;
+}
+
+.tiptap summary h1,
+.tiptap summary h2 {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.tiptap ul.no-list,
+.tiptap ol.no-list {
+  padding: 0;
+  list-style-type: none;
+}
+
+.tiptap ol[type="a s"] {
+  list-style-type: lower-alpha;
+}
+
+.tiptap ol[type="A s"] {
+  list-style-type: upper-alpha;
+}
+
+.tiptap ol[type="i s"] {
+  list-style-type: lower-roman;
+}
+
+.tiptap ol[type="I s"] {
+  list-style-type: upper-roman;
+}
+
+.tiptap ol[type="1"] {
+  list-style-type: decimal;
+}
+
+.tiptap div > ol:not([type]) {
+  list-style-type: decimal;
+}
+
+.tiptap ul ul,
+.tiptap ul ol,
+.tiptap ol ol,
+.tiptap ol ul {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.tiptap li > p {
+  margin-top: var(--base-size-16);
+}
+
+.tiptap li + li {
+  margin-top: 0.25em;
+}
+
+.tiptap dl {
+  padding: 0;
+}
+
+.tiptap dl dt {
+  padding: 0;
+  margin-top: var(--base-size-16);
+  font-size: 1em;
+  font-style: italic;
+  font-weight: var(--base-text-weight-semibold, 600);
+}
+
+.tiptap dl dd {
+  padding: 0 var(--base-size-16);
+  margin-bottom: var(--base-size-16);
+}
+
+.tiptap table th {
+  font-weight: var(--base-text-weight-semibold, 600);
+}
+
+.tiptap table th,
+.tiptap table td {
+  padding: 6px 13px;
+  border: 1px solid var(--borderColor-default);
+}
+
+.tiptap table td > :last-child {
+  margin-bottom: 0;
+}
+
+.tiptap table tr {
+  background-color: var(--bgColor-default);
+  border-top: 1px solid var(--borderColor-muted);
+}
+
+.tiptap table tr:nth-child(2n) {
+  background-color: var(--bgColor-muted);
+}
+
+.tiptap table img {
+  background-color: transparent;
+}
+
+.tiptap img[align="right"] {
+  padding-left: 20px;
+}
+
+.tiptap img[align="left"] {
+  padding-right: 20px;
+}
+
+.tiptap .emoji {
+  max-width: none;
+  vertical-align: text-top;
+  background-color: transparent;
+}
+
+.tiptap span.frame {
+  display: block;
+  overflow: hidden;
+}
+
+.tiptap span.frame > span {
+  display: block;
+  float: left;
+  width: auto;
+  padding: 7px;
+  margin: 13px 0 0;
+  overflow: hidden;
+  border: 1px solid var(--borderColor-default);
+}
+
+.tiptap span.frame span img {
+  display: block;
+  float: left;
+}
+
+.tiptap span.frame span span {
+  display: block;
+  padding: 5px 0 0;
+  clear: both;
+  color: var(--fgColor-default);
+}
+
+.tiptap span.align-center {
+  display: block;
+  overflow: hidden;
+  clear: both;
+}
+
+.tiptap span.align-center > span {
+  display: block;
+  margin: 13px auto 0;
+  overflow: hidden;
+  text-align: center;
+}
+
+.tiptap span.align-center span img {
+  margin: 0 auto;
+  text-align: center;
+}
+
+.tiptap span.align-right {
+  display: block;
+  overflow: hidden;
+  clear: both;
+}
+
+.tiptap span.align-right > span {
+  display: block;
+  margin: 13px 0 0;
+  overflow: hidden;
+  text-align: right;
+}
+
+.tiptap span.align-right span img {
+  margin: 0;
+  text-align: right;
+}
+
+.tiptap span.float-left {
+  display: block;
+  float: left;
+  margin-right: 13px;
+  overflow: hidden;
+}
+
+.tiptap span.float-left span {
+  margin: 13px 0 0;
+}
+
+.tiptap span.float-right {
+  display: block;
+  float: right;
+  margin-left: 13px;
+  overflow: hidden;
+}
+
+.tiptap span.float-right > span {
+  display: block;
+  margin: 13px auto 0;
+  overflow: hidden;
+  text-align: right;
+}
+
+.tiptap code,
+.tiptap tt {
+  padding: 0.2em 0.4em;
+  margin: 0;
+  font-size: 85%;
+  white-space: break-spaces;
+  background-color: var(--bgColor-neutral-muted);
+  border-radius: 6px;
+}
+
+.tiptap code br,
+.tiptap tt br {
+  display: none;
+}
+
+.tiptap del code {
+  text-decoration: inherit;
+}
+
+.tiptap samp {
+  font-size: 85%;
+}
+
+.tiptap pre code {
+  font-size: 100%;
+}
+
+.tiptap pre > code {
+  padding: 0;
+  margin: 0;
+  word-break: normal;
+  white-space: pre;
+  background: transparent;
+  border: 0;
+}
+
+.tiptap .highlight {
+  margin-bottom: var(--base-size-16);
+}
+
+.tiptap .highlight pre {
+  margin-bottom: 0;
+  word-break: normal;
+}
+
+.tiptap .highlight pre,
+.tiptap pre {
+  padding: var(--base-size-16);
+  overflow: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  color: var(--fgColor-default);
+  background-color: var(--bgColor-muted);
+  border-radius: 6px;
+}
+
+.tiptap pre code,
+.tiptap pre tt {
+  display: inline;
+  max-width: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  line-height: inherit;
+  word-wrap: normal;
+  background-color: transparent;
+  border: 0;
+}
+
+.tiptap .csv-data td,
+.tiptap .csv-data th {
+  padding: 5px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tiptap .csv-data .blob-num {
+  padding: 10px var(--base-size-8) 9px;
+  text-align: right;
+  background: var(--bgColor-default);
+  border: 0;
+}
+
+.tiptap .csv-data tr {
+  border-top: 0;
+}
+
+.tiptap .csv-data th {
+  font-weight: var(--base-text-weight-semibold, 600);
+  background: var(--bgColor-muted);
+  border-top: 0;
+}
+
+.tiptap [data-footnote-ref]::before {
+  content: "[";
+}
+
+.tiptap [data-footnote-ref]::after {
+  content: "]";
+}
+
+.tiptap .footnotes {
+  font-size: 12px;
+  color: var(--fgColor-muted);
+  border-top: 1px solid var(--borderColor-default);
+}
+
+.tiptap .footnotes ol {
+  padding-left: var(--base-size-16);
+}
+
+.tiptap .footnotes ol ul {
+  display: inline-block;
+  padding-left: var(--base-size-16);
+  margin-top: var(--base-size-16);
+}
+
+.tiptap .footnotes li {
+  position: relative;
+}
+
+.tiptap .footnotes li:target::before {
+  position: absolute;
+  top: calc(var(--base-size-8) * -1);
+  right: calc(var(--base-size-8) * -1);
+  bottom: calc(var(--base-size-8) * -1);
+  left: calc(var(--base-size-24) * -1);
+  pointer-events: none;
+  content: "";
+  border: 2px solid var(--borderColor-accent-emphasis);
+  border-radius: 6px;
+}
+
+.tiptap .footnotes li:target {
+  color: var(--fgColor-default);
+}
+
+.tiptap .footnotes .data-footnote-backref g-emoji {
+  font-family: monospace;
+}
+
+.tiptap body:has(:modal) {
+  padding-right: var(--dialog-scrollgutter);
+}
+
+.tiptap .pl-c {
+  color: var(--color-prettylights-syntax-comment);
+}
+
+.tiptap .pl-c1,
+.tiptap .pl-s .pl-v {
+  color: var(--color-prettylights-syntax-constant);
+}
+
+.tiptap .pl-e,
+.tiptap .pl-en {
+  color: var(--color-prettylights-syntax-entity);
+}
+
+.tiptap .pl-smi,
+.tiptap .pl-s .pl-s1 {
+  color: var(--color-prettylights-syntax-storage-modifier-import);
+}
+
+.tiptap .pl-ent {
+  color: var(--color-prettylights-syntax-entity-tag);
+}
+
+.tiptap .pl-k {
+  color: var(--color-prettylights-syntax-keyword);
+}
+
+.tiptap .pl-s,
+.tiptap .pl-pds,
+.tiptap .pl-s .pl-pse .pl-s1,
+.tiptap .pl-sr,
+.tiptap .pl-sr .pl-cce,
+.tiptap .pl-sr .pl-sre,
+.tiptap .pl-sr .pl-sra {
+  color: var(--color-prettylights-syntax-string);
+}
+
+.tiptap .pl-v,
+.tiptap .pl-smw {
+  color: var(--color-prettylights-syntax-variable);
+}
+
+.tiptap .pl-bu {
+  color: var(--color-prettylights-syntax-brackethighlighter-unmatched);
+}
+
+.tiptap .pl-ii {
+  color: var(--color-prettylights-syntax-invalid-illegal-text);
+  background-color: var(--color-prettylights-syntax-invalid-illegal-bg);
+}
+
+.tiptap .pl-c2 {
+  color: var(--color-prettylights-syntax-carriage-return-text);
+  background-color: var(--color-prettylights-syntax-carriage-return-bg);
+}
+
+.tiptap .pl-sr .pl-cce {
+  font-weight: bold;
+  color: var(--color-prettylights-syntax-string-regexp);
+}
+
+.tiptap .pl-ml {
+  color: var(--color-prettylights-syntax-markup-list);
+}
+
+.tiptap .pl-mh,
+.tiptap .pl-mh .pl-en,
+.tiptap .pl-ms {
+  font-weight: bold;
+  color: var(--color-prettylights-syntax-markup-heading);
+}
+
+.tiptap .pl-mi {
+  font-style: italic;
+  color: var(--color-prettylights-syntax-markup-italic);
+}
+
+.tiptap .pl-mb {
+  font-weight: bold;
+  color: var(--color-prettylights-syntax-markup-bold);
+}
+
+.tiptap .pl-md {
+  color: var(--color-prettylights-syntax-markup-deleted-text);
+  background-color: var(--color-prettylights-syntax-markup-deleted-bg);
+}
+
+.tiptap .pl-mi1 {
+  color: var(--color-prettylights-syntax-markup-inserted-text);
+  background-color: var(--color-prettylights-syntax-markup-inserted-bg);
+}
+
+.tiptap .pl-mc {
+  color: var(--color-prettylights-syntax-markup-changed-text);
+  background-color: var(--color-prettylights-syntax-markup-changed-bg);
+}
+
+.tiptap .pl-mi2 {
+  color: var(--color-prettylights-syntax-markup-ignored-text);
+  background-color: var(--color-prettylights-syntax-markup-ignored-bg);
+}
+
+.tiptap .pl-mdr {
+  font-weight: bold;
+  color: var(--color-prettylights-syntax-meta-diff-range);
+}
+
+.tiptap .pl-ba {
+  color: var(--color-prettylights-syntax-brackethighlighter-angle);
+}
+
+.tiptap .pl-sg {
+  color: var(--color-prettylights-syntax-sublimelinter-gutter-mark);
+}
+
+.tiptap .pl-corl {
+  text-decoration: underline;
+  color: var(--color-prettylights-syntax-constant-other-reference-link);
+}
+
+.tiptap [role="button"]:focus:not(:focus-visible),
+.tiptap [role="tabpanel"][tabindex="0"]:focus:not(:focus-visible),
+.tiptap button:focus:not(:focus-visible),
+.tiptap summary:focus:not(:focus-visible),
+.tiptap a:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+.tiptap [tabindex="0"]:focus:not(:focus-visible),
+.tiptap details-dialog:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.tiptap g-emoji {
+  display: inline-block;
+  min-width: 1ch;
+  font-family:
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  font-size: 1em;
+  font-style: normal;
+  font-weight: var(--base-text-weight-normal, 400);
+  line-height: 1;
+  vertical-align: -0.075em;
+}
+
+.tiptap g-emoji img {
+  width: 1em;
+  height: 1em;
+}
+
+.tiptap .task-list-item {
+  list-style-type: none;
+}
+
+.tiptap .task-list-item label {
+  font-weight: var(--base-text-weight-normal, 400);
+}
+
+.tiptap .task-list-item.enabled label {
+  cursor: pointer;
+}
+
+.tiptap .task-list-item + .task-list-item {
+  margin-top: var(--base-size-4);
+}
+
+.tiptap .task-list-item .handle {
+  display: none;
+}
+
+.tiptap .task-list-item-checkbox {
+  margin: 0 0.2em 0.25em -1.4em;
+  vertical-align: middle;
+}
+
+.tiptap ul:dir(rtl) .task-list-item-checkbox {
+  margin: 0 -1.6em 0.25em 0.2em;
+}
+
+.tiptap ol:dir(rtl) .task-list-item-checkbox {
+  margin: 0 -1.6em 0.25em 0.2em;
+}
+
+.tiptap .contains-task-list:hover .task-list-item-convert-container,
+.tiptap .contains-task-list:focus-within .task-list-item-convert-container {
+  display: block;
+  width: auto;
+  height: 24px;
+  overflow: visible;
+  clip: auto;
+}
+
+.tiptap ::-webkit-calendar-picker-indicator {
+  filter: invert(50%);
+}
+
+.tiptap .markdown-alert {
+  padding: var(--base-size-8) var(--base-size-16);
+  margin-bottom: var(--base-size-16);
+  color: inherit;
+  border-left: 0.25em solid var(--borderColor-default);
+}
+
+.tiptap .markdown-alert > :first-child {
+  margin-top: 0;
+}
+
+.tiptap .markdown-alert > :last-child {
+  margin-bottom: 0;
+}
+
+.tiptap .markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: var(--base-text-weight-medium, 500);
+  align-items: center;
+  line-height: 1;
+}
+
+.tiptap .markdown-alert.markdown-alert-note {
+  border-left-color: var(--borderColor-accent-emphasis);
+}
+
+.tiptap .markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--fgColor-accent);
+}
+
+.tiptap .markdown-alert.markdown-alert-important {
+  border-left-color: var(--borderColor-done-emphasis);
+}
+
+.tiptap .markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--fgColor-done);
+}
+
+.tiptap .markdown-alert.markdown-alert-warning {
+  border-left-color: var(--borderColor-attention-emphasis);
+}
+
+.tiptap .markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--fgColor-attention);
+}
+
+.tiptap .markdown-alert.markdown-alert-tip {
+  border-left-color: var(--borderColor-success-emphasis);
+}
+
+.tiptap .markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--fgColor-success);
+}
+
+.tiptap .markdown-alert.markdown-alert-caution {
+  border-left-color: var(--borderColor-danger-emphasis);
+}
+
+.tiptap .markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--fgColor-danger);
+}
+
+.tiptap > *:first-child > .heading-element:first-child {
+  margin-top: 0;
+}
+
+.tiptap .highlight pre:has(+ .zeroclipboard-container) {
+  min-height: 52px;
+}
+
+.tiptap {
+  ol {
+    list-style: decimal;
+  }
+
+  ul {
+    list-style: disc;
+  }
+
+  p {
+    word-break: auto-phrase;
+    line-break: strict;
+    text-autospace: normal;
+  }
+
+  li > p {
+    margin: 0;
+    padding: 0;
+    line-height: inherit;
+    font: inherit;
+  }
+}
