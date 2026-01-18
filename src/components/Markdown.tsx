@@ -5,6 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { renderToHTMLString } from "@tiptap/static-renderer";
 import type { HTMLAttributes } from "react";
 import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 const extensions = [StarterKit];
 
@@ -20,13 +21,20 @@ function createEditor(options: PartialEditorOptions = {}) {
 
 function MarkdownView({
   content,
+  className,
   ...props
 }: { content: string } & HTMLAttributes<HTMLDivElement>) {
   const editor = createEditor({ element: null, content });
   const json: JSONContent = editor.getJSON();
   const html = renderToHTMLString({ content: json, extensions });
-  // biome-ignore lint/security/noDangerouslySetInnerHtml: HTML is rendered from TipTap content.
-  return <div dangerouslySetInnerHTML={{ __html: html }} {...props} />;
+  return (
+    <div
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: HTML is rendered from TipTap content.
+      dangerouslySetInnerHTML={{ __html: html }}
+      {...props}
+      className={cn("tiptap", className)}
+    />
+  );
 }
 
 function MarkdownEditor({
