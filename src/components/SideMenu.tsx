@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export function SideMenu(props: { children?: ReactNode; className?: string }) {
-  const { openMobile, setOpenMobile } = useSidebar();
+  const { openMobile, setOpenMobile, isMobile } = useSidebar();
   const menuLayout = (
     <SidebarContent className={props.className}>
       {props.children}
@@ -26,7 +26,7 @@ export function SideMenu(props: { children?: ReactNode; className?: string }) {
       </Drawer>
       <Sidebar
         side="left"
-        collapsible="none"
+        collapsible={isMobile ? "none" : "offcanvas"}
         className={cn(
           "hidden md:flex md:min-h-svh md:h-full md:w-(--sidebar-width) md:border-r",
           props.className,
@@ -66,16 +66,14 @@ export function SideMenuTrigger({
 }: ComponentProps<"button"> & {
   asChild?: boolean;
 }) {
-  const { setOpenMobile } = useSidebar();
+  const { toggleSidebar } = useSidebar();
   const Comp = asChild ? Slot : "button";
   return (
     <Comp
       {...props}
       onClick={(e) => {
-        setOpenMobile(true);
-        if (onClick) {
-          onClick(e);
-        }
+        onClick?.(e);
+        toggleSidebar();
       }}
     />
   );

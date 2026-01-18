@@ -44,7 +44,7 @@ export function App({ path }: { path: string }) {
   return (
     <SideMenuProvider>
       <div className="h-svh">
-        <SideMenuTrigger asChild className="md:hidden">
+        <SideMenuTrigger asChild>
           <Button
             type="button"
             variant="outline"
