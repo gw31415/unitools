@@ -65,10 +65,7 @@ function MarkdownEditor({
     <div
       ref={editorContainerRef}
       {...props}
-      className={cn(
-        "tiptap w-full min-w-0 max-w-full overflow-x-auto",
-        className,
-      )}
+      className={cn("tiptap", className)}
     />
   );
 }

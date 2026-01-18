@@ -43,7 +43,7 @@ export const renderer = reactRenderer(({ children }) => {
 export function App({ path }: { path: string }) {
   return (
     <SideMenuProvider>
-      <div className="min-h-full">
+      <div className="h-svh">
         <SideMenuTrigger asChild className="md:hidden">
           <Button
             type="button"
@@ -59,7 +59,7 @@ export function App({ path }: { path: string }) {
           className="p-2 size-full pb-15 md:pb-2"
         />
       </div>
-      <SideMenu className="md:min-h-svh md:border-r gap-0 overflow-hidden">
+      <SideMenu className="gap-0 overflow-hidden">
         <SidebarHeader className="shrink-0">
           <div className="relative">
             <Search className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
