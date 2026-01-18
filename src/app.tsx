@@ -1,5 +1,5 @@
 import { reactRenderer } from "@hono/react-renderer";
-import { Menu } from "lucide-react";
+import { Clock, Menu, Search } from "lucide-react";
 import { Link, Script, ViteClient } from "vite-ssr-components/react";
 import Markdown from "@/components/Markdown";
 import {
@@ -8,6 +8,19 @@ import {
   SideMenuTrigger,
 } from "./components/SideMenu";
 import { Button } from "./components/ui/button";
+import {
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInput,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSkeleton,
+  SidebarSeparator,
+} from "./components/ui/sidebar";
 
 export const renderer = reactRenderer(({ children }) => {
   return (
@@ -46,10 +59,121 @@ export function App({ path }: { path: string }) {
           className="p-2 size-full pb-15 md:pb-2"
         />
       </div>
-      <SideMenu className="md:min-h-svh md:border-r">
-        <a href="/">Overview</a>
-        <a href="/projects">Projects</a>
-        <a href="/settings">Settings</a>
+      <SideMenu className="md:min-h-svh md:border-r gap-0 overflow-hidden">
+        <SidebarHeader className="shrink-0">
+          <div className="relative">
+            <Search className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+            <SidebarInput
+              placeholder="Search articles..."
+              className="pl-9"
+            />
+          </div>
+        </SidebarHeader>
+        <SidebarSeparator />
+        <SidebarGroup className="min-h-0 flex-1">
+          <SidebarGroupLabel>Past articles</SidebarGroupLabel>
+          <SidebarGroupContent className="min-h-0 flex-1 overflow-y-auto pr-1">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="#article-1">
+                    <Clock />
+                    <span>Jan 14 — Shipping an editor that feels fast</span>
+                  </a>
+                </SidebarMenuButton>
+                <SidebarMenuBadge>3m</SidebarMenuBadge>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="#article-2">
+                    <Clock />
+                    <span>Jan 12 — A tiny design system for Hono</span>
+                  </a>
+                </SidebarMenuButton>
+                <SidebarMenuBadge>5m</SidebarMenuBadge>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="#article-3">
+                    <Clock />
+                    <span>Jan 09 — Making markdown feel human</span>
+                  </a>
+                </SidebarMenuButton>
+                <SidebarMenuBadge>7m</SidebarMenuBadge>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="#article-4">
+                    <Clock />
+                    <span>Jan 06 — Infinite scroll without losing context</span>
+                  </a>
+                </SidebarMenuButton>
+                <SidebarMenuBadge>4m</SidebarMenuBadge>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="#article-5">
+                    <Clock />
+                    <span>Jan 03 — Notes on typography for sidebars</span>
+                  </a>
+                </SidebarMenuButton>
+                <SidebarMenuBadge>6m</SidebarMenuBadge>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="#article-6">
+                    <Clock />
+                    <span>Dec 30 — A calmer information hierarchy</span>
+                  </a>
+                </SidebarMenuButton>
+                <SidebarMenuBadge>8m</SidebarMenuBadge>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="#article-7">
+                    <Clock />
+                    <span>Dec 28 — Quick wins for content editors</span>
+                  </a>
+                </SidebarMenuButton>
+                <SidebarMenuBadge>4m</SidebarMenuBadge>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="#article-8">
+                    <Clock />
+                    <span>Dec 24 — Designing the quiet state</span>
+                  </a>
+                </SidebarMenuButton>
+                <SidebarMenuBadge>5m</SidebarMenuBadge>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="#article-9">
+                    <Clock />
+                    <span>Dec 20 — The case for compact menus</span>
+                  </a>
+                </SidebarMenuButton>
+                <SidebarMenuBadge>2m</SidebarMenuBadge>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <a href="#article-10">
+                    <Clock />
+                    <span>Dec 16 — Shipping with a light touch</span>
+                  </a>
+                </SidebarMenuButton>
+                <SidebarMenuBadge>3m</SidebarMenuBadge>
+              </SidebarMenuItem>
+            </SidebarMenu>
+            <div className="px-2 py-3">
+              <SidebarMenuSkeleton showIcon />
+              <SidebarMenuSkeleton showIcon />
+              <div className="text-muted-foreground mt-2 text-xs">
+                Loading more articles...
+              </div>
+            </div>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SideMenu>
     </SideMenuProvider>
   );
