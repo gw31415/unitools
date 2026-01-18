@@ -73,7 +73,7 @@ export function App({ path }: { path: string }) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="#article-1">
+                  <a href="/">
                     <Clock />
                     <span>Jan 14 — Shipping an editor that feels fast</span>
                   </a>
@@ -82,7 +82,7 @@ export function App({ path }: { path: string }) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="#article-2">
+                  <a href="/article-2">
                     <Clock />
                     <span>Jan 12 — A tiny design system for Hono</span>
                   </a>
@@ -91,7 +91,7 @@ export function App({ path }: { path: string }) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="#article-3">
+                  <a href="/article-3">
                     <Clock />
                     <span>Jan 09 — Making markdown feel human</span>
                   </a>
@@ -100,7 +100,7 @@ export function App({ path }: { path: string }) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="#article-4">
+                  <a href="/article-4">
                     <Clock />
                     <span>Jan 06 — Infinite scroll without losing context</span>
                   </a>
@@ -109,7 +109,7 @@ export function App({ path }: { path: string }) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="#article-5">
+                  <a href="/article-5">
                     <Clock />
                     <span>Jan 03 — Notes on typography for sidebars</span>
                   </a>
@@ -118,7 +118,7 @@ export function App({ path }: { path: string }) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="#article-6">
+                  <a href="/article-6">
                     <Clock />
                     <span>Dec 30 — A calmer information hierarchy</span>
                   </a>
@@ -127,7 +127,7 @@ export function App({ path }: { path: string }) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="#article-7">
+                  <a href="/article-7">
                     <Clock />
                     <span>Dec 28 — Quick wins for content editors</span>
                   </a>
@@ -136,7 +136,7 @@ export function App({ path }: { path: string }) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="#article-8">
+                  <a href="/article-8">
                     <Clock />
                     <span>Dec 24 — Designing the quiet state</span>
                   </a>
@@ -145,7 +145,7 @@ export function App({ path }: { path: string }) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="#article-9">
+                  <a href="/article-9">
                     <Clock />
                     <span>Dec 20 — The case for compact menus</span>
                   </a>
@@ -154,7 +154,7 @@ export function App({ path }: { path: string }) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="#article-10">
+                  <a href="/article-10">
                     <Clock />
                     <span>Dec 16 — Shipping with a light touch</span>
                   </a>
