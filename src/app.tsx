@@ -61,7 +61,13 @@ export const renderer = reactRenderer(({ children }) => {
           name="viewport"
           content="width=device-width, initial-scale=1.0, viewport-fit=cover"
         />
+        <title>Unitools : Compose Markdown</title>
+        <meta
+          name="description"
+          content="Markdown Database, Search engine and re-organizer"
+        />
         <ViteClient />
+        <link rel="icon" href="/favicon.png" />
         <Link href="/src/style.css" rel="stylesheet" />
         <Script src="/src/client.tsx" defer />
       </head>
