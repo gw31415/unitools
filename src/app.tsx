@@ -41,7 +41,7 @@ function Header() {
   }, [scheme]);
 
   return (
-    <header className="h-10 flex items-center gap-2 px-2 py-1 border-b">
+    <header className="h-10 sticky flex items-center gap-2 px-2 py-1 border-b">
       <SideMenuTrigger asChild className="hidden md:flex">
         <Button size="icon" variant="ghost">
           <PanelLeft />
