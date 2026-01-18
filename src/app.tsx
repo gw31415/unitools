@@ -14,7 +14,10 @@ export const renderer = reactRenderer(({ children }) => {
     <html lang="ja">
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+        />
         <ViteClient />
         <Link href="/src/style.css" rel="stylesheet" />
         <Script src="/src/client.tsx" defer />
@@ -40,7 +43,7 @@ export function App({ path }: { path: string }) {
         </SideMenuTrigger>
         <Markdown
           content={`# Markdown Editor\n\nEdit **bold** or *italic* text.\n\nYou access this page at path: \`${path}\`.`}
-          className="p-2 container size-full pb-15 md:pb-2"
+          className="p-2 size-full pb-15 md:pb-2"
         />
       </div>
       <SideMenu className="md:min-h-svh md:border-r">

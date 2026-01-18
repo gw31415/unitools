@@ -32,13 +32,17 @@ function MarkdownView({
       // biome-ignore lint/security/noDangerouslySetInnerHtml: HTML is rendered from TipTap content.
       dangerouslySetInnerHTML={{ __html: html }}
       {...props}
-      className={cn("tiptap", className)}
+      className={cn(
+        "tiptap w-full min-w-0 max-w-full overflow-x-auto",
+        className,
+      )}
     />
   );
 }
 
 function MarkdownEditor({
   editorOpts,
+  className,
   ...props
 }: { editorOpts?: PartialEditorOptions } & HTMLAttributes<HTMLDivElement>) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -57,7 +61,16 @@ function MarkdownEditor({
       editorRef.current = null;
     };
   }, [editorOpts]);
-  return <div ref={editorContainerRef} {...props} />;
+  return (
+    <div
+      ref={editorContainerRef}
+      {...props}
+      className={cn(
+        "tiptap w-full min-w-0 max-w-full overflow-x-auto",
+        className,
+      )}
+    />
+  );
 }
 
 export default function Markdown({

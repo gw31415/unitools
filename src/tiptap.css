@@ -28,6 +28,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 }
 
 @media (prefers-color-scheme: dark) {
+
   .tiptap,
   [data-theme="dark"] {
     /* dark */
@@ -86,6 +87,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 }
 
 @media (prefers-color-scheme: light) {
+
   .tiptap,
   [data-theme="light"] {
     /* light */
@@ -396,17 +398,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 .tiptap kbd {
   display: inline-block;
   padding: var(--base-size-4);
-  font: 11px
-    var(
-      --fontStack-monospace,
+  font: 11px var(--fontStack-monospace,
       ui-monospace,
       SFMono-Regular,
       SF Mono,
       Menlo,
       Consolas,
       Liberation Mono,
-      monospace
-    );
+      monospace);
   line-height: 10px;
   color: var(--fgColor-default);
   vertical-align: middle;
@@ -495,32 +494,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 .tiptap tt,
 .tiptap code,
 .tiptap samp {
-  font-family: var(
-    --fontStack-monospace,
-    ui-monospace,
-    SFMono-Regular,
-    SF Mono,
-    Menlo,
-    Consolas,
-    Liberation Mono,
-    monospace
-  );
+  font-family: var(--fontStack-monospace,
+      ui-monospace,
+      SFMono-Regular,
+      SF Mono,
+      Menlo,
+      Consolas,
+      Liberation Mono,
+      monospace);
   font-size: 12px;
 }
 
 .tiptap pre {
   margin-top: 0;
   margin-bottom: 0;
-  font-family: var(
-    --fontStack-monospace,
-    ui-monospace,
-    SFMono-Regular,
-    SF Mono,
-    Menlo,
-    Consolas,
-    Liberation Mono,
-    monospace
-  );
+  font-family: var(--fontStack-monospace,
+      ui-monospace,
+      SFMono-Regular,
+      SF Mono,
+      Menlo,
+      Consolas,
+      Liberation Mono,
+      monospace);
   font-size: 12px;
   word-wrap: normal;
 }
@@ -553,11 +548,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   content: "";
 }
 
-.tiptap > *:first-child {
+.tiptap>*:first-child {
   margin-top: 0;
 }
 
-.tiptap > *:last-child {
+.tiptap>*:last-child {
   margin-bottom: 0;
 }
 
@@ -593,11 +588,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   margin-bottom: var(--base-size-16);
 }
 
-.tiptap blockquote > :first-child {
+.tiptap blockquote> :first-child {
   margin-top: 0;
 }
 
-.tiptap blockquote > :last-child {
+.tiptap blockquote> :last-child {
   margin-bottom: 0;
 }
 
@@ -696,7 +691,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   list-style-type: decimal;
 }
 
-.tiptap div > ol:not([type]) {
+.tiptap div>ol:not([type]) {
   list-style-type: decimal;
 }
 
@@ -708,11 +703,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   margin-bottom: 0;
 }
 
-.tiptap li > p {
+.tiptap li>p {
   margin-top: var(--base-size-16);
 }
 
-.tiptap li + li {
+.tiptap li+li {
   margin-top: 0.25em;
 }
 
@@ -743,7 +738,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   border: 1px solid var(--borderColor-default);
 }
 
-.tiptap table td > :last-child {
+.tiptap table td> :last-child {
   margin-bottom: 0;
 }
 
@@ -779,7 +774,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   overflow: hidden;
 }
 
-.tiptap span.frame > span {
+.tiptap span.frame>span {
   display: block;
   float: left;
   width: auto;
@@ -807,7 +802,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   clear: both;
 }
 
-.tiptap span.align-center > span {
+.tiptap span.align-center>span {
   display: block;
   margin: 13px auto 0;
   overflow: hidden;
@@ -825,7 +820,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   clear: both;
 }
 
-.tiptap span.align-right > span {
+.tiptap span.align-right>span {
   display: block;
   margin: 13px 0 0;
   overflow: hidden;
@@ -855,7 +850,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   overflow: hidden;
 }
 
-.tiptap span.float-right > span {
+.tiptap span.float-right>span {
   display: block;
   margin: 13px auto 0;
   overflow: hidden;
@@ -889,7 +884,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   font-size: 100%;
 }
 
-.tiptap pre > code {
+.tiptap pre>code {
   padding: 0;
   margin: 0;
   word-break: normal;
@@ -1173,7 +1168,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   cursor: pointer;
 }
 
-.tiptap .task-list-item + .task-list-item {
+.tiptap .task-list-item+.task-list-item {
   margin-top: var(--base-size-4);
 }
 
@@ -1214,11 +1209,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   border-left: 0.25em solid var(--borderColor-default);
 }
 
-.tiptap .markdown-alert > :first-child {
+.tiptap .markdown-alert> :first-child {
   margin-top: 0;
 }
 
-.tiptap .markdown-alert > :last-child {
+.tiptap .markdown-alert> :last-child {
   margin-bottom: 0;
 }
 
@@ -1269,7 +1264,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   color: var(--fgColor-danger);
 }
 
-.tiptap > *:first-child > .heading-element:first-child {
+.tiptap>*:first-child>.heading-element:first-child {
   margin-top: 0;
 }
 
@@ -1280,10 +1275,34 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 .tiptap {
   ol {
     list-style: decimal;
+
+    ol {
+      list-style: lower-roman;
+
+      ol {
+        list-style: lower-alpha;
+
+        ol {
+          list-style: decimal;
+        }
+      }
+    }
   }
 
   ul {
     list-style: disc;
+
+    ul {
+      list-style: circle;
+
+      ul {
+        list-style: square;
+
+        ul {
+          list-style: disc;
+        }
+      }
+    }
   }
 
   p {
@@ -1292,7 +1311,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     text-autospace: normal;
   }
 
-  li > p {
+  li>p {
     margin: 0;
     padding: 0;
     line-height: inherit;
