@@ -64,7 +64,7 @@ export const renderer = reactRenderer(({ children }) => {
         <title>Unitools : Compose Markdown</title>
         <meta
           name="description"
-          content="Markdown Database, Search engine and re-organizer"
+          content="Markdown database, search engine and re-organizer"
         />
         <ViteClient />
         <link rel="icon" href="/favicon.png" />
