@@ -8,10 +8,17 @@ body {
   height: 100%;
 }
 
-p {
-  word-break: auto-phrase;
-  line-break: strict;
-  text-autospace: normal;
+*:focus {
+  outline: none;
+}
+
+/* Basic content styles */
+.tiptap {
+  p {
+    word-break: auto-phrase;
+    line-break: strict;
+    text-autospace: normal;
+  }
 }
 
 @theme inline {
@@ -128,6 +135,7 @@ p {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }

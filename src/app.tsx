@@ -1,6 +1,13 @@
 import { reactRenderer } from "@hono/react-renderer";
+import { Menu } from "lucide-react";
 import { Link, Script, ViteClient } from "vite-ssr-components/react";
 import Markdown from "@/components/Markdown";
+import {
+  SideMenu,
+  SideMenuProvider,
+  SideMenuTrigger,
+} from "./components/SideMenu";
+import { Button } from "./components/ui/button";
 
 export const renderer = reactRenderer(({ children }) => {
   return (
@@ -19,9 +26,28 @@ export const renderer = reactRenderer(({ children }) => {
 
 export function App({ path }: { path: string }) {
   return (
-    <Markdown
-      content={`# Markdown Editor\n\nEdit **bold** or *italic* text.\n\nYou access this page at path: \`${path}\`.`}
-      className="min-h-full"
-    />
+    <SideMenuProvider>
+      <div className="min-h-full">
+        <SideMenuTrigger asChild className="md:hidden">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="rounded-full fixed bottom-4 left-4 z-50"
+          >
+            <Menu />
+          </Button>
+        </SideMenuTrigger>
+        <Markdown
+          content={`# Markdown Editor\n\nEdit **bold** or *italic* text.\n\nYou access this page at path: \`${path}\`.`}
+          className="p-2 container size-full pb-15 md:pb-2"
+        />
+      </div>
+      <SideMenu className="md:min-h-svh md:border-r">
+        <a href="/">Overview</a>
+        <a href="/projects">Projects</a>
+        <a href="/settings">Settings</a>
+      </SideMenu>
+    </SideMenuProvider>
   );
 }
