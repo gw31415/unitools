@@ -1,7 +1,9 @@
 import { reactRenderer } from "@hono/react-renderer";
-import { Clock, Menu, Search } from "lucide-react";
+import { Clock, Menu, PanelLeft, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, Script, ViteClient } from "vite-ssr-components/react";
 import Markdown from "@/components/Markdown";
+import { Logo } from "./components/Logo";
 import {
   SideMenu,
   SideMenuProvider,
@@ -21,6 +23,34 @@ import {
   SidebarMenuSkeleton,
   SidebarSeparator,
 } from "./components/ui/sidebar";
+
+function Header() {
+  const [scheme, setScheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)",
+    ).matches;
+    setScheme(prefersDark ? "dark" : "light");
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.style.colorScheme = scheme;
+  }, [scheme]);
+
+  return (
+    <header className="h-10 flex items-center gap-2 px-2 py-1 border-b">
+      <SideMenuTrigger asChild className="hidden md:flex">
+        <Button size="icon" variant="ghost">
+          <PanelLeft />
+        </Button>
+      </SideMenuTrigger>
+      <Logo className="fill-white py-1 h-full" />
+    </header>
+  );
+}
 
 export const renderer = reactRenderer(({ children }) => {
   return (
@@ -43,21 +73,22 @@ export const renderer = reactRenderer(({ children }) => {
 export function App({ path }: { path: string }) {
   return (
     <SideMenuProvider>
-      <div className="h-svh">
+      <div className="h-svh flex flex-col">
+        <Header />
+        <Markdown
+          content={`# Markdown Editor\n\nEdit **bold** or *italic* text.\n\nYou access this page at path: \`${path}\`.`}
+          className="px-4 py-2 size-full pb-15 md:pb-2"
+        />
         <SideMenuTrigger asChild>
           <Button
             type="button"
             variant="outline"
             size="icon"
-            className="rounded-full fixed bottom-4 left-4 z-50"
+            className="rounded-full fixed bottom-4 left-4 z-50 md:hidden"
           >
             <Menu />
           </Button>
         </SideMenuTrigger>
-        <Markdown
-          content={`# Markdown Editor\n\nEdit **bold** or *italic* text.\n\nYou access this page at path: \`${path}\`.`}
-          className="px-4 py-2 size-full pb-15 md:pb-2"
-        />
       </div>
       <SideMenu className="gap-0 overflow-hidden">
         <SidebarHeader className="shrink-0">
