@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./tiptap.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -10,15 +11,6 @@ body {
 
 *:focus {
   outline: none;
-}
-
-/* Basic content styles */
-.tiptap {
-  p {
-    word-break: auto-phrase;
-    line-break: strict;
-    text-autospace: normal;
-  }
 }
 
 @theme inline {

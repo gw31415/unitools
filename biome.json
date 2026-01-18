@@ -45,6 +45,6 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**"]
+    "includes": ["**", "!src/components/ui"]
   }
 }
