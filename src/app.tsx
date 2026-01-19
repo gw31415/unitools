@@ -1,5 +1,6 @@
 import { reactRenderer } from "@hono/react-renderer";
 import { Clock, Menu, PanelLeft, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, Script, ViteClient } from "vite-ssr-components/react";
 import Markdown from "@/components/Markdown";
 import { Logo } from "./components/Logo";
@@ -22,8 +23,13 @@ import {
   SidebarMenuSkeleton,
   SidebarSeparator,
 } from "./components/ui/sidebar";
+import { Spinner } from "./components/ui/spinner";
 
 function Header() {
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    setLoading(false);
+  }, []);
   return (
     <header className="h-10 sticky flex items-center gap-2 px-2 py-1 border-b">
       <SideMenuTrigger asChild className="hidden md:flex">
@@ -32,6 +38,8 @@ function Header() {
         </Button>
       </SideMenuTrigger>
       <Logo className="fill-foreground py-1 h-full" />
+      <div className="grow" />
+      {loading ? <Spinner className="mx-1" /> : undefined}
     </header>
   );
 }
