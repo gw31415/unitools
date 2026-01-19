@@ -20,12 +20,21 @@ export function SideMenu(props: { children?: ReactNode; className?: string }) {
   );
 
   useEffect(() => {
-    const closeMenuOnResize = () => {
+    const closeMenu = () => {
       setOpenMobile(false);
     };
-    window.addEventListener("resize", closeMenuOnResize);
+    const events: (keyof WindowEventMap)[] = [
+      "resize",
+      "orientationchange",
+      "popstate",
+    ];
+    events.forEach((ev) => {
+      window.addEventListener(ev, closeMenu);
+    });
     return () => {
-      window.removeEventListener("resize", closeMenuOnResize);
+      events.forEach((ev) => {
+        window.removeEventListener(ev, closeMenu);
+      });
     };
   }, [setOpenMobile]);
 
