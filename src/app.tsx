@@ -1,6 +1,5 @@
 import { reactRenderer } from "@hono/react-renderer";
 import { Clock, Menu, PanelLeft, Search } from "lucide-react";
-import { useEffect, useState } from "react";
 import { Link, Script, ViteClient } from "vite-ssr-components/react";
 import Markdown from "@/components/Markdown";
 import { Logo } from "./components/Logo";
@@ -25,21 +24,6 @@ import {
 } from "./components/ui/sidebar";
 
 function Header() {
-  const [scheme, setScheme] = useState<"light" | "dark">("light");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const prefersDark = window.matchMedia(
-      "(prefers-color-scheme: dark)",
-    ).matches;
-    setScheme(prefersDark ? "dark" : "light");
-  }, []);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    document.documentElement.style.colorScheme = scheme;
-  }, [scheme]);
-
   return (
     <header className="h-10 sticky flex items-center gap-2 px-2 py-1 border-b">
       <SideMenuTrigger asChild className="hidden md:flex">
