@@ -1,5 +1,13 @@
 const root = document.querySelector("body");
 
+declare global {
+  interface Window {
+    __INITIAL_DOC_UPDATE__?: string;
+    __INITIAL_DOC_ID__?: string;
+    __INITIAL_DOC_JSON__?: unknown;
+  }
+}
+
 if (root) {
   document.addEventListener("click", (event) => {
     if (
@@ -28,15 +36,27 @@ if (root) {
   });
 
   (async () => {
-    const [{ App }, { hydrateRoot }, { useEffect, useState }] =
+    const [{ App, pathToDocId }, { hydrateRoot }, { useEffect, useState }] =
       await Promise.all([
         import("@/app"),
         import("react-dom/client"),
         import("react"),
       ]);
 
+    const initialDocUpdate = window.__INITIAL_DOC_UPDATE__ ?? "";
+    const initialDocId = window.__INITIAL_DOC_ID__ ?? "";
+    const initialDocJSON = window.__INITIAL_DOC_JSON__ ?? null;
+
     function AppClient({ path }: { path: string }) {
       const [currentPath, setCurrentPath] = useState(path);
+      const initialDocUpdateForPath =
+        currentPath === path && initialDocId === pathToDocId(path)
+          ? initialDocUpdate
+          : undefined;
+      const initialDocJSONForPath =
+        currentPath === path && initialDocId === pathToDocId(path)
+          ? initialDocJSON
+          : null;
 
       useEffect(() => {
         const onPopState = () => {
@@ -52,7 +72,13 @@ if (root) {
       useEffect(() => {
         setCurrentPath(path);
       }, [path]);
-      return <App path={currentPath} />;
+      return (
+        <App
+          path={currentPath}
+          initialDocUpdate={initialDocUpdateForPath}
+          initialDocJSON={initialDocJSONForPath}
+        />
+      );
     }
     hydrateRoot(root, <AppClient path={window.location.pathname} />);
   })();
