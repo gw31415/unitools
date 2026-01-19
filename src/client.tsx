@@ -1,10 +1,10 @@
+import type { InitialEditorState } from "@/types/editor";
+
 const root = document.querySelector("body");
 
 declare global {
   interface Window {
-    __INITIAL_DOC_UPDATE__?: string;
-    __INITIAL_DOC_ID__?: string;
-    __INITIAL_DOC_JSON__?: unknown;
+    __INITIAL_EDITOR_STATE__?: InitialEditorState;
   }
 }
 
@@ -43,20 +43,21 @@ if (root) {
         import("react"),
       ]);
 
-    const initialDocUpdate = window.__INITIAL_DOC_UPDATE__ ?? "";
-    const initialDocId = window.__INITIAL_DOC_ID__ ?? "";
-    const initialDocJSON = window.__INITIAL_DOC_JSON__ ?? null;
+    const initialEditorState = window.__INITIAL_EDITOR_STATE__ ?? {
+      initialDocUpdate: "",
+      initialDocId: "",
+      initialDocJSON: undefined,
+    };
 
     function AppClient({ path }: { path: string }) {
       const [currentPath, setCurrentPath] = useState(path);
-      const initialDocUpdateForPath =
-        currentPath === path && initialDocId === pathToDocId(path)
-          ? initialDocUpdate
-          : undefined;
-      const initialDocJSONForPath =
-        currentPath === path && initialDocId === pathToDocId(path)
-          ? initialDocJSON
-          : null;
+      if (
+        currentPath !== path ||
+        initialEditorState.initialDocId !== pathToDocId(path)
+      ) {
+        initialEditorState.initialDocUpdate = undefined;
+        initialEditorState.initialDocJSON = undefined;
+      }
 
       useEffect(() => {
         const onPopState = () => {
@@ -72,13 +73,7 @@ if (root) {
       useEffect(() => {
         setCurrentPath(path);
       }, [path]);
-      return (
-        <App
-          path={currentPath}
-          initialDocUpdate={initialDocUpdateForPath}
-          initialDocJSON={initialDocJSONForPath}
-        />
-      );
+      return <App path={currentPath} initialEditorState={initialEditorState} />;
     }
     hydrateRoot(root, <AppClient path={window.location.pathname} />);
   })();

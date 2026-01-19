@@ -1,16 +1,13 @@
 import type { JSONContent } from "@tiptap/core";
 import { Editor } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
-import { Markdown as MarkdownExt } from "@tiptap/markdown";
-import StarterKit from "@tiptap/starter-kit";
 import { renderToHTMLString } from "@tiptap/static-renderer";
 import type { HTMLAttributes } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
+import { baseExtensions } from "@/lib/editorExtensions";
 import { cn } from "@/lib/utils";
-
-const baseExtensions = [StarterKit, MarkdownExt];
 
 type PartialEditorOptions = Partial<ConstructorParameters<typeof Editor>[0]>;
 
@@ -24,23 +21,15 @@ function createEditor(options: PartialEditorOptions = {}) {
 }
 
 function MarkdownView({
-  content,
   contentJSON,
   className,
   ...props
 }: {
-  content?: string;
   contentJSON?: JSONContent | null;
 } & HTMLAttributes<HTMLDivElement>) {
-  let json: JSONContent;
-  if (contentJSON) {
-    json = contentJSON;
-  } else {
-    const editor = createEditor({ element: null, content: content ?? "" });
-    json = editor.getJSON();
-  }
   const html = renderToHTMLString({
-    content: json,
+    content:
+      contentJSON ?? createEditor({ element: null, content: "" }).getJSON(),
     extensions: baseExtensions,
   });
   return (

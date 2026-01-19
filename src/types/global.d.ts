@@ -1,10 +1,8 @@
-import type { JSONContent } from "@tiptap/core";
 import "@hono/react-renderer";
+import type { InitialEditorState } from "@/types/editor";
 
 type Head = {
-  initialDocUpdate: string | undefined;
-  initialDocId: string;
-  initialDocJSON?: JSONContent | null;
+  initialEditorState?: InitialEditorState;
 };
 
 declare module "@hono/react-renderer" {
