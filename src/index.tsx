@@ -1,10 +1,16 @@
+import { getSchema, type JSONContent } from "@tiptap/core";
 import { Hono } from "hono";
-import { yDocToProsemirrorJSON } from "y-prosemirror";
+import { hc } from "hono/client";
+import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import * as Y from "yjs";
 import { App, pathToDocId, renderer } from "@/app";
+import { baseExtensions } from "@/lib/editorExtensions";
+import type { InitialEditorState } from "@/types/editor";
 import api from "./api";
 
 export { YDurableObjects } from "y-durableobjects";
+
+const proseMirrorSchema = getSchema(baseExtensions);
 
 const app = new Hono()
   .use(renderer)
@@ -13,15 +19,19 @@ const app = new Hono()
   .route("/api/v1", api)
   .get("*", async (c) => {
     const docId = pathToDocId(c.req.path);
-    let initialDocUpdate;
-    let initialDocJSON = null;
+    let initialDocUpdate: string | undefined;
+    let initialDocJSON: JSONContent | undefined;
 
     try {
-      const apiUrl = new URL(
-        `/api/v1/page/${encodeURIComponent(docId)}/editor`,
-        c.req.url,
+      const client = hc<typeof app>(c.req.url);
+      const headers: Record<string, string> = {};
+      c.req.raw.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+      const res = await client.api.v1.page[":id"].editor.$get(
+        { param: { id: docId } },
+        { headers },
       );
-      const res = await fetch(apiUrl, { headers: c.req.raw.headers });
       if (res.ok) {
         const data = (await res.json()) as { doc?: string };
         if (data.doc) {
@@ -34,9 +44,14 @@ const app = new Hono()
               bytes[i] = binary.charCodeAt(i);
             }
             Y.applyUpdate(doc, bytes);
-            initialDocJSON = yDocToProsemirrorJSON(doc, "default");
+            const fragment = doc.getXmlFragment("default");
+            const rootNode = yXmlFragmentToProseMirrorRootNode(
+              fragment,
+              proseMirrorSchema,
+            );
+            initialDocJSON = rootNode.toJSON();
           } catch {
-            initialDocJSON = null;
+            initialDocJSON = undefined;
           }
         }
       }
@@ -44,17 +59,15 @@ const app = new Hono()
       // Keep initialDocUpdate empty for SSR if the API is unavailable.
     }
 
+    const initialEditorState: InitialEditorState = {
+      initialDocUpdate,
+      initialDocId: docId,
+      initialDocJSON,
+    };
+
     return c.render(
-      <App
-        path={c.req.path}
-        initialDocUpdate={initialDocUpdate}
-        initialDocJSON={initialDocJSON}
-      />,
-      {
-        initialDocUpdate,
-        initialDocId: docId,
-        initialDocJSON,
-      },
+      <App path={c.req.path} initialEditorState={initialEditorState} />,
+      { initialEditorState },
     );
   });
 

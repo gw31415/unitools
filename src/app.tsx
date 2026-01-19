@@ -1,9 +1,9 @@
 import { reactRenderer } from "@hono/react-renderer";
-import type { JSONContent } from "@tiptap/core";
 import { Clock, Menu, PanelLeft, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, Script, ViteClient } from "vite-ssr-components/react";
 import Markdown from "@/components/Markdown";
+import type { InitialEditorState } from "@/types/editor";
 import { Logo } from "./components/Logo";
 import {
   SideMenu,
@@ -48,53 +48,50 @@ function Header() {
 const toInlineJSON = (value: unknown) =>
   JSON.stringify(value).replace(/</g, "\\u003c");
 
-export const renderer = reactRenderer(
-  ({ children, initialDocUpdate, initialDocId, initialDocJSON }) => {
-    const title = "Unitools: compose knowledge with ease";
-    const description =
-      "WYSIWYG Markdown editor for seamless content creation.";
-    return (
-      <html lang="ja">
-        <head>
-          <meta charSet="utf-8" />
-          <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-          />
-          <meta name="description" content={description} />
+export const renderer = reactRenderer(({ children, initialEditorState }) => {
+  const title = "Unitools: compose knowledge with ease";
+  const description = "WYSIWYG Markdown editor for seamless content creation.";
+  return (
+    <html lang="ja">
+      <head>
+        <meta charSet="utf-8" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+        />
+        <meta name="description" content={description} />
 
-          {/* OGPタグ */}
-          <meta property="og:title" content={title} />
-          <meta property="og:description" content={description} />
-          <meta property="og:type" content="website" />
-          {/* <meta property="og:url" content="サイトURL" /> */}
-          {/* <meta property="og:image" content="サムネイル画像のURL" /> */}
-          <meta property="og:site_name" content="Unitools" />
-          {/* <meta name="twitter:card" content="summary_large_image" /> */}
-          <meta name="twitter:title" content={title} />
-          <meta name="twitter:description" content={description} />
-          {/* <meta name="twitter:image" content="サムネイル画像のURL" /> */}
-          <title>{title}</title>
+        {/* OGPタグ */}
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:type" content="website" />
+        {/* <meta property="og:url" content="サイトURL" /> */}
+        {/* <meta property="og:image" content="サムネイル画像のURL" /> */}
+        <meta property="og:site_name" content="Unitools" />
+        {/* <meta name="twitter:card" content="summary_large_image" /> */}
+        <meta name="twitter:title" content={title} />
+        <meta name="twitter:description" content={description} />
+        {/* <meta name="twitter:image" content="サムネイル画像のURL" /> */}
+        <title>{title}</title>
 
-          <ViteClient />
-          <link rel="icon" href="/favicon.ico" sizes="32x32" />
-          <link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml" />
-          <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <ViteClient />
+        <link rel="icon" href="/favicon.ico" sizes="32x32" />
+        <link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-          <Link href="/src/style.css" rel="stylesheet" />
-          <Script src="/src/client.tsx" defer />
-          <script
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON is escaped for inline script.
-            dangerouslySetInnerHTML={{
-              __html: `window.__INITIAL_DOC_UPDATE__=${toInlineJSON(initialDocUpdate ?? "")};window.__INITIAL_DOC_ID__=${toInlineJSON(initialDocId ?? "")};window.__INITIAL_DOC_JSON__=${toInlineJSON(initialDocJSON ?? null)};`,
-            }}
-          />
-        </head>
-        <body>{children}</body>
-      </html>
-    );
-  },
-);
+        <Link href="/src/style.css" rel="stylesheet" />
+        <Script src="/src/client.tsx" defer />
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON is escaped for inline script.
+          dangerouslySetInnerHTML={{
+            __html: `window.__INITIAL_EDITOR_STATE__=${toInlineJSON(initialEditorState)};`,
+          }}
+        />
+      </head>
+      <body>{children}</body>
+    </html>
+  );
+});
 
 export function pathToDocId(path: string) {
   if (path === "/" || path.length === 0) return "home";
@@ -103,12 +100,10 @@ export function pathToDocId(path: string) {
 
 export function App({
   path,
-  initialDocUpdate,
-  initialDocJSON,
+  initialEditorState,
 }: {
   path: string;
-  initialDocUpdate?: string;
-  initialDocJSON?: JSONContent | null;
+  initialEditorState: InitialEditorState;
 }) {
   const docId = pathToDocId(path);
   return (
@@ -117,8 +112,8 @@ export function App({
         <Header />
         <Markdown
           docId={docId}
-          initialDocUpdate={initialDocUpdate}
-          initialDocJSON={initialDocJSON}
+          initialDocUpdate={initialEditorState.initialDocUpdate}
+          initialDocJSON={initialEditorState.initialDocJSON}
           className="px-4 py-2 size-full pb-15 md:pb-2"
           aria-label="Main content editor/viewer of this page"
         />
