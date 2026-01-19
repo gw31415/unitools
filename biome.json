@@ -45,6 +45,11 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!src/components/ui", "!src/*.css"]
+    "includes": [
+      "**",
+      "!src/components/ui",
+      "!src/*.css",
+      "!worker-configuration.d.ts"
+    ]
   }
 }
