@@ -10,7 +10,7 @@ pnpm run deploy
 [For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
 
 ```txt
-npm run cf-typegen
+pnpm run cf-typegen
 ```
 
 Pass the `CloudflareBindings` as generics when instantiation `Hono`:
