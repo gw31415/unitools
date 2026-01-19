@@ -207,17 +207,35 @@ export function App({ path }: { path: string }) {
                 </SidebarMenuButton>
                 <SidebarMenuBadge>3m</SidebarMenuBadge>
               </SidebarMenuItem>
+              <SidebarLoadingItems />
             </SidebarMenu>
-            <div className="px-2 py-3">
-              <SidebarMenuSkeleton showIcon />
-              <SidebarMenuSkeleton showIcon />
-              <div className="text-muted-foreground mt-2 text-xs">
-                Loading more articles...
-              </div>
-            </div>
           </SidebarGroupContent>
         </SidebarGroup>
       </SideMenu>
     </SideMenuProvider>
+  );
+}
+
+function SidebarLoadingItems() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  return (
+    <>
+      {mounted ? (
+        <>
+          <SidebarMenuSkeleton showIcon />
+          <SidebarMenuSkeleton showIcon />
+          <SidebarMenuItem>
+            <div className="text-muted-foreground text-xs flex m-2 gap-2">
+              <Spinner />
+              <span>Loading more articles...</span>
+            </div>
+          </SidebarMenuItem>
+        </>
+      ) : null}
+    </>
   );
 }
