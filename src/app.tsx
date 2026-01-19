@@ -83,6 +83,7 @@ export function App({ path }: { path: string }) {
         <Markdown
           content={`# Markdown Editor\n\nEdit **bold** or *italic* text.\n\nYou access this page at path: \`${path}\`.`}
           className="px-4 py-2 size-full pb-15 md:pb-2"
+          aria-label="Main content editor/viewer of this page"
         />
         <SideMenuTrigger asChild>
           <Button
@@ -90,6 +91,7 @@ export function App({ path }: { path: string }) {
             variant="outline"
             size="icon"
             className="rounded-full fixed bottom-4 left-4 z-50 md:hidden"
+            aria-label="Open side menu"
           >
             <Menu />
           </Button>
