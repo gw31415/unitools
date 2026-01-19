@@ -63,7 +63,10 @@ export const renderer = reactRenderer(({ children }) => {
         <title>{title}</title>
 
         <ViteClient />
-        <link rel="icon" href="/favicon.png" />
+        <link rel="icon" href="/favicon.ico" sizes="32x32" />
+        <link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
         <Link href="/src/style.css" rel="stylesheet" />
         <Script src="/src/client.tsx" defer />
       </head>
