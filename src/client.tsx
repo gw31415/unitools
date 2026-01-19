@@ -2,12 +2,6 @@ import type { InitialEditorState } from "@/types/editor";
 
 const root = document.querySelector("body");
 
-declare global {
-  interface Window {
-    __INITIAL_EDITOR_STATE__?: InitialEditorState;
-  }
-}
-
 if (root) {
   document.addEventListener("click", (event) => {
     if (
@@ -43,7 +37,14 @@ if (root) {
         import("react"),
       ]);
 
-    const initialEditorState = window.__INITIAL_EDITOR_STATE__ ?? {
+    const initialEditorState = (() => {
+      try {
+        const json = document.getElementById(
+          "initial-editor-state",
+        )?.textContent;
+        if (json) return JSON.parse(json) as InitialEditorState;
+      } catch {}
+    })() ?? {
       initialDocUpdate: "",
       initialDocId: "",
       initialDocJSON: undefined,

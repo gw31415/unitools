@@ -45,9 +45,6 @@ function Header() {
   );
 }
 
-const toInlineJSON = (value: unknown) =>
-  JSON.stringify(value).replace(/</g, "\\u003c");
-
 export const renderer = reactRenderer(({ children, initialEditorState }) => {
   const title = "Unitools: compose knowledge with ease";
   const description = "WYSIWYG Markdown editor for seamless content creation.";
@@ -81,12 +78,9 @@ export const renderer = reactRenderer(({ children, initialEditorState }) => {
 
         <Link href="/src/style.css" rel="stylesheet" />
         <Script src="/src/client.tsx" defer />
-        <script
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON is escaped for inline script.
-          dangerouslySetInnerHTML={{
-            __html: `window.__INITIAL_EDITOR_STATE__=${toInlineJSON(initialEditorState)};`,
-          }}
-        />
+        <script type="application/json" id="initial-editor-state">
+          {JSON.stringify(initialEditorState)}
+        </script>
       </head>
       <body>{children}</body>
     </html>
