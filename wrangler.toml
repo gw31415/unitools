@@ -2,4 +2,17 @@ name = "unitools"
 compatibility_date = "2025-08-03"
 main = "./src/index.tsx"
 
+[[durable_objects.bindings]]
+name = "UNITOOLS_COLLAB_ROOM"
+class_name = "UnitoolsCollabRoom"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "unitools"
+database_id = "REPLACE_WITH_DATABASE_ID"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["UnitoolsCollabRoom"]
+
 #:schema ./node_modules/wrangler/config-schema.json
