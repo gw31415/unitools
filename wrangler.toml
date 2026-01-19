@@ -3,8 +3,8 @@ compatibility_date = "2025-08-03"
 main = "./src/index.tsx"
 
 [[durable_objects.bindings]]
-name = "UNITOOLS_COLLAB_ROOM"
-class_name = "UnitoolsCollabRoom"
+name = "UNITOOLS_EDITORS"
+class_name = "YDurableObjects"
 
 [[d1_databases]]
 binding = "DB"
@@ -13,6 +13,6 @@ database_id = "REPLACE_WITH_DATABASE_ID"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["UnitoolsCollabRoom"]
+new_classes = ["YDurableObjects"]
 
 #:schema ./node_modules/wrangler/config-schema.json
