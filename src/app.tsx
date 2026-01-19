@@ -27,7 +27,7 @@ function Header() {
   return (
     <header className="h-10 sticky flex items-center gap-2 px-2 py-1 border-b">
       <SideMenuTrigger asChild className="hidden md:flex">
-        <Button size="icon" variant="ghost">
+        <Button size="icon" variant="ghost" aria-label="Open side menu">
           <PanelLeft />
         </Button>
       </SideMenuTrigger>
@@ -91,7 +91,7 @@ export function App({ path }: { path: string }) {
             variant="outline"
             size="icon"
             className="rounded-full fixed bottom-4 left-4 z-50 md:hidden"
-            aria-label="Open side menu"
+            aria-label="Open drawer menu"
           >
             <Menu />
           </Button>
