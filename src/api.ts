@@ -1,16 +1,8 @@
 import { hc } from "hono/client";
 import type { YDurableObjectsAppType } from "y-durableobjects";
 import { upgrade } from "y-durableobjects/helpers/upgrade";
+import { serialize } from "./lib/base64";
 import { createApp } from "./lib/hono";
-
-const toBase64 = (data: Uint8Array) => {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < data.length; i += chunkSize) {
-    binary += String.fromCharCode(...data.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
-};
 
 const api = createApp()
   .get("/page/:id/editor/ws", upgrade(), async (c) => {
@@ -36,7 +28,7 @@ const api = createApp()
     const room = c.env.UNITOOLS_EDITORS.idFromName(roomId);
     const stub = c.env.UNITOOLS_EDITORS.get(room);
     const ydoc = await stub.getYDoc();
-    return c.json({ doc: toBase64(ydoc) });
+    return c.json({ doc: serialize(ydoc) });
   });
 
 export default api;

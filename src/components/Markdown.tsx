@@ -6,6 +6,7 @@ import type { HTMLAttributes } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
+import { toUint8Array } from "@/lib/base64";
 import { baseExtensions } from "@/lib/editorExtensions";
 import { cn } from "@/lib/utils";
 
@@ -85,15 +86,6 @@ function MarkdownEditor({
   );
 }
 
-const base64ToUint8Array = (base64: string) => {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-};
-
 export default function Markdown({
   docId,
   initialDocUpdate,
@@ -124,7 +116,7 @@ export default function Markdown({
     const doc = new Y.Doc();
     if (initialDocUpdate) {
       try {
-        Y.applyUpdate(doc, base64ToUint8Array(initialDocUpdate));
+        Y.applyUpdate(doc, toUint8Array(initialDocUpdate));
       } catch {
         // Ignore malformed updates; live sync will repair.
       }
