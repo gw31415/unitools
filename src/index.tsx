@@ -3,10 +3,11 @@ import { Hono } from "hono";
 import { hc } from "hono/client";
 import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import * as Y from "yjs";
-import { App, pathToDocId, renderer } from "@/app";
+import { App, renderer } from "@/app";
 import { baseExtensions } from "@/lib/editorExtensions";
 import type { InitialEditorState } from "@/types/editor";
 import api from "./api";
+import { headers2Record } from "./lib/utils";
 
 export { YDurableObjects } from "y-durableobjects";
 
@@ -17,23 +18,20 @@ const app = new Hono()
   // Currently development only disallows all robots
   .get("/robots.txt", (c) => c.text("User-agent: *\nDisallow: /\n"))
   .route("/api/v1", api)
-  .get("*", async (c) => {
-    const docId = pathToDocId(c.req.path);
+  .get("/:id", async (c) => {
+    const id = c.req.param("id");
     let initialDocUpdate: string | undefined;
     let initialDocJSON: JSONContent | undefined;
 
     try {
       const client = hc<typeof app>(c.req.url);
-      const headers: Record<string, string> = {};
-      c.req.raw.headers.forEach((value, key) => {
-        headers[key] = value;
-      });
+      const headers = headers2Record(c.req.raw.headers);
       const res = await client.api.v1.page[":id"].editor.$get(
-        { param: { id: docId } },
+        { param: { id } },
         { headers },
       );
       if (res.ok) {
-        const data = (await res.json()) as { doc?: string };
+        const data = await res.json();
         if (data.doc) {
           initialDocUpdate = data.doc;
           try {
@@ -61,7 +59,7 @@ const app = new Hono()
 
     const initialEditorState: InitialEditorState = {
       initialDocUpdate,
-      initialDocId: docId,
+      initialDocId: id,
       initialDocJSON,
     };
 

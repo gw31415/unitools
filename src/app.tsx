@@ -88,7 +88,6 @@ export const renderer = reactRenderer(({ children, initialEditorState }) => {
 });
 
 export function pathToDocId(path: string) {
-  if (path === "/" || path.length === 0) return "home";
   return path.replace(/^\//, "").replace(/\//g, ":");
 }
 
