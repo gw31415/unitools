@@ -86,20 +86,29 @@ function MarkdownEditor({
   );
 }
 
+/*
+[3段階]
+  1. SSR時
+  2. CSR(ハイドレーション後useEffect前)
+  3. CSR (Editorアタッチ後)
+  スムーズに各種引数を受け渡す必要がある
+*/
 export default function Markdown({
   docId,
-  initialDocUpdate,
-  initialDocJSON,
+  bootstrap,
   readonly,
   ...props
 }: {
   docId: string;
-  initialDocUpdate?: string;
-  initialDocJSON?: JSONContent | null;
+  bootstrap?: {
+    snapshotJSON?: JSONContent | null;
+    yjsUpdate?: string;
+  };
   readonly?: boolean;
 } & HTMLAttributes<HTMLDivElement>) {
   const [mounted, setMounted] = useState(false);
   const [collabDoc, setCollabDoc] = useState<Y.Doc | null>(null);
+  const { snapshotJSON, yjsUpdate } = bootstrap ?? {};
 
   useEffect(() => {
     setMounted(true);
@@ -111,9 +120,9 @@ export default function Markdown({
       return;
     }
     const doc = new Y.Doc();
-    if (initialDocUpdate) {
+    if (yjsUpdate) {
       try {
-        Y.applyUpdate(doc, toUint8Array(initialDocUpdate));
+        Y.applyUpdate(doc, toUint8Array(yjsUpdate));
       } catch {
         // Ignore malformed updates; live sync will repair.
       }
@@ -130,7 +139,7 @@ export default function Markdown({
       doc.destroy();
       setCollabDoc(null);
     };
-  }, [mounted, readonly, docId, initialDocUpdate]);
+  }, [mounted, readonly, docId, yjsUpdate]);
 
   const editorOpts = useMemo<PartialEditorOptions | undefined>(() => {
     if (!collabDoc || !docId) return undefined;
@@ -149,7 +158,7 @@ export default function Markdown({
   return (
     <>
       {import.meta.env.SSR || !shouldRenderEditor ? (
-        <MarkdownView contentJSON={initialDocJSON} {...props} />
+        <MarkdownView contentJSON={snapshotJSON} {...props} />
       ) : (
         <MarkdownEditor editorOpts={editorOpts} {...props} />
       )}

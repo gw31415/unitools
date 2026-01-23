@@ -1,8 +1,8 @@
 import "@hono/react-renderer";
-import type { InitialEditorState } from "@/types/editor";
+import type { AppBootstrap } from "@/types/editor";
 
 type Head = {
-  initialEditorState?: InitialEditorState;
+  appBootstrap?: AppBootstrap;
 };
 
 declare module "@hono/react-renderer" {

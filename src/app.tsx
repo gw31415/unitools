@@ -6,7 +6,7 @@ import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import * as Y from "yjs";
 import Markdown from "@/components/Markdown";
 import { headers2Record } from "@/lib/utils";
-import type { InitialEditorState } from "@/types/editor";
+import type { AppBootstrap } from "@/types/editor";
 import { Header } from "./components/Header";
 import {
   SideMenu,
@@ -41,10 +41,10 @@ export function pathToDocId(path: string) {
 
 export type AppProps = {
   path: string;
-  initialEditorState: InitialEditorState;
+  appBootstrap: AppBootstrap;
 };
 
-export function App({ path, initialEditorState }: AppProps) {
+export function App({ path, appBootstrap }: AppProps) {
   const docId = pathToDocId(path);
   return (
     <SideMenuProvider>
@@ -52,8 +52,10 @@ export function App({ path, initialEditorState }: AppProps) {
         <Header />
         <Markdown
           docId={docId}
-          initialDocUpdate={initialEditorState.initialDocUpdate}
-          initialDocJSON={initialEditorState.initialDocJSON}
+          bootstrap={{
+            snapshotJSON: appBootstrap.snapshotJSON,
+            yjsUpdate: appBootstrap.yjsUpdate,
+          }}
           className="px-4 py-2 size-full pb-15 md:pb-2"
           aria-label="Main content editor/viewer of this page"
         />
@@ -207,36 +209,36 @@ function SidebarLoadingItems() {
 const app = createApp()
   .get("/", (c) => c.redirect("/article-1"))
   .get("/:id", async (c) => {
-    const id = c.req.param("id");
+    const docId = c.req.param("id");
 
     const client = hc<ServerAppType>(new URL(c.req.url).origin);
     const headers = headers2Record(c.req.raw.headers);
-    const res = await client.api.v1.editor[":id"].state.$get(
-      { param: { id } },
+    const res = await client.api.v1.editor[":id"].doc.$get(
+      { param: { id: docId } },
       { headers },
     );
-    let initialEditorState = {
-      initialDocUpdate: "",
-      initialDocId: id,
-      initialDocJSON: undefined,
+    let appBootstrap = {
+      yjsUpdate: "",
+      docId,
+      snapshotJSON: undefined,
     };
     if (res.ok) {
       const doc = new Y.Doc();
-      const initialDocUpdate = await res.bytes();
-      Y.applyUpdate(doc, initialDocUpdate);
+      const yjsUpdateBytes = await res.bytes();
+      Y.applyUpdate(doc, yjsUpdateBytes);
       const rootNode = yXmlFragmentToProseMirrorRootNode(
         doc.getXmlFragment("default"),
         proseMirrorSchema,
       );
-      initialEditorState = {
-        initialDocUpdate: serialize(initialDocUpdate),
-        initialDocId: id,
-        initialDocJSON: rootNode.toJSON(),
+      appBootstrap = {
+        yjsUpdate: serialize(yjsUpdateBytes),
+        docId,
+        snapshotJSON: rootNode.toJSON(),
       };
     }
     const props: AppProps = {
       path: c.req.path,
-      initialEditorState: initialEditorState,
+      appBootstrap: appBootstrap,
     };
     return c.render(<App {...props} />, props);
   });
