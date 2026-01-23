@@ -1,10 +1,13 @@
-import { reactRenderer } from "@hono/react-renderer";
-import { Clock, Menu, PanelLeft, Search } from "lucide-react";
+import { getSchema } from "@tiptap/core";
+import { hc } from "hono/client";
+import { Clock, Menu, Search } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, Script, ViteClient } from "vite-ssr-components/react";
+import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
+import * as Y from "yjs";
 import Markdown from "@/components/Markdown";
+import { headers2Record } from "@/lib/utils";
 import type { InitialEditorState } from "@/types/editor";
-import { Logo } from "./components/Logo";
+import { Header } from "./components/Header";
 import {
   SideMenu,
   SideMenuProvider,
@@ -25,79 +28,23 @@ import {
   SidebarSeparator,
 } from "./components/ui/sidebar";
 import { Spinner } from "./components/ui/spinner";
+import { toUint8Array } from "./lib/base64";
+import { baseExtensions } from "./lib/editorExtensions";
+import { createApp } from "./lib/hono";
+import type { ServerAppType } from "./server";
 
-function Header() {
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    setLoading(false);
-  }, []);
-  return (
-    <header className="h-10 sticky flex items-center gap-2 px-2 py-1 border-b">
-      <SideMenuTrigger asChild className="hidden md:flex">
-        <Button size="icon" variant="ghost" aria-label="Open side menu">
-          <PanelLeft />
-        </Button>
-      </SideMenuTrigger>
-      <Logo className="fill-foreground py-1 h-full" />
-      <div className="grow" />
-      {loading ? <Spinner className="mx-1" /> : undefined}
-    </header>
-  );
-}
-
-export const renderer = reactRenderer(({ children, initialEditorState }) => {
-  const title = "Unitools: compose knowledge with ease";
-  const description = "WYSIWYG Markdown editor for seamless content creation.";
-  return (
-    <html lang="ja">
-      <head>
-        <meta charSet="utf-8" />
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-        />
-        <meta name="description" content={description} />
-
-        {/* OGPタグ */}
-        <meta property="og:title" content={title} />
-        <meta property="og:description" content={description} />
-        <meta property="og:type" content="website" />
-        {/* <meta property="og:url" content="サイトURL" /> */}
-        {/* <meta property="og:image" content="サムネイル画像のURL" /> */}
-        <meta property="og:site_name" content="Unitools" />
-        {/* <meta name="twitter:card" content="summary_large_image" /> */}
-        <meta name="twitter:title" content={title} />
-        <meta name="twitter:description" content={description} />
-        {/* <meta name="twitter:image" content="サムネイル画像のURL" /> */}
-        <title>{title}</title>
-
-        <ViteClient />
-        <link rel="icon" href="/favicon.ico" sizes="32x32" />
-        <link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-
-        <Link href="/src/style.css" rel="stylesheet" />
-        <Script src="/src/client.tsx" defer />
-        <script type="application/json" id="initial-editor-state">
-          {JSON.stringify(initialEditorState)}
-        </script>
-      </head>
-      <body>{children}</body>
-    </html>
-  );
-});
+const proseMirrorSchema = getSchema(baseExtensions);
 
 export function pathToDocId(path: string) {
   return path.replace(/^\//, "").replace(/\//g, ":");
 }
 
-export function App({
-  path,
-  initialEditorState,
-}: {
+export type AppProps = {
   path: string;
   initialEditorState: InitialEditorState;
-}) {
+};
+
+export function App({ path, initialEditorState }: AppProps) {
   const docId = pathToDocId(path);
   return (
     <SideMenuProvider>
@@ -136,7 +83,7 @@ export function App({
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/">
+                  <a href="/article-1">
                     <Clock />
                     <span>Jan 14 — Shipping an editor that feels fast</span>
                   </a>
@@ -256,3 +203,42 @@ function SidebarLoadingItems() {
     </>
   );
 }
+
+const app = createApp()
+  .get("/", (c) => c.redirect("/article-1"))
+  .get("/:id", async (c) => {
+    const id = c.req.param("id");
+
+    const client = hc<ServerAppType>(new URL(c.req.url).origin);
+    const headers = headers2Record(c.req.raw.headers);
+    const res = await client.api.v1.page[":id"].editor.$get(
+      { param: { id } },
+      { headers },
+    );
+    let initialEditorState = {
+      initialDocUpdate: "",
+      initialDocId: id,
+      initialDocJSON: undefined,
+    };
+    if (res.ok) {
+      const { doc: initialDocUpdate } = await res.json();
+      const doc = new Y.Doc();
+      Y.applyUpdate(doc, toUint8Array(initialDocUpdate));
+      const rootNode = yXmlFragmentToProseMirrorRootNode(
+        doc.getXmlFragment("default"),
+        proseMirrorSchema,
+      );
+      initialEditorState = {
+        initialDocUpdate,
+        initialDocId: id,
+        initialDocJSON: rootNode.toJSON(),
+      };
+    }
+    const props: AppProps = {
+      path: c.req.path,
+      initialEditorState: initialEditorState,
+    };
+    return c.render(<App {...props} />, props);
+  });
+
+export default app;
