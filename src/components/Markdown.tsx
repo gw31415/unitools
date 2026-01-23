@@ -99,10 +99,7 @@ export default function Markdown({
   readonly?: boolean;
 } & HTMLAttributes<HTMLDivElement>) {
   const [mounted, setMounted] = useState(false);
-  const [collabState, setCollabState] = useState<{
-    doc: Y.Doc;
-    provider: WebsocketProvider;
-  } | null>(null);
+  const [collabDoc, setCollabDoc] = useState<Y.Doc | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -110,7 +107,7 @@ export default function Markdown({
 
   useEffect(() => {
     if (!mounted || readonly || !docId) {
-      setCollabState(null);
+      setCollabDoc(null);
       return;
     }
     const doc = new Y.Doc();
@@ -121,39 +118,32 @@ export default function Markdown({
         // Ignore malformed updates; live sync will repair.
       }
     }
-    const wsBase = new URL(
-      `/api/v1/page/${encodeURIComponent(docId)}/editor`,
-      window.location.origin,
-    );
-    wsBase.protocol = wsBase.protocol === "https:" ? "wss:" : "ws:";
-    const provider = new WebsocketProvider(wsBase.toString(), "ws", doc);
-    setCollabState({ doc, provider });
+    const baseUrl = `${window.location.origin}/api/v1/page/${docId}/editor`;
+    const provider = new WebsocketProvider(baseUrl, "ws", doc, {
+      connect: true,
+    });
+    setCollabDoc(doc);
     return () => {
       provider.destroy();
       doc.destroy();
-      setCollabState(null);
+      setCollabDoc(null);
     };
   }, [mounted, readonly, docId, initialDocUpdate]);
 
   const editorOpts = useMemo<PartialEditorOptions | undefined>(() => {
-    if (!collabState || !docId) return undefined;
+    if (!collabDoc || !docId) return undefined;
     return {
       extensions: [
         ...baseExtensions,
         Collaboration.configure({
-          document: collabState.doc,
+          document: collabDoc,
           field: "default",
         }),
       ],
-      editorProps: {
-        attributes: {
-          "data-collab-ws": `/api/v1/page/${encodeURIComponent(docId)}/editor/ws`,
-        },
-      },
     };
-  }, [collabState, docId]);
+  }, [collabDoc, docId]);
 
-  const shouldRenderEditor = mounted && !readonly && !!collabState;
+  const shouldRenderEditor = mounted && !readonly && !!collabDoc;
   return (
     <>
       {import.meta.env.SSR || !shouldRenderEditor ? (
