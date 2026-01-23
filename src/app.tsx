@@ -28,7 +28,7 @@ import {
   SidebarSeparator,
 } from "./components/ui/sidebar";
 import { Spinner } from "./components/ui/spinner";
-import { toUint8Array } from "./lib/base64";
+import { serialize } from "./lib/base64";
 import { baseExtensions } from "./lib/editorExtensions";
 import { createApp } from "./lib/hono";
 import type { ServerAppType } from "./server";
@@ -211,7 +211,7 @@ const app = createApp()
 
     const client = hc<ServerAppType>(new URL(c.req.url).origin);
     const headers = headers2Record(c.req.raw.headers);
-    const res = await client.api.v1.page[":id"].editor.$get(
+    const res = await client.api.v1.editor[":id"].state.$get(
       { param: { id } },
       { headers },
     );
@@ -221,15 +221,15 @@ const app = createApp()
       initialDocJSON: undefined,
     };
     if (res.ok) {
-      const { doc: initialDocUpdate } = await res.json();
       const doc = new Y.Doc();
-      Y.applyUpdate(doc, toUint8Array(initialDocUpdate));
+      const initialDocUpdate = await res.bytes();
+      Y.applyUpdate(doc, initialDocUpdate);
       const rootNode = yXmlFragmentToProseMirrorRootNode(
         doc.getXmlFragment("default"),
         proseMirrorSchema,
       );
       initialEditorState = {
-        initialDocUpdate,
+        initialDocUpdate: serialize(initialDocUpdate),
         initialDocId: id,
         initialDocJSON: rootNode.toJSON(),
       };

@@ -118,8 +118,10 @@ export default function Markdown({
         // Ignore malformed updates; live sync will repair.
       }
     }
-    const baseUrl = `${window.location.origin}/api/v1/page/${docId}/editor`;
-    const provider = new WebsocketProvider(baseUrl, "ws", doc, {
+
+    const wsUrl = new URL("/api/v1/editor", window.location.origin);
+    wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+    const provider = new WebsocketProvider(wsUrl.toString(), docId, doc, {
       connect: true,
     });
     setCollabDoc(doc);
