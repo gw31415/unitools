@@ -1,7 +1,7 @@
 import type { JSONContent } from "@tiptap/core";
 
-export interface InitialEditorState {
-  initialDocUpdate?: string;
-  initialDocId: string;
-  initialDocJSON?: JSONContent;
+export interface AppBootstrap {
+  yjsUpdate?: string;
+  docId: string;
+  snapshotJSON?: JSONContent;
 }

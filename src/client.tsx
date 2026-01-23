@@ -1,4 +1,4 @@
-import type { InitialEditorState } from "@/types/editor";
+import type { AppBootstrap } from "@/types/editor";
 
 const root = document.querySelector("body");
 
@@ -37,27 +37,22 @@ if (root) {
         import("react"),
       ]);
 
-    const initialEditorState = (() => {
+    const appBootstrap = (() => {
       try {
-        const json = document.getElementById(
-          "initial-editor-state",
-        )?.textContent;
-        if (json) return JSON.parse(json) as InitialEditorState;
+        const json = document.getElementById("app-bootstrap")?.textContent;
+        if (json) return JSON.parse(json) as AppBootstrap;
       } catch {}
     })() ?? {
-      initialDocUpdate: "",
-      initialDocId: "",
-      initialDocJSON: undefined,
+      yjsUpdate: "",
+      docId: "",
+      snapshotJSON: undefined,
     };
 
     function AppClient({ path }: { path: string }) {
       const [currentPath, setCurrentPath] = useState(path);
-      if (
-        currentPath !== path ||
-        initialEditorState.initialDocId !== pathToDocId(path)
-      ) {
-        initialEditorState.initialDocUpdate = undefined;
-        initialEditorState.initialDocJSON = undefined;
+      if (currentPath !== path || appBootstrap.docId !== pathToDocId(path)) {
+        appBootstrap.yjsUpdate = undefined;
+        appBootstrap.snapshotJSON = undefined;
       }
 
       useEffect(() => {
@@ -74,7 +69,7 @@ if (root) {
       useEffect(() => {
         setCurrentPath(path);
       }, [path]);
-      return <App path={currentPath} initialEditorState={initialEditorState} />;
+      return <App path={currentPath} appBootstrap={appBootstrap} />;
     }
     hydrateRoot(root, <AppClient path={window.location.pathname} />);
   })();

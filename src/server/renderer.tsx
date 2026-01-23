@@ -1,7 +1,7 @@
 import { reactRenderer } from "@hono/react-renderer";
 import { Link, Script, ViteClient } from "vite-ssr-components/react";
 
-export const renderer = reactRenderer(({ children, initialEditorState }) => {
+export const renderer = reactRenderer(({ children, appBootstrap }) => {
   const title = "Unitools: compose knowledge with ease";
   const description = "WYSIWYG Markdown editor for seamless content creation.";
   return (
@@ -34,8 +34,8 @@ export const renderer = reactRenderer(({ children, initialEditorState }) => {
 
         <Link href="/src/style.css" rel="stylesheet" />
         <Script src="/src/client.tsx" defer />
-        <script type="application/json" id="initial-editor-state">
-          {JSON.stringify(initialEditorState)}
+        <script type="application/json" id="app-bootstrap">
+          {JSON.stringify(appBootstrap)}
         </script>
       </head>
       <body>{children}</body>
