@@ -10,6 +10,12 @@ class_name = "YDurableObjects"
 binding = "DB"
 database_name = "unitools"
 database_id = "REPLACE_WITH_DATABASE_ID"
+migrations_dir = "./src/db/migrations"
+
+[[kv_namespaces]]
+binding = "AUTH_KV"
+id = "REPLACE_WITH_KV_ID"
+preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
 
 [[migrations]]
 tag = "v1"

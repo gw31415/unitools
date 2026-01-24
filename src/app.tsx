@@ -7,6 +7,7 @@ import * as Y from "yjs";
 import Markdown from "@/components/Markdown";
 import { headers2Record } from "@/lib/utils";
 import type { AppBootstrap } from "@/types/editor";
+import { useUser } from "./api/auth";
 import { Header } from "./components/Header";
 import {
   SideMenu,
@@ -49,7 +50,7 @@ export function App({ path, appBootstrap }: AppProps) {
   return (
     <SideMenuProvider>
       <div className="h-svh flex flex-col">
-        <Header />
+        <Header user={appBootstrap.user} />
         <Markdown
           docId={docId}
           bootstrap={{
@@ -208,7 +209,7 @@ function SidebarLoadingItems() {
 
 const app = createApp()
   .get("/", (c) => c.redirect("/article-1"))
-  .get("/:id", async (c) => {
+  .get("/:id", useUser, async (c) => {
     const docId = c.req.param("id");
 
     const client = hc<ServerAppType>(new URL(c.req.url).origin);
@@ -217,10 +218,11 @@ const app = createApp()
       { param: { id: docId } },
       { headers },
     );
-    let appBootstrap = {
+    let appBootstrap: AppBootstrap = {
       yjsUpdate: "",
       docId,
       snapshotJSON: undefined,
+      user: undefined,
     };
     if (res.ok) {
       const doc = new Y.Doc();
@@ -234,6 +236,7 @@ const app = createApp()
         yjsUpdate: serialize(yjsUpdateBytes),
         docId,
         snapshotJSON: rootNode.toJSON(),
+        user: c.get("user"),
       };
     }
     const props: AppProps = {
