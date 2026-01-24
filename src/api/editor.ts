@@ -1,19 +1,19 @@
 import { yRoute } from "y-durableobjects";
-import { createApp } from "./lib/hono";
+import { createApp } from "@/lib/hono";
 
-const api = createApp()
+const editor = createApp()
   .route(
-    "/editor",
+    "/",
     yRoute<{ Bindings: CloudflareBindings }>((env) => env.UNITOOLS_EDITORS),
   )
-  .get("/editor/:id/doc", async (c) => {
+  .get("/:id/doc", async (c) => {
     const roomId = c.req.param("id");
     const room = c.env.UNITOOLS_EDITORS.idFromName(roomId);
     const stub = c.env.UNITOOLS_EDITORS.get(room);
     const ydoc = await stub.getYDoc();
-    return c.body(ydoc, undefined, {
+    return c.body(ydoc, 200, {
       "Content-Type": "application/octet-stream",
     });
   });
 
-export default api;
+export default editor;

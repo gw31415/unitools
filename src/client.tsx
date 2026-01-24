@@ -37,7 +37,7 @@ if (root) {
         import("react"),
       ]);
 
-    const appBootstrap = (() => {
+    const appBootstrap: AppBootstrap = (() => {
       try {
         const json = document.getElementById("app-bootstrap")?.textContent;
         if (json) return JSON.parse(json) as AppBootstrap;
@@ -46,6 +46,7 @@ if (root) {
       yjsUpdate: "",
       docId: "",
       snapshotJSON: undefined,
+      user: undefined,
     };
 
     function AppClient({ path }: { path: string }) {
