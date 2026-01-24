@@ -10,8 +10,10 @@
 - Hono framework
 - React
 - Cloudflare services
-  - D1
-  - R2
+  - D1: Relational Database
+  - R2: Object Storage
+  - Workers KV: Temporary values; Session IDs, etc.
+  - Durable Objects: Document Synchronization
 - drizzle-orm
 - tailwindcss
 
@@ -25,18 +27,18 @@ pnpm run dev
 ## Common commands
 
 ```txt
-pnpm run dev       # local dev server
-pnpm run build     # production build
-pnpm run preview   # build then preview
-npm run cf-typegen # generate CloudflareBindings types
-pnpm tsc --noEmit  # typecheck only
+pnpm run dev        # local dev server
+pnpm run build      # production build
+pnpm run preview    # build then preview
+pnpm run cf-typegen # generate CloudflareBindings types
 
-pnpm run deploy    # DO NOT RUN: build then deploy via wrangler
+pnpm run check      # RUN BEFORE FINISH to Check all: types, formatting, linting
+pnpm run deploy     # DO NOT RUN: build then deploy via wrangler
 ```
 
 ## Notes for agents
 
 - Use `pnpm` for installs and scripts.
 - If you touch Worker bindings or Wrangler config,
-  rerun `npm run cf-typegen` and update Hono generics in `src/index.ts` as needed.
-- No test runner or lint script is configured; ask before adding new tooling.
+  rerun `pnpm run cf-typegen` and update Hono generics in `src/index.ts` as needed.
+- Run `pnpm run check` before finishing to ensure code quality.
