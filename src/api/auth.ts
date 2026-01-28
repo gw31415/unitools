@@ -1,6 +1,6 @@
-import { sValidator } from "@hono/standard-validator";
 import {
   type AuthenticationResponseJSON,
+  type AuthenticatorTransportFuture,
   generateAuthenticationOptions,
   generateRegistrationOptions,
   type RegistrationResponseJSON,
@@ -16,29 +16,28 @@ import type { Context, MiddlewareHandler } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { CookieOptions } from "hono/utils/cookie";
 import { ulid } from "ulid";
-import { z } from "zod";
 import { passkeyCredentials, type User, users } from "@/db/schema";
 import { createApp } from "@/lib/hono";
+import { type WebAuthnChallenge, webAuthnChallengeSchema } from "@/models/auth";
+import {
+  authenticationChallengeValidator,
+  registrationChallengeValidator,
+  sessionInitValidator,
+  signupValidator,
+} from "@/validators/auth";
 
 const PASSKEY_SESSION_COOKIE = "sid";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
-interface AuthenticationChallenge {
-  userId: string;
-  challenge: string;
+const SESSION_HINT_TTL_SECONDS = 60 * 60 * 24 * 7;
+
+interface RegistrationWebAuthnJSON extends RegistrationResponseJSON {
+  challengeId: string;
 }
 
-interface RegistrationChallenge extends AuthenticationChallenge {
-  userName: string;
+interface AuthenticationWebAuthnJSON extends AuthenticationResponseJSON {
+  challengeId: string;
 }
-
-type WebAuthnJSON =
-  | ({ flow: "registration" } & RegistrationResponseJSON)
-  | ({ flow: "authentication" } & AuthenticationResponseJSON);
-
-type WebAuthnChallenge =
-  | ({ flow: "registration" } & RegistrationChallenge)
-  | ({ flow: "authentication" } & AuthenticationChallenge);
 
 function getRpConfig(c: Context) {
   const url = new URL(c.req.url);
@@ -59,62 +58,58 @@ function getRpConfig(c: Context) {
   };
 }
 
-const signupSchema = z.object({
-  username: z
-    .string()
-    .trim()
-    .min(3)
-    .max(32)
-    .regex(/^[A-Za-z0-9_-]+$/),
-});
-
-const verifyParamsSchema = z.object({
-  userId: z.string().min(1),
-});
-
-const webAuthnSchema = z
-  .object({
-    flow: z.enum(["registration", "authentication"]),
-  })
-  .catchall(z.unknown());
-
 async function loadSessionFromRequest<
   Env extends { Bindings: CloudflareBindings },
 >(
   c: Context<Env>,
 ): Promise<{
   user: User;
-  sid: string;
+  sessionId: string;
 } | null> {
-  const sid = getCookie(c, PASSKEY_SESSION_COOKIE);
+  const sessionToken = getCookie(c, PASSKEY_SESSION_COOKIE);
 
   // Check for invalid cookie format
-  if (!sid?.includes(":")) return null;
+  if (!sessionToken?.includes(":")) return null;
 
-  if (!sid) {
+  if (!sessionToken) {
     deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
     return null;
   }
 
-  const record = await c.env.AUTH_KV.get<{ user: User }>(`sid:${sid}`, "json");
-  if (!record) {
+  const [sessionId, secret] = sessionToken.split(":");
+  if (!sessionId || !secret) {
     deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
     return null;
   }
 
-  return { ...record, sid };
+  const record = await c.env.AUTH_KV.get<{ user: User; secret: string }>(
+    `session:${sessionId}`,
+    "json",
+  );
+  if (!record || record.secret !== secret) {
+    deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
+    return null;
+  }
+
+  return { user: record.user, sessionId };
 }
 
 export const deleteUserSessionsFromKv = async (
   kv: CloudflareBindings["AUTH_KV"],
   userId: string,
 ) => {
-  const prefix = `sid:${userId}:`;
+  const prefix = `user-session:${userId}:`;
   let cursor: string | undefined;
   for (;;) {
     const result = await kv.list({ prefix, cursor });
     if (result.keys.length > 0) {
-      await Promise.all(result.keys.map((key) => kv.delete(key.name)));
+      await Promise.all(
+        result.keys.map(async (key) => {
+          const sessionId = key.name.replace(prefix, "");
+          await kv.delete(key.name);
+          await kv.delete(`session:${sessionId}`);
+        }),
+      );
     }
     if (result.list_complete) {
       break;
@@ -150,7 +145,7 @@ export const requireUser: MiddlewareHandler<{
 const requireSid: MiddlewareHandler<{
   Bindings: CloudflareBindings;
   Variables: {
-    sid: string;
+    sessionId: string;
   };
 }> = async (c, next) => {
   const session = await loadSessionFromRequest(c);
@@ -158,20 +153,71 @@ const requireSid: MiddlewareHandler<{
     return c.json({ authenticated: false }, 401);
   }
 
-  c.set("sid", session.sid);
+  c.set("sessionId", session.sessionId);
   await next();
 };
 
-const auth = createApp()
+function createSessionSecret() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return isoBase64URL.fromBuffer(bytes);
+}
+
+function toWebAuthnResponseJSON<T extends RegistrationWebAuthnJSON>(
+  payload: T,
+) {
+  const response = { ...payload } as RegistrationResponseJSON;
+  delete (response as Partial<T>).challengeId;
+  return response;
+}
+
+function toWebAuthnAuthenticationJSON<T extends AuthenticationWebAuthnJSON>(
+  payload: T,
+) {
+  const response = { ...payload } as AuthenticationResponseJSON;
+  delete (response as Partial<T>).challengeId;
+  return response;
+}
+
+async function createSession(
+  c: Context<{ Bindings: CloudflareBindings }>,
+  user: User,
+  sessionId: string,
+  sessionSecret: string,
+) {
+  const sessionRecord = { user, secret: sessionSecret };
+  await c.env.AUTH_KV.put(
+    `session:${sessionId}`,
+    JSON.stringify(sessionRecord),
+    {
+      expirationTtl: SESSION_TTL_SECONDS,
+    },
+  );
+  await c.env.AUTH_KV.put(
+    `user-session:${user.id}:${sessionId}`,
+    JSON.stringify({ sessionId }),
+    {
+      expirationTtl: SESSION_HINT_TTL_SECONDS,
+    },
+  );
+  setCookie(
+    c,
+    PASSKEY_SESSION_COOKIE,
+    `${sessionId}:${sessionSecret}`,
+    getRpConfig(c).toCookieOptions(),
+  );
+}
+
+export const usersApi = createApp()
   // サインアップ
-  .post("/", sValidator("json", signupSchema), async (c) => {
-    const { username: userName } = c.req.valid("json");
+  .post("/", signupValidator, async (c) => {
+    const { username } = c.req.valid("json");
 
     const db = drizzle(c.env.DB);
     const existing = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.userName, userName))
+      .where(eq(users.username, username))
       .limit(1);
 
     if (existing.length > 0) {
@@ -179,13 +225,14 @@ const auth = createApp()
     }
 
     const userId = ulid();
+    const challengeId = crypto.randomUUID();
     const { rpID, rpName } = getRpConfig(c);
 
     const options = await generateRegistrationOptions({
       rpID,
       rpName,
       userID: isoUint8Array.fromUTF8String(userId),
-      userName,
+      userName: username,
       authenticatorSelection: {
         residentKey: "required",
         userVerification: "preferred",
@@ -194,197 +241,250 @@ const auth = createApp()
     const registrationChallenge: WebAuthnChallenge = {
       flow: "registration",
       userId,
-      userName,
+      username,
       challenge: options.challenge,
     };
+
     await c.env.AUTH_KV.put(
-      `webauthn:${userId}`,
+      `webauthn:challenge:${challengeId}`,
       JSON.stringify(registrationChallenge),
       {
         expirationTtl: options.timeout ?? 60000,
       },
     );
 
-    return c.json({ options, userId }, 200);
+    return c.json(
+      {
+        id: userId,
+        username,
+        challenge: { id: challengeId, options },
+      },
+      200,
+    );
   })
-  // サインアップ/ログインの検証
-  .post(
-    "/:userId/verify",
-    sValidator("param", verifyParamsSchema),
-    sValidator("json", webAuthnSchema),
-    async (c) => {
-      const { userId } = c.req.valid("param");
-      const body = c.req.valid("json") as unknown as WebAuthnJSON;
+  // サインアップチャレンジの検証
+  .post("/-/challenge", registrationChallengeValidator, async (c) => {
+    const payload = c.req.valid("json") as unknown as RegistrationWebAuthnJSON;
+    const rawChallengeRecord = await c.env.AUTH_KV.get<WebAuthnChallenge>(
+      `webauthn:challenge:${payload.challengeId}`,
+      "json",
+    );
 
-      const challengeRecord = await c.env.AUTH_KV.get<WebAuthnChallenge>(
-        `webauthn:${userId}`,
-        "json",
-      );
+    const parsed = webAuthnChallengeSchema.safeParse(rawChallengeRecord);
+    if (!parsed.success || parsed.data.flow !== "registration") {
+      return c.json({ error: "challenge_not_found" }, 400);
+    }
+    const challengeRecord = parsed.data;
 
-      if (!challengeRecord) {
-        return c.json({ error: "challenge_not_found" }, 400);
-      }
-
-      const { rpID, expectedOrigin } = getRpConfig(c);
-      if (body.flow === "registration") {
-        if (challengeRecord.flow !== "registration") {
-          return c.json({ error: "challenge_not_found" }, 400);
-        }
-
-        const { flow, ...response } = body;
-        let verification: VerifiedRegistrationResponse;
-        try {
-          verification = await verifyRegistrationResponse({
-            response,
-            expectedChallenge: challengeRecord.challenge,
-            expectedOrigin,
-            expectedRPID: rpID,
-          });
-          if (!verification.verified || !verification.registrationInfo)
-            throw undefined;
-        } catch (error) {
-          if (error !== undefined) console.error(error);
-          return c.json({ error: "registration_failed" }, 400);
-        }
-
-        const { credential } = verification.registrationInfo;
-        const publicKey = isoBase64URL.fromBuffer(credential.publicKey);
-        const transports = credential.transports;
-
-        const db = drizzle(c.env.DB);
-        const existingUser = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.userName, challengeRecord.userName))
-          .limit(1);
-        if (existingUser.length > 0) {
-          return c.json({ error: "username_unavailable" }, 409);
-        }
-        await db.insert(users).values({
-          id: challengeRecord.userId,
-          userName: challengeRecord.userName,
-        });
-        await db.insert(passkeyCredentials).values({
-          id: credential.id,
-          userId: challengeRecord.userId,
-          publicKey,
-          counter: credential.counter,
-          transports,
-        });
-
-        await c.env.AUTH_KV.delete(`webauthn:${userId}`);
-
-        return c.body(null, 204);
-      }
-
-      if (challengeRecord.flow !== "authentication") {
-        return c.json({ error: "challenge_not_found" }, 400);
-      }
-
-      const { flow, ...response } = body;
-      const db = drizzle(c.env.DB);
-      const credentialRows = await db
-        .select()
-        .from(passkeyCredentials)
-        .where(eq(passkeyCredentials.id, response.id))
-        .limit(1);
-      const storedCredential = credentialRows[0];
-
-      if (!storedCredential || storedCredential.userId !== userId) {
-        return c.json({ error: "credential_not_found" }, 404);
-      }
-
-      let verification: VerifiedAuthenticationResponse;
-      try {
-        verification = await verifyAuthenticationResponse({
-          response,
-          expectedChallenge: challengeRecord.challenge,
-          expectedOrigin,
-          expectedRPID: rpID,
-          credential: {
-            id: storedCredential.id,
-            publicKey: new Uint8Array(
-              isoBase64URL.toBuffer(storedCredential.publicKey),
-            ),
-            counter: storedCredential.counter,
-            transports: storedCredential.transports ?? undefined,
-          },
-        });
-
-        if (!verification.verified) throw undefined;
-      } catch (error) {
-        if (error !== undefined) console.error(error);
-        return c.json({ error: "authentication_failed" }, 401);
-      }
-
-      await db
-        .update(passkeyCredentials)
-        .set({ counter: verification.authenticationInfo.newCounter })
-        .where(eq(passkeyCredentials.id, storedCredential.id));
-
-      await c.env.AUTH_KV.delete(`webauthn:${userId}`);
-
-      const sessionToken = crypto.randomUUID();
-      const user = (
-        await db.select().from(users).where(eq(users.id, userId)).limit(1)
-      )[0];
-
-      const sid = `${userId}:${sessionToken}`;
-      const sessionRecord = { user };
-      await c.env.AUTH_KV.put(`sid:${sid}`, JSON.stringify(sessionRecord), {
-        expirationTtl: SESSION_TTL_SECONDS,
+    const { rpID, expectedOrigin } = getRpConfig(c);
+    let verification: VerifiedRegistrationResponse;
+    try {
+      verification = await verifyRegistrationResponse({
+        response: toWebAuthnResponseJSON(payload),
+        expectedChallenge: challengeRecord.challenge,
+        expectedOrigin,
+        expectedRPID: rpID,
       });
-      setCookie(
-        c,
-        PASSKEY_SESSION_COOKIE,
-        sid,
-        getRpConfig(c).toCookieOptions(),
-      );
-
-      return c.body(null, 204);
-    },
-  )
-  // ログインチャレンジの生成
-  .get("/:userId/challenge", async (c) => {
-    const userId = c.req.param("userId");
-
-    const db = drizzle(c.env.DB);
-
-    const credentials = await db
-      .select()
-      .from(passkeyCredentials)
-      .where(eq(passkeyCredentials.userId, userId));
-
-    const { rpID } = getRpConfig(c);
-    const options = await generateAuthenticationOptions({
-      rpID,
-      userVerification: "preferred",
-      allowCredentials: credentials.map((credential) => ({
-        id: credential.id,
-        transports: credential.transports ?? undefined,
-      })),
-    });
-
-    if (credentials.length > 0) {
-      const authenticationChallenge: WebAuthnChallenge = {
-        flow: "authentication",
-        userId,
-        challenge: options.challenge,
-      };
-      await c.env.AUTH_KV.put(
-        `webauthn:${userId}`,
-        JSON.stringify(authenticationChallenge),
-        { expirationTtl: options.timeout ?? 60000 },
-      );
+      if (!verification.verified || !verification.registrationInfo) {
+        throw undefined;
+      }
+    } catch (error) {
+      if (error !== undefined) console.error(error);
+      return c.json({ error: "registration_failed" }, 400);
     }
 
-    return c.json(options, 200);
-  })
-  .delete("/session", requireSid, async (c) => {
-    const sid = c.get("sid");
-    await c.env.AUTH_KV.delete(`sid:${sid}`);
-    deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
+    const db = drizzle(c.env.DB);
+    const existingUser = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.username, challengeRecord.username))
+      .limit(1);
+    if (existingUser.length > 0) {
+      return c.json({ error: "username_unavailable" }, 409);
+    }
+
+    const { credential } = verification.registrationInfo;
+    const publicKey = isoBase64URL.fromBuffer(credential.publicKey);
+    const transports = credential.transports;
+
+    const [user] = await db
+      .insert(users)
+      .values({
+        id: challengeRecord.userId,
+        username: challengeRecord.username,
+      })
+      .returning();
+
+    await db
+      .insert(passkeyCredentials)
+      .values({
+        id: credential.id,
+        userId: challengeRecord.userId,
+        publicKey,
+        counter: credential.counter,
+        transports,
+      })
+      .returning();
+
+    await c.env.AUTH_KV.delete(`webauthn:challenge:${payload.challengeId}`);
+
+    const sessionId = ulid();
+    const sessionSecret = createSessionSecret();
+    await createSession(c, user, sessionId, sessionSecret);
+
     return c.body(null, 204);
   });
 
-export default auth;
+export const sessionsApi = createApp()
+  // ログイン（チャレンジ生成）
+  .post("/-", sessionInitValidator, async (c) => {
+    const { id: requestedSessionId } = c.req.valid("json");
+    const { rpID } = getRpConfig(c);
+    const challengeId = crypto.randomUUID();
+    const sessionId = requestedSessionId ?? ulid();
+    const sessionSecret = createSessionSecret();
+
+    let allowCredentials:
+      | {
+          id: string;
+          type: "public-key";
+          transports?: AuthenticatorTransportFuture[];
+        }[]
+      | undefined;
+
+    let userId: string | undefined;
+    if (requestedSessionId) {
+      const sessionRecord = await c.env.AUTH_KV.get<{
+        user: User;
+        secret: string;
+      }>(`session:${requestedSessionId}`, "json");
+      if (!sessionRecord) {
+        return c.json({ error: "session_not_found" }, 404);
+      }
+      userId = sessionRecord.user.id;
+      const db = drizzle(c.env.DB);
+      const credentials = await db
+        .select({
+          id: passkeyCredentials.id,
+          transports: passkeyCredentials.transports,
+        })
+        .from(passkeyCredentials)
+        .where(eq(passkeyCredentials.userId, userId));
+      allowCredentials = credentials.map((credential) => ({
+        id: credential.id,
+        type: "public-key" as const,
+        transports: credential.transports ?? undefined,
+      }));
+    }
+
+    const options = await generateAuthenticationOptions({
+      rpID,
+      userVerification: "preferred",
+      allowCredentials,
+    });
+
+    const authenticationChallenge: WebAuthnChallenge = {
+      flow: "authentication",
+      challenge: options.challenge,
+      sessionId,
+      sessionSecret,
+      userId,
+    };
+    await c.env.AUTH_KV.put(
+      `webauthn:challenge:${challengeId}`,
+      JSON.stringify(authenticationChallenge),
+      { expirationTtl: options.timeout ?? 60000 },
+    );
+
+    return c.json(
+      {
+        id: sessionId,
+        secret: sessionSecret,
+        challenge: { id: challengeId, options },
+      },
+      200,
+    );
+  })
+  // ログイン検証
+  .post("/-/challenge", authenticationChallengeValidator, async (c) => {
+    const payload = c.req.valid(
+      "json",
+    ) as unknown as AuthenticationWebAuthnJSON;
+    const rawChallengeRecord = await c.env.AUTH_KV.get<WebAuthnChallenge>(
+      `webauthn:challenge:${payload.challengeId}`,
+      "json",
+    );
+
+    const parsed = webAuthnChallengeSchema.safeParse(rawChallengeRecord);
+    if (!parsed.success || parsed.data.flow !== "authentication") {
+      return c.json({ error: "challenge_not_found" }, 400);
+    }
+    const challengeRecord = parsed.data;
+
+    const { rpID, expectedOrigin } = getRpConfig(c);
+    const db = drizzle(c.env.DB);
+
+    const [storedCredential] = await db
+      .select()
+      .from(passkeyCredentials)
+      .where(eq(passkeyCredentials.id, payload.id))
+      .limit(1);
+
+    if (!storedCredential) {
+      return c.json({ error: "credential_not_found" }, 404);
+    }
+
+    let verification: VerifiedAuthenticationResponse;
+    try {
+      verification = await verifyAuthenticationResponse({
+        response: toWebAuthnAuthenticationJSON(payload),
+        expectedChallenge: challengeRecord.challenge,
+        expectedOrigin,
+        expectedRPID: rpID,
+        credential: {
+          id: storedCredential.id,
+          publicKey: new Uint8Array(
+            isoBase64URL.toBuffer(storedCredential.publicKey),
+          ),
+          counter: storedCredential.counter,
+          transports: storedCredential.transports ?? undefined,
+        },
+      });
+
+      if (!verification.verified) throw undefined;
+    } catch (error) {
+      if (error !== undefined) console.error(error);
+      return c.json({ error: "authentication_failed" }, 401);
+    }
+
+    await db
+      .update(passkeyCredentials)
+      .set({ counter: verification.authenticationInfo.newCounter })
+      .where(eq(passkeyCredentials.id, storedCredential.id));
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, storedCredential.userId))
+      .limit(1);
+    if (!user) {
+      return c.json({ error: "user_not_found" }, 404);
+    }
+
+    await c.env.AUTH_KV.delete(`webauthn:challenge:${payload.challengeId}`);
+
+    await createSession(
+      c,
+      user,
+      challengeRecord.sessionId,
+      challengeRecord.sessionSecret,
+    );
+
+    return c.body(null, 204);
+  })
+  .delete("/-", requireSid, async (c) => {
+    const sessionId = c.get("sessionId");
+    await c.env.AUTH_KV.delete(`session:${sessionId}`);
+    deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
+    return c.body(null, 204);
+  });
