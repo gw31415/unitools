@@ -166,7 +166,7 @@ function createSessionSecret() {
 function toWebAuthnResponseJSON<T extends RegistrationWebAuthnJSON>(
   payload: T,
 ) {
-  const response = { ...payload } as RegistrationResponseJSON;
+  const response = { ...payload } satisfies RegistrationResponseJSON;
   delete (response as Partial<T>).challengeId;
   return response;
 }
@@ -174,7 +174,7 @@ function toWebAuthnResponseJSON<T extends RegistrationWebAuthnJSON>(
 function toWebAuthnAuthenticationJSON<T extends AuthenticationWebAuthnJSON>(
   payload: T,
 ) {
-  const response = { ...payload } as AuthenticationResponseJSON;
+  const response = { ...payload } satisfies AuthenticationResponseJSON;
   delete (response as Partial<T>).challengeId;
   return response;
 }
