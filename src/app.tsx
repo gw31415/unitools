@@ -37,7 +37,10 @@ import type { ServerAppType } from "./server";
 const proseMirrorSchema = getSchema(baseExtensions);
 
 export function pathToDocId(path: string) {
-  return path.replace(/^\//, "").replace(/\//g, ":");
+  const normalized = path.startsWith("/pages/")
+    ? path.slice("/pages/".length)
+    : path.replace(/^\//, "");
+  return normalized.replace(/\//g, ":");
 }
 
 export type AppProps = {
@@ -86,7 +89,7 @@ export function App({ path, appBootstrap }: AppProps) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/article-1">
+                  <a href="/pages/article-1">
                     <Clock />
                     <span>Jan 14 — Shipping an editor that feels fast</span>
                   </a>
@@ -95,7 +98,7 @@ export function App({ path, appBootstrap }: AppProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/article-2">
+                  <a href="/pages/article-2">
                     <Clock />
                     <span>Jan 12 — A tiny design system for Hono</span>
                   </a>
@@ -104,7 +107,7 @@ export function App({ path, appBootstrap }: AppProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/article-3">
+                  <a href="/pages/article-3">
                     <Clock />
                     <span>Jan 09 — Making markdown feel human</span>
                   </a>
@@ -113,7 +116,7 @@ export function App({ path, appBootstrap }: AppProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/article-4">
+                  <a href="/pages/article-4">
                     <Clock />
                     <span>Jan 06 — Infinite scroll without losing context</span>
                   </a>
@@ -122,7 +125,7 @@ export function App({ path, appBootstrap }: AppProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/article-5">
+                  <a href="/pages/article-5">
                     <Clock />
                     <span>Jan 03 — Notes on typography for sidebars</span>
                   </a>
@@ -131,7 +134,7 @@ export function App({ path, appBootstrap }: AppProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/article-6">
+                  <a href="/pages/article-6">
                     <Clock />
                     <span>Dec 30 — A calmer information hierarchy</span>
                   </a>
@@ -140,7 +143,7 @@ export function App({ path, appBootstrap }: AppProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/article-7">
+                  <a href="/pages/article-7">
                     <Clock />
                     <span>Dec 28 — Quick wins for content editors</span>
                   </a>
@@ -149,7 +152,7 @@ export function App({ path, appBootstrap }: AppProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/article-8">
+                  <a href="/pages/article-8">
                     <Clock />
                     <span>Dec 24 — Designing the quiet state</span>
                   </a>
@@ -158,7 +161,7 @@ export function App({ path, appBootstrap }: AppProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/article-9">
+                  <a href="/pages/article-9">
                     <Clock />
                     <span>Dec 20 — The case for compact menus</span>
                   </a>
@@ -167,7 +170,7 @@ export function App({ path, appBootstrap }: AppProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <a href="/article-10">
+                  <a href="/pages/article-10">
                     <Clock />
                     <span>Dec 16 — Shipping with a light touch</span>
                   </a>
@@ -208,8 +211,8 @@ function SidebarLoadingItems() {
 }
 
 const app = createApp()
-  .get("/", (c) => c.redirect("/article-1"))
-  .get("/:id", useUser, async (c) => {
+  .get("/", (c) => c.redirect("/pages/article-1"))
+  .get("/pages/:id", useUser, async (c) => {
     const docId = c.req.param("id");
 
     const client = hc<ServerAppType>(new URL(c.req.url).origin);
