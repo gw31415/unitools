@@ -13,26 +13,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Spinner } from "./ui/spinner";
 
-const AUTH_USERS_KEY = "unitools:authUsers";
-const AUTH_LAST_USER_KEY = "unitools:lastUserName";
-
-function readAuthUsers(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  const raw = window.localStorage.getItem(AUTH_USERS_KEY);
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") {
-      return parsed as Record<string, string>;
-    }
-  } catch {}
-  return {};
-}
-
-function writeAuthUsers(users: Record<string, string>) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users));
-}
+const normalizeUserName = (value: string) => value.trim();
 
 function LoginButton(props: {
   onLogin: () => Promise<void>;
@@ -40,7 +21,7 @@ function LoginButton(props: {
 }) {
   return (
     <Button type="button" onClick={props.onLogin} disabled={props.disabled}>
-      Login
+      Passkey Login
     </Button>
   );
 }
@@ -54,7 +35,7 @@ function SignupButton(props: {
   return (
     <>
       <Input
-        placeholder="alice"
+        placeholder="new username"
         value={props.userName}
         onChange={(event) => props.onChangeUserName(event.target.value)}
         className="w-40"
@@ -70,7 +51,7 @@ function SignupButton(props: {
 function LogoutButton(props: { user: User; onLogout: () => Promise<void> }) {
   return (
     <Button type="button" onClick={props.onLogout}>
-      Logout for {props.user.userName}
+      Logout for {props.user.username}
     </Button>
   );
 }
@@ -92,22 +73,9 @@ export function Header(props: { user: User | undefined }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem(AUTH_LAST_USER_KEY);
-    if (saved) {
-      setUserName(saved);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(AUTH_LAST_USER_KEY, userName);
-  }, [userName]);
-
   const handleSignup = useCallback(async () => {
     if (!client || authBusy) return;
-    const nextName = userName.trim();
+    const nextName = normalizeUserName(userName);
     if (!nextName) {
       setAuthError("Please enter a username.");
       return;
@@ -115,7 +83,7 @@ export function Header(props: { user: User | undefined }) {
     setAuthBusy(true);
     setAuthError(null);
     try {
-      const res = await client.api.v1.auth.$post({
+      const res = await client.api.v1.users.$post({
         json: { username: nextName },
       });
       if (!res.ok) {
@@ -127,19 +95,17 @@ export function Header(props: { user: User | undefined }) {
         setAuthError(message);
         return;
       }
-      const { options, userId } = await res.json();
-      const response = await startRegistration({ optionsJSON: options });
-      const verifyRes = await client.api.v1.auth[":userId"].verify.$post({
-        param: { userId },
-        json: { flow: "registration", ...response },
+      const { challenge } = await res.json();
+      const response = await startRegistration({
+        optionsJSON: challenge.options,
+      });
+      const verifyRes = await client.api.v1.users["-"].challenge.$post({
+        json: { challengeId: challenge.id, ...response },
       });
       if (!verifyRes.ok) {
         setAuthError("Could not verify signup.");
         return;
       }
-      const users = readAuthUsers();
-      users[nextName] = userId;
-      writeAuthUsers(users);
       window.location.reload();
     } catch (error) {
       console.error(error);
@@ -151,32 +117,22 @@ export function Header(props: { user: User | undefined }) {
 
   const handleLogin = useCallback(async () => {
     if (!client || authBusy) return;
-    const nextName = userName.trim();
-    if (!nextName) {
-      setAuthError("Please enter your username.");
-      return;
-    }
-    const users = readAuthUsers();
-    const userId = users[nextName];
-    if (!userId) {
-      setAuthError("No local account found for that username.");
-      return;
-    }
     setAuthBusy(true);
     setAuthError(null);
     try {
-      const challengeRes = await client.api.v1.auth[":userId"].challenge.$get({
-        param: { userId },
+      const challengeRes = await client.api.v1.sessions["-"].$post({
+        json: {},
       });
       if (!challengeRes.ok) {
         setAuthError("Login challenge failed.");
         return;
       }
-      const options = await challengeRes.json();
-      const response = await startAuthentication({ optionsJSON: options });
-      const verifyRes = await client.api.v1.auth[":userId"].verify.$post({
-        param: { userId },
-        json: { flow: "authentication", ...response },
+      const { challenge } = await challengeRes.json();
+      const response = await startAuthentication({
+        optionsJSON: challenge.options,
+      });
+      const verifyRes = await client.api.v1.sessions["-"].challenge.$post({
+        json: { challengeId: challenge.id, ...response },
       });
       if (!verifyRes.ok) {
         setAuthError("Login verification failed.");
@@ -189,14 +145,14 @@ export function Header(props: { user: User | undefined }) {
     } finally {
       setAuthBusy(false);
     }
-  }, [authBusy, client, userName]);
+  }, [authBusy, client]);
 
   const handleLogout = useCallback(async () => {
     if (!client || authBusy) return;
     setAuthBusy(true);
     setAuthError(null);
     try {
-      const res = await client.api.v1.auth.session.$delete();
+      const res = await client.api.v1.sessions["-"].$delete();
       if (!res.ok) {
         setAuthError("Logout failed. Please try again.");
         return;
