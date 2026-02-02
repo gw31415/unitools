@@ -1,4 +1,7 @@
+import { cn } from "@/lib/utils";
+
 export function Logo(props: React.SVGProps<SVGSVGElement>) {
+  const className = cn("fill-foreground", props.className);
   return (
     <svg
       viewBox="0 0 5834 2084"
@@ -13,6 +16,7 @@ export function Logo(props: React.SVGProps<SVGSVGElement>) {
         strokeMiterlimit: "2",
       }}
       {...props}
+      className={className}
     >
       <title>Unitools</title>
       <path
