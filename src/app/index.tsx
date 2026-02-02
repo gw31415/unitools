@@ -215,7 +215,7 @@ function SidebarLoadingItems() {
 }
 
 const app = createApp()
-  .get("/", (c) => c.redirect("/pages/article-1"))
+  .get("/", (c) => c.redirect("/auth"))
   .get("/pages/:id", useUser, async (c) => {
     const docId = c.req.param("id");
 
@@ -252,7 +252,7 @@ const app = createApp()
     };
     return c.render(<App {...props} />, props);
   })
-  .get(useUser, (c) => {
+  .get("*", useUser, (c) => {
     const appBootstrap = {
       yjsUpdate: "",
       docId: "",
