@@ -1,10 +1,11 @@
-import { PanelLeft } from "lucide-react";
+import { PanelLeft, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SideMenuTrigger } from "@/components/SideMenu";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import type { User } from "@/db/schema";
 
-export function Header() {
+export function Header({ user }: { user?: User }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,7 +20,9 @@ export function Header() {
         </Button>
       </SideMenuTrigger>
       <div className="grow" />
-      {loading ? <Spinner className="mx-1" /> : undefined}
+      <Button size="icon" variant="ghost" disabled={loading}>
+        {loading ? <Spinner /> : user ? <Plus /> : undefined}
+      </Button>
     </header>
   );
 }

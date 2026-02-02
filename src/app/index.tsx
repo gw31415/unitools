@@ -57,7 +57,7 @@ export function App({ path, appBootstrap }: AppProps) {
   return (
     <SideMenuProvider>
       <div className="h-svh flex flex-col">
-        <Header />
+        <Header user={appBootstrap.user} />
         <Markdown
           docId={docId}
           bootstrap={{
