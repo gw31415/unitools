@@ -29,7 +29,11 @@ import {
 const PASSKEY_SESSION_COOKIE = "sid";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
-const SESSION_HINT_TTL_SECONDS = 60 * 60 * 24 * 7;
+const SESSION_PREFIX = "session";
+
+const sessionKey = (userId: string, sessionId: string) =>
+  `${userSessionPrefix(userId)}:${sessionId}`;
+const userSessionPrefix = (userId: string) => `${SESSION_PREFIX}:${userId}:`;
 
 interface RegistrationWebAuthnJSON extends RegistrationResponseJSON {
   challengeId: string;
@@ -68,25 +72,22 @@ async function loadSessionFromRequest<
 } | null> {
   const sessionToken = getCookie(c, PASSKEY_SESSION_COOKIE);
 
-  // Check for invalid cookie format
-  if (!sessionToken?.includes(":")) return null;
-
   if (!sessionToken) {
     deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
     return null;
   }
 
-  const [sessionId, secret] = sessionToken.split(":");
-  if (!sessionId || !secret) {
+  const [userId, sessionId, secret] = sessionToken.split(":");
+  if (!userId || !sessionId || !secret) {
     deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
     return null;
   }
 
   const record = await c.env.AUTH_KV.get<{ user: User; secret: string }>(
-    `session:${sessionId}`,
+    sessionKey(userId, sessionId),
     "json",
   );
-  if (!record || record.secret !== secret) {
+  if (!record || record.secret !== secret || record.user.id !== userId) {
     deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
     return null;
   }
@@ -98,16 +99,14 @@ export const deleteUserSessionsFromKv = async (
   kv: CloudflareBindings["AUTH_KV"],
   userId: string,
 ) => {
-  const prefix = `user-session:${userId}:`;
+  const prefix = userSessionPrefix(userId);
   let cursor: string | undefined;
   for (;;) {
     const result = await kv.list({ prefix, cursor });
     if (result.keys.length > 0) {
       await Promise.all(
         result.keys.map(async (key) => {
-          const sessionId = key.name.replace(prefix, "");
           await kv.delete(key.name);
-          await kv.delete(`session:${sessionId}`);
         }),
       );
     }
@@ -146,6 +145,7 @@ const requireSid: MiddlewareHandler<{
   Bindings: CloudflareBindings;
   Variables: {
     sessionId: string;
+    userId: string;
   };
 }> = async (c, next) => {
   const session = await loadSessionFromRequest(c);
@@ -154,6 +154,7 @@ const requireSid: MiddlewareHandler<{
   }
 
   c.set("sessionId", session.sessionId);
+  c.set("userId", session.user.id);
   await next();
 };
 
@@ -187,23 +188,16 @@ async function createSession(
 ) {
   const sessionRecord = { user, secret: sessionSecret };
   await c.env.AUTH_KV.put(
-    `session:${sessionId}`,
+    sessionKey(user.id, sessionId),
     JSON.stringify(sessionRecord),
     {
       expirationTtl: SESSION_TTL_SECONDS,
     },
   );
-  await c.env.AUTH_KV.put(
-    `user-session:${user.id}:${sessionId}`,
-    JSON.stringify({ sessionId }),
-    {
-      expirationTtl: SESSION_HINT_TTL_SECONDS,
-    },
-  );
   setCookie(
     c,
     PASSKEY_SESSION_COOKIE,
-    `${sessionId}:${sessionSecret}`,
+    `${user.id}:${sessionId}:${sessionSecret}`,
     getRpConfig(c).toCookieOptions(),
   );
 }
@@ -338,7 +332,8 @@ export const usersApi = createApp()
 export const sessionsApi = createApp()
   // ログイン（チャレンジ生成）
   .post("/-", sessionInitValidator, async (c) => {
-    const { id: requestedSessionId } = c.req.valid("json");
+    const { id: requestedSessionId, userId: requestedUserId } =
+      c.req.valid("json");
     const { rpID } = getRpConfig(c);
     const challengeId = crypto.randomUUID();
     const sessionId = requestedSessionId ?? ulid();
@@ -354,10 +349,13 @@ export const sessionsApi = createApp()
 
     let userId: string | undefined;
     if (requestedSessionId) {
+      if (!requestedUserId) {
+        return c.json({ error: "user_id_required" }, 400);
+      }
       const sessionRecord = await c.env.AUTH_KV.get<{
         user: User;
         secret: string;
-      }>(`session:${requestedSessionId}`, "json");
+      }>(sessionKey(requestedUserId, requestedSessionId), "json");
       if (!sessionRecord) {
         return c.json({ error: "session_not_found" }, 404);
       }
@@ -484,7 +482,8 @@ export const sessionsApi = createApp()
   })
   .delete("/-", requireSid, async (c) => {
     const sessionId = c.get("sessionId");
-    await c.env.AUTH_KV.delete(`session:${sessionId}`);
+    const userId = c.get("userId");
+    await c.env.AUTH_KV.delete(sessionKey(userId, sessionId));
     deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
     return c.body(null, 204);
   });

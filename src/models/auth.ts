@@ -54,9 +54,18 @@ export const sessionSchema = z.object({
   secret: z.string().min(1),
 });
 
-export const sessionInitSchema = z.object({
+const sessionInitBaseSchema = z.object({
   id: z.string().min(1).optional(),
+  userId: ulidSchema.optional(),
 });
+
+export const sessionInitSchema = sessionInitBaseSchema.refine(
+  (data) => !data.id || !!data.userId,
+  {
+    message: "user_id_required",
+    path: ["userId"],
+  },
+);
 
 export const registrationChallengeSchema = z.object({
   flow: z.literal("registration"),
