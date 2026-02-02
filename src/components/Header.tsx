@@ -1,6 +1,5 @@
 import { PanelLeft } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Logo } from "@/components/Logo";
 import { SideMenuTrigger } from "@/components/SideMenu";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -19,7 +18,6 @@ export function Header() {
           <PanelLeft />
         </Button>
       </SideMenuTrigger>
-      <Logo className="py-1 h-full" />
       <div className="grow" />
       {loading ? <Spinner className="mx-1" /> : undefined}
     </header>
