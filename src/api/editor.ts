@@ -1,10 +1,10 @@
 import { yRoute } from "y-durableobjects";
-import { createApp } from "@/lib/hono";
+import { createApp, type Env } from "@/lib/hono";
 
 const editor = createApp()
   .route(
     "/",
-    yRoute<{ Bindings: CloudflareBindings }>((env) => env.UNITOOLS_EDITORS),
+    yRoute<Env>((env) => env.UNITOOLS_EDITORS),
   )
   .get("/:id/doc", async (c) => {
     const roomId = c.req.param("id");

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { trimTrailingSlash } from "hono/trailing-slash";
 
-export const createApp = () =>
-  new Hono<{ Bindings: CloudflareBindings }>().use(trimTrailingSlash());
+export type Env = { Bindings: CloudflareBindings };
+
+export const createApp = () => new Hono<Env>().use(trimTrailingSlash());

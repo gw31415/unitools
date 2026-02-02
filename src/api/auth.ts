@@ -17,7 +17,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { CookieOptions } from "hono/utils/cookie";
 import { ulid } from "ulid";
 import { passkeyCredentials, type User, users } from "@/db/schema";
-import { createApp } from "@/lib/hono";
+import { createApp, type Env } from "@/lib/hono";
 import { type WebAuthnChallenge, webAuthnChallengeSchema } from "@/models/auth";
 import {
   authenticationChallengeValidator,
@@ -62,10 +62,8 @@ function getRpConfig(c: Context) {
   };
 }
 
-async function loadSessionFromRequest<
-  Env extends { Bindings: CloudflareBindings },
->(
-  c: Context<Env>,
+async function loadSessionFromRequest<EnvExtended extends Env>(
+  c: Context<EnvExtended>,
 ): Promise<{
   user: User;
   sessionId: string;
@@ -181,7 +179,7 @@ function toWebAuthnAuthenticationJSON<T extends AuthenticationWebAuthnJSON>(
 }
 
 async function createSession(
-  c: Context<{ Bindings: CloudflareBindings }>,
+  c: Context<Env>,
   user: User,
   sessionId: string,
   sessionSecret: string,
