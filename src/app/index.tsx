@@ -4,17 +4,16 @@ import { Clock, Menu, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import * as Y from "yjs";
+import { useUser } from "@/api/auth";
+import AuthPage from "@/app/auth";
+import { Header } from "@/components/Header";
 import Markdown from "@/components/Markdown";
-import { headers2Record } from "@/lib/utils";
-import type { AppBootstrap } from "@/types/editor";
-import { useUser } from "./api/auth";
-import { Header } from "./components/Header";
 import {
   SideMenu,
   SideMenuProvider,
   SideMenuTrigger,
-} from "./components/SideMenu";
-import { Button } from "./components/ui/button";
+} from "@/components/SideMenu";
+import { Button } from "@/components/ui/button";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -27,12 +26,14 @@ import {
   SidebarMenuItem,
   SidebarMenuSkeleton,
   SidebarSeparator,
-} from "./components/ui/sidebar";
-import { Spinner } from "./components/ui/spinner";
-import { serialize } from "./lib/base64";
-import { baseExtensions } from "./lib/editorExtensions";
-import { createApp } from "./lib/hono";
-import type { ServerAppType } from "./server";
+} from "@/components/ui/sidebar";
+import { Spinner } from "@/components/ui/spinner";
+import { serialize } from "@/lib/base64";
+import { baseExtensions } from "@/lib/editorExtensions";
+import { createApp } from "@/lib/hono";
+import { headers2Record } from "@/lib/utils";
+import type { ServerAppType } from "@/server";
+import type { AppBootstrap } from "@/types/editor";
 
 const proseMirrorSchema = getSchema(baseExtensions);
 
@@ -49,11 +50,14 @@ export type AppProps = {
 };
 
 export function App({ path, appBootstrap }: AppProps) {
+  if (/^\/auth\/?/g.test(path)) {
+    return <AuthPage user={appBootstrap.user} />;
+  }
   const docId = pathToDocId(path);
   return (
     <SideMenuProvider>
       <div className="h-svh flex flex-col">
-        <Header user={appBootstrap.user} />
+        <Header />
         <Markdown
           docId={docId}
           bootstrap={{
@@ -247,6 +251,16 @@ const app = createApp()
       appBootstrap: appBootstrap,
     };
     return c.render(<App {...props} />, props);
+  })
+  .get(useUser, (c) => {
+    const appBootstrap = {
+      yjsUpdate: "",
+      docId: "",
+      user: c.get("user"),
+    };
+    return c.render(<App path={c.req.path} appBootstrap={appBootstrap} />, {
+      appBootstrap,
+    });
   });
 
 export default app;

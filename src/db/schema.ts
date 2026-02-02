@@ -22,5 +22,12 @@ export const passkeyCredentials = sqliteTable("passkey_credentials", {
     .default(sql`(unixepoch('now', 'subsec') * 1000)`),
 });
 
+export const markdownDocs = sqliteTable("docs", {
+  id: text("id").primaryKey(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(unixepoch('now', 'subsec') * 1000)`),
+});
+
 export type User = typeof users.$inferSelect;
 export type PasskeyCredential = typeof passkeyCredentials.$inferSelect;
