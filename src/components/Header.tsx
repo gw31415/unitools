@@ -20,7 +20,7 @@ export function Header({ user }: { user?: User }) {
         </Button>
       </SideMenuTrigger>
       <div className="grow" />
-      <Button size="icon" variant="ghost" disabled={loading}>
+      <Button size="icon" variant="ghost" disabled={loading || !user}>
         {loading ? <Spinner /> : user ? <Plus /> : undefined}
       </Button>
     </header>
