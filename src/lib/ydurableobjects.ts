@@ -5,16 +5,7 @@ import {
 import type { Env } from "@/lib/hono";
 
 export class YDurableObjects extends BaseYDurableObjects<Env> {
-  async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname === "/reset" && request.method === "POST") {
-      await this.resetDoc();
-      return new Response(null, { status: 204 });
-    }
-    return super.fetch(request);
-  }
-
-  private async resetDoc(): Promise<void> {
+  async reset(): Promise<void> {
     for (const ws of this.state.getWebSockets()) {
       await this.unregisterWebSocket(ws);
       try {
