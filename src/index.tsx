@@ -1,5 +1,5 @@
 import app from "./server";
 
-export { YDurableObjects } from "y-durableobjects";
+export { YDurableObjects } from "@/lib/ydurableobjects";
 
 export default app;
