@@ -3,7 +3,14 @@ import { hc } from "hono/client";
 import { Provider as JotaiProvider, useAtomValue } from "jotai";
 import { useHydrateAtoms } from "jotai/utils";
 import { Clock, Menu, Search } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import * as Y from "yjs";
 import { useUser } from "@/api/auth";
@@ -23,7 +30,6 @@ import {
   SidebarHeader,
   SidebarInput,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
@@ -47,6 +53,34 @@ import {
 import type { InitialRouteState, RouteData } from "@/types/route";
 
 const proseMirrorSchema = getSchema(baseExtensions);
+const SIDEBAR_PAGE_SIZE = 20;
+
+type EditorListItem = {
+  id: string;
+  createdAt: number;
+};
+
+type EditorListResponse = {
+  items: EditorListItem[];
+  pageInfo: {
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
+};
+
+const sidebarDateFormatter = new Intl.DateTimeFormat("ja-JP", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const formatSidebarLabel = (item: EditorListItem) => {
+  const date = new Date(item.createdAt);
+  const dateLabel = Number.isNaN(date.getTime())
+    ? "Invalid date"
+    : sidebarDateFormatter.format(date).replaceAll("/", "-");
+  return `${dateLabel} · ${item.id.slice(-6)}`;
+};
 
 type RouteRootProps = {
   routeData: RouteData;
@@ -120,128 +154,222 @@ export function RouteApp() {
         <SidebarSeparator />
         <SidebarGroup className="min-h-0 flex-1">
           <SidebarGroupLabel>Past articles</SidebarGroupLabel>
-          <SidebarGroupContent className="min-h-0 flex-1 overflow-y-auto pr-1">
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="/pages/article-1">
-                    <Clock />
-                    <span>Jan 14 — Shipping an editor that feels fast</span>
-                  </a>
-                </SidebarMenuButton>
-                <SidebarMenuBadge>3m</SidebarMenuBadge>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="/pages/article-2">
-                    <Clock />
-                    <span>Jan 12 — A tiny design system for Hono</span>
-                  </a>
-                </SidebarMenuButton>
-                <SidebarMenuBadge>5m</SidebarMenuBadge>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="/pages/article-3">
-                    <Clock />
-                    <span>Jan 09 — Making markdown feel human</span>
-                  </a>
-                </SidebarMenuButton>
-                <SidebarMenuBadge>7m</SidebarMenuBadge>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="/pages/article-4">
-                    <Clock />
-                    <span>Jan 06 — Infinite scroll without losing context</span>
-                  </a>
-                </SidebarMenuButton>
-                <SidebarMenuBadge>4m</SidebarMenuBadge>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="/pages/article-5">
-                    <Clock />
-                    <span>Jan 03 — Notes on typography for sidebars</span>
-                  </a>
-                </SidebarMenuButton>
-                <SidebarMenuBadge>6m</SidebarMenuBadge>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="/pages/article-6">
-                    <Clock />
-                    <span>Dec 30 — A calmer information hierarchy</span>
-                  </a>
-                </SidebarMenuButton>
-                <SidebarMenuBadge>8m</SidebarMenuBadge>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="/pages/article-7">
-                    <Clock />
-                    <span>Dec 28 — Quick wins for content editors</span>
-                  </a>
-                </SidebarMenuButton>
-                <SidebarMenuBadge>4m</SidebarMenuBadge>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="/pages/article-8">
-                    <Clock />
-                    <span>Dec 24 — Designing the quiet state</span>
-                  </a>
-                </SidebarMenuButton>
-                <SidebarMenuBadge>5m</SidebarMenuBadge>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="/pages/article-9">
-                    <Clock />
-                    <span>Dec 20 — The case for compact menus</span>
-                  </a>
-                </SidebarMenuButton>
-                <SidebarMenuBadge>2m</SidebarMenuBadge>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <a href="/pages/article-10">
-                    <Clock />
-                    <span>Dec 16 — Shipping with a light touch</span>
-                  </a>
-                </SidebarMenuButton>
-                <SidebarMenuBadge>3m</SidebarMenuBadge>
-              </SidebarMenuItem>
-              <SidebarLoadingItems />
-            </SidebarMenu>
-          </SidebarGroupContent>
+          <EditorSidebarMenu currentDocId={docId} />
         </SidebarGroup>
       </SideMenu>
     </SideMenuProvider>
   );
 }
 
-function SidebarLoadingItems() {
-  const [mounted, setMounted] = useState(false);
+function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
+  const client = useMemo(
+    () =>
+      typeof window === "undefined"
+        ? null
+        : hc<ServerAppType>(window.location.origin),
+    [],
+  );
+  const seenIdsRef = useRef(new Set<string>());
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const scrollRootRef = useRef<HTMLDivElement | null>(null);
+  const mountedRef = useRef(true);
+
+  const [items, setItems] = useState<EditorListItem[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [isAuthRequired, setIsAuthRequired] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPage = useCallback(
+    async (args: { cursor: string | null; initial: boolean }) => {
+      if (!client) return;
+
+      if (args.initial) {
+        setIsInitialLoading(true);
+      } else {
+        setIsFetchingMore(true);
+      }
+      setError(null);
+
+      try {
+        const query = args.cursor
+          ? { limit: String(SIDEBAR_PAGE_SIZE), cursor: args.cursor }
+          : { limit: String(SIDEBAR_PAGE_SIZE) };
+        const res = await client.api.v1.editor.$get({ query });
+
+        if (!mountedRef.current) return;
+
+        if (res.status === 401) {
+          setIsAuthRequired(true);
+          setHasMore(false);
+          return;
+        }
+        if (!res.ok) {
+          setError("Failed to load articles.");
+          return;
+        }
+
+        const data = (await res.json()) as EditorListResponse;
+        const nextSeen = args.initial
+          ? new Set<string>()
+          : new Set(seenIdsRef.current);
+
+        setItems((prev) => {
+          const merged = args.initial ? [] : [...prev];
+          for (const item of data.items) {
+            if (nextSeen.has(item.id)) continue;
+            nextSeen.add(item.id);
+            merged.push(item);
+          }
+          return merged;
+        });
+        seenIdsRef.current = nextSeen;
+        setNextCursor(data.pageInfo.nextCursor);
+        setHasMore(data.pageInfo.hasMore);
+        setIsAuthRequired(false);
+      } catch (fetchError) {
+        console.error(fetchError);
+        if (!mountedRef.current) return;
+        setError("Failed to load articles.");
+      } finally {
+        if (mountedRef.current) {
+          if (args.initial) {
+            setIsInitialLoading(false);
+          } else {
+            setIsFetchingMore(false);
+          }
+        }
+      }
+    },
+    [client],
+  );
+
   useEffect(() => {
-    setMounted(true);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
+  useEffect(() => {
+    if (!client) return;
+    seenIdsRef.current.clear();
+    void fetchPage({ cursor: null, initial: true });
+  }, [client, fetchPage]);
+
+  useEffect(() => {
+    const root = scrollRootRef.current;
+    const target = sentinelRef.current;
+    if (!root || !target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.some((entry) => entry.isIntersecting);
+        if (!visible) return;
+        if (!hasMore || isFetchingMore || isInitialLoading || isAuthRequired) {
+          return;
+        }
+        if (!nextCursor) return;
+        void fetchPage({ cursor: nextCursor, initial: false });
+      },
+      { root, rootMargin: "240px 0px 240px 0px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [
+    fetchPage,
+    hasMore,
+    isAuthRequired,
+    isFetchingMore,
+    isInitialLoading,
+    nextCursor,
+  ]);
+
+  const handleRetry = useCallback(() => {
+    if (isInitialLoading || isFetchingMore) return;
+    if (items.length === 0) {
+      void fetchPage({ cursor: null, initial: true });
+      return;
+    }
+    if (!nextCursor) return;
+    void fetchPage({ cursor: nextCursor, initial: false });
+  }, [fetchPage, isFetchingMore, isInitialLoading, items.length, nextCursor]);
+
   return (
-    <>
-      {mounted ? (
-        <>
-          <SidebarMenuSkeleton showIcon />
-          <SidebarMenuSkeleton showIcon />
+    <SidebarGroupContent className="min-h-0 flex-1">
+      <div ref={scrollRootRef} className="h-full min-h-0 overflow-y-auto pr-1">
+        <SidebarMenu>
+          {items.map((item) => (
+            <SidebarMenuItem key={item.id}>
+              <SidebarMenuButton asChild isActive={item.id === currentDocId}>
+                <a href={`/pages/${item.id}`}>
+                  <Clock />
+                  <span>{formatSidebarLabel(item)}</span>
+                </a>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+
+          {isInitialLoading ? (
+            <>
+              <SidebarMenuSkeleton showIcon />
+              <SidebarMenuSkeleton showIcon />
+            </>
+          ) : null}
+
+          {!isInitialLoading &&
+          !error &&
+          !isAuthRequired &&
+          items.length === 0 ? (
+            <SidebarMenuItem>
+              <div className="text-muted-foreground text-xs m-2">
+                No articles yet.
+              </div>
+            </SidebarMenuItem>
+          ) : null}
+
+          {error ? (
+            <SidebarMenuItem>
+              <div className="text-muted-foreground text-xs m-2 flex items-center gap-2">
+                <span>{error}</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleRetry}
+                >
+                  Retry
+                </Button>
+              </div>
+            </SidebarMenuItem>
+          ) : null}
+
+          {isAuthRequired ? (
+            <SidebarMenuItem>
+              <div className="text-muted-foreground text-xs m-2">
+                Login is required.
+              </div>
+            </SidebarMenuItem>
+          ) : null}
+
+          {isFetchingMore ? (
+            <SidebarMenuItem>
+              <div className="text-muted-foreground text-xs flex m-2 gap-2">
+                <Spinner />
+                <span>Loading more articles...</span>
+              </div>
+            </SidebarMenuItem>
+          ) : null}
+
           <SidebarMenuItem>
-            <div className="text-muted-foreground text-xs flex m-2 gap-2">
-              <Spinner />
-              <span>Loading more articles...</span>
-            </div>
+            <div ref={sentinelRef} className="h-1 w-full" />
           </SidebarMenuItem>
-        </>
-      ) : null}
-    </>
+        </SidebarMenu>
+      </div>
+    </SidebarGroupContent>
   );
 }
 

@@ -1,5 +1,5 @@
 import { sValidator } from "@hono/standard-validator";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, lt, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { Context, MiddlewareHandler } from "hono";
 import { ulid } from "ulid";
@@ -11,6 +11,31 @@ import { requireUser } from "./auth";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
+
+const cursorPayloadSchema = z.object({
+  id: z.ulid(),
+  createdAt: z.number().int().nonnegative(),
+});
+
+type CursorPayload = z.infer<typeof cursorPayloadSchema>;
+
+const encodeCursor = (cursor: CursorPayload) =>
+  btoa(JSON.stringify(cursor))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+
+const decodeCursor = (cursor: string): CursorPayload => {
+  const base64 = cursor
+    .replaceAll("-", "+")
+    .replaceAll("_", "/")
+    .padEnd(Math.ceil(cursor.length / 4) * 4, "=");
+  const parsed = cursorPayloadSchema.parse(JSON.parse(atob(base64)));
+  return parsed;
+};
+
+const toTimestamp = (value: unknown) =>
+  value instanceof Date ? value.getTime() : Number(value);
 
 const requireDocExists: MiddlewareHandler<Env> = async (c, next) => {
   const id = c.req.param("id");
@@ -49,33 +74,28 @@ function getDurableObjectOfDoc<T extends Env>(c: Context<T>, id: string) {
 const editor = createApp()
   .get(
     "/",
+    requireUser,
     sValidator(
       "query",
       z.object({
-        limit: z.uint32().optional(),
-        id: z.ulid().optional(),
-        cursor: z.base64url().transform((s, ctx) => {
-          const cursorPayloadSchema = z.object({
-            id: z.ulid(),
-            createdAt: z.iso.datetime(),
-          });
-          try {
-            const json = JSON.parse(
-              Buffer.from(s, "base64url").toString("utf8"),
-            );
-
-            const parsed = cursorPayloadSchema.safeParse(json);
-            if (!parsed.success) {
-              ctx.addIssue("Decoded cursor does not match schema");
+        limit: z.coerce.number().int().nonnegative().optional(),
+        cursor: z
+          .base64url()
+          .optional()
+          .transform((s, ctx) => {
+            if (!s) {
+              return undefined;
+            }
+            try {
+              return decodeCursor(s);
+            } catch {
+              ctx.addIssue({
+                code: "custom",
+                message: "Invalid cursor payload",
+              });
               return z.NEVER;
             }
-
-            return parsed.data; // ← これが“使えるカーソル”
-          } catch {
-            ctx.addIssue("Invalid base64url or invalid JSON");
-            return z.NEVER;
-          }
-        }),
+          }),
       }),
     ),
     async (c) => {
@@ -84,28 +104,47 @@ const editor = createApp()
         Math.max(1, query.limit ?? DEFAULT_PAGE_SIZE),
         MAX_PAGE_SIZE,
       );
+      const take = limit + 1;
 
       const db = drizzle(c.env.DB, { schema });
-
-      const res = await db.query.markdownDocs.findMany({
-        where: (docs, { eq, gt }) => {
-          const conds = [];
-
-          // 単一IDで絞る
-          if (query.id) {
-            conds.push(eq(docs.id, query.id));
+      const rows = await db.query.markdownDocs.findMany({
+        where: (docs) => {
+          if (!query.cursor) {
+            return undefined;
           }
-
-          if (query.cursor) {
-            conds.push(gt(docs.id, query.cursor.id));
-          }
-
-          return conds.length ? and(...conds) : undefined;
+          const cursorCreatedAt = new Date(query.cursor.createdAt);
+          return or(
+            lt(docs.createdAt, cursorCreatedAt),
+            and(
+              eq(docs.createdAt, cursorCreatedAt),
+              lt(docs.id, query.cursor.id),
+            ),
+          );
         },
-        limit,
+        orderBy: (docs) => [desc(docs.createdAt), desc(docs.id)],
+        limit: take,
       });
 
-      return c.json(res);
+      const hasMore = rows.length > limit;
+      const pageItems = hasMore ? rows.slice(0, limit) : rows;
+      const items = pageItems.map((doc) => ({
+        id: doc.id,
+        createdAt: toTimestamp(doc.createdAt),
+      }));
+
+      const last = items.at(-1);
+      const nextCursor =
+        hasMore && last
+          ? encodeCursor({ id: last.id, createdAt: last.createdAt })
+          : null;
+
+      return c.json({
+        items,
+        pageInfo: {
+          hasMore,
+          nextCursor,
+        },
+      });
     },
   )
   .post("/", requireUser, async (c) => {
