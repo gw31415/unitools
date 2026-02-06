@@ -86,13 +86,6 @@ function MarkdownEditor({
   );
 }
 
-/*
-[3段階]
-  1. SSR時
-  2. CSR(ハイドレーション後useEffect前)
-  3. CSR (Editorアタッチ後)
-  スムーズに各種引数を受け渡す必要がある
-*/
 export default function Markdown({
   docId,
   bootstrap,

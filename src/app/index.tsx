@@ -33,36 +33,56 @@ import { baseExtensions } from "@/lib/editorExtensions";
 import { createApp } from "@/lib/hono";
 import { headers2Record } from "@/lib/utils";
 import type { ServerAppType } from "@/server";
-import type { AppBootstrap } from "@/types/editor";
+import type { InitialRouteState, RouteData } from "@/types/route";
 
 const proseMirrorSchema = getSchema(baseExtensions);
 
-export function pathToDocId(path: string) {
-  const normalized = path.startsWith("/pages/")
-    ? path.slice("/pages/".length)
-    : path.replace(/^\//, "");
-  return normalized.replace(/\//g, ":");
-}
-
-export type AppProps = {
-  path: string;
-  appBootstrap: AppBootstrap;
+type RouteAppProps = {
+  routeData: RouteData;
+  initialRouteState?: InitialRouteState;
 };
 
-export function App({ path, appBootstrap }: AppProps) {
-  if (/^\/auth\/?/g.test(path)) {
-    return <AuthPage user={appBootstrap.user} />;
+const createFallbackState = (
+  routeData: RouteData,
+  initialRouteState?: InitialRouteState,
+): InitialRouteState =>
+  initialRouteState ?? {
+    docId: routeData.kind === "page" ? routeData.docId : "",
+    yjsUpdate: "",
+    snapshotJSON: undefined,
+    user: undefined,
+  };
+
+export function RouteApp({ routeData, initialRouteState }: RouteAppProps) {
+  const routeState = createFallbackState(routeData, initialRouteState);
+
+  if (routeData.kind === "auth") {
+    return <AuthRouteView routeState={routeState} />;
   }
-  const docId = pathToDocId(path);
+
+  return <PageRouteView docId={routeData.docId} routeState={routeState} />;
+}
+
+function AuthRouteView({ routeState }: { routeState: InitialRouteState }) {
+  return <AuthPage user={routeState.user} />;
+}
+
+function PageRouteView({
+  docId,
+  routeState,
+}: {
+  docId: string;
+  routeState: InitialRouteState;
+}) {
   return (
     <SideMenuProvider>
       <div className="h-svh flex flex-col">
-        <Header user={appBootstrap.user} />
+        <Header user={routeState.user} />
         <Markdown
           docId={docId}
           bootstrap={{
-            snapshotJSON: appBootstrap.snapshotJSON,
-            yjsUpdate: appBootstrap.yjsUpdate,
+            snapshotJSON: routeState.snapshotJSON,
+            yjsUpdate: routeState.yjsUpdate,
           }}
           className="px-4 py-2 size-full pb-15 md:pb-2"
           aria-label="Main content editor/viewer of this page"
@@ -214,6 +234,15 @@ function SidebarLoadingItems() {
   );
 }
 
+const buildAuthState = (
+  user: InitialRouteState["user"],
+): InitialRouteState => ({
+  docId: "",
+  yjsUpdate: "",
+  snapshotJSON: undefined,
+  user,
+});
+
 const app = createApp()
   .get("/", (c) => c.redirect("/auth"))
   .get("/pages/:id", useUser, async (c) => {
@@ -225,12 +254,14 @@ const app = createApp()
       { param: { id: docId } },
       { headers },
     );
-    let appBootstrap: AppBootstrap = {
-      yjsUpdate: "",
+
+    let initialRouteState: InitialRouteState = {
       docId,
+      yjsUpdate: "",
       snapshotJSON: undefined,
-      user: undefined,
+      user: c.get("user"),
     };
+
     if (res.ok) {
       const doc = new Y.Doc();
       const yjsUpdateBytes = await res.bytes();
@@ -239,28 +270,32 @@ const app = createApp()
         doc.getXmlFragment("default"),
         proseMirrorSchema,
       );
-      appBootstrap = {
-        yjsUpdate: serialize(yjsUpdateBytes),
+      initialRouteState = {
         docId,
+        yjsUpdate: serialize(yjsUpdateBytes),
         snapshotJSON: rootNode.toJSON(),
         user: c.get("user"),
       };
     }
-    const props: AppProps = {
-      path: c.req.path,
-      appBootstrap: appBootstrap,
+
+    const routeData: RouteData = {
+      kind: "page",
+      docId,
     };
-    return c.render(<App {...props} />, props);
+
+    return c.render(
+      <RouteApp routeData={routeData} initialRouteState={initialRouteState} />,
+      { routeData, initialRouteState },
+    );
   })
-  .get("*", useUser, (c) => {
-    const appBootstrap = {
-      yjsUpdate: "",
-      docId: "",
-      user: c.get("user"),
-    };
-    return c.render(<App path={c.req.path} appBootstrap={appBootstrap} />, {
-      appBootstrap,
-    });
-  });
+  .get("/auth", useUser, (c) => {
+    const routeData: RouteData = { kind: "auth" };
+    const initialRouteState = buildAuthState(c.get("user"));
+    return c.render(
+      <RouteApp routeData={routeData} initialRouteState={initialRouteState} />,
+      { routeData, initialRouteState },
+    );
+  })
+  .get("*", (c) => c.notFound());
 
 export default app;

@@ -1,8 +1,9 @@
 import "@hono/react-renderer";
-import type { AppBootstrap } from "@/types/editor";
+import type { InitialRouteState, RouteData } from "@/types/route";
 
 type Head = {
-  appBootstrap?: AppBootstrap;
+  routeData?: RouteData;
+  initialRouteState?: InitialRouteState;
 };
 
 declare module "@hono/react-renderer" {

@@ -1,77 +1,49 @@
-import type { AppBootstrap } from "@/types/editor";
+import { hydrateRoot } from "react-dom/client";
+import { RouteApp } from "@/app";
+import type { InitialRouteState, RouteData } from "@/types/route";
 
 const root = document.querySelector("body");
 
-if (root) {
-  document.addEventListener("click", (event) => {
-    if (
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
-      return;
-    }
-
-    const target = event.target as Element | null;
-    const anchor = target?.closest("a");
-    if (!anchor) return;
-    if (anchor.target && anchor.target !== "_self") return;
-    if (anchor.hasAttribute("download")) return;
-
-    const href = anchor.getAttribute("href");
-    if (!href || !href.startsWith("/")) return;
-
-    event.preventDefault();
-    history.pushState(null, "", href);
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  });
-
-  (async () => {
-    const [{ App, pathToDocId }, { hydrateRoot }, { useEffect, useState }] =
-      await Promise.all([
-        import("@/app"),
-        import("react-dom/client"),
-        import("react"),
-      ]);
-
-    const appBootstrap: AppBootstrap = (() => {
-      try {
-        const json = document.getElementById("app-bootstrap")?.textContent;
-        if (json) return JSON.parse(json) as AppBootstrap;
-      } catch {}
-    })() ?? {
-      yjsUpdate: "",
-      docId: "",
-      snapshotJSON: undefined,
-      user: undefined,
-    };
-
-    function AppClient({ path }: { path: string }) {
-      const [currentPath, setCurrentPath] = useState(path);
-      if (currentPath !== path || appBootstrap.docId !== pathToDocId(path)) {
-        appBootstrap.yjsUpdate = undefined;
-        appBootstrap.snapshotJSON = undefined;
+const readRouteData = (): RouteData => {
+  try {
+    const json = document.getElementById("route-data")?.textContent;
+    if (json) {
+      const parsed = JSON.parse(json) as RouteData;
+      if (parsed.kind === "auth") {
+        return parsed;
       }
-
-      useEffect(() => {
-        const onPopState = () => {
-          setCurrentPath(window.location.pathname);
-        };
-
-        window.addEventListener("popstate", onPopState);
-        return () => {
-          window.removeEventListener("popstate", onPopState);
-        };
-      }, []);
-
-      useEffect(() => {
-        setCurrentPath(path);
-      }, [path]);
-      return <App path={currentPath} appBootstrap={appBootstrap} />;
+      if (parsed.kind === "page" && typeof parsed.docId === "string") {
+        return parsed;
+      }
     }
-    hydrateRoot(root, <AppClient path={window.location.pathname} />);
-  })();
+  } catch {
+    // Ignore malformed route payload.
+  }
+
+  return { kind: "auth" };
+};
+
+const readRouteState = (): InitialRouteState | undefined => {
+  try {
+    const json = document.getElementById("route-state")?.textContent;
+    if (!json) return undefined;
+    const parsed = JSON.parse(json) as InitialRouteState;
+    if (typeof parsed.docId !== "string") {
+      return undefined;
+    }
+    return parsed;
+  } catch {
+    // Ignore malformed state payload.
+  }
+
+  return undefined;
+};
+
+if (root) {
+  const routeData = readRouteData();
+  const initialRouteState = readRouteState();
+  hydrateRoot(
+    root,
+    <RouteApp routeData={routeData} initialRouteState={initialRouteState} />,
+  );
 }
