@@ -1,7 +1,9 @@
 import { getSchema } from "@tiptap/core";
 import { hc } from "hono/client";
+import { Provider as JotaiProvider, useAtomValue } from "jotai";
+import { useHydrateAtoms } from "jotai/utils";
 import { Clock, Menu, Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import * as Y from "yjs";
 import { useUser } from "@/api/auth";
@@ -33,57 +35,66 @@ import { baseExtensions } from "@/lib/editorExtensions";
 import { createApp } from "@/lib/hono";
 import { headers2Record } from "@/lib/utils";
 import type { ServerAppType } from "@/server";
+import {
+  createFallbackRouteState,
+  currentDocIdAtom,
+  currentUserAtom,
+  isAuthRouteAtom,
+  markdownBootstrapAtom,
+  routeDataAtom,
+  routeStateAtom,
+} from "@/store/routeState";
 import type { InitialRouteState, RouteData } from "@/types/route";
 
 const proseMirrorSchema = getSchema(baseExtensions);
 
-type RouteAppProps = {
+type RouteRootProps = {
   routeData: RouteData;
   initialRouteState?: InitialRouteState;
 };
 
-const createFallbackState = (
-  routeData: RouteData,
-  initialRouteState?: InitialRouteState,
-): InitialRouteState =>
-  initialRouteState ?? {
-    docId: routeData.kind === "page" ? routeData.docId : "",
-    yjsUpdate: "",
-    snapshotJSON: undefined,
-    user: undefined,
-  };
+function RouteStateHydrator({
+  routeData,
+  initialRouteState,
+  children,
+}: RouteRootProps & { children: ReactNode }) {
+  const routeState = createFallbackRouteState(routeData, initialRouteState);
+  useHydrateAtoms([
+    [routeDataAtom, routeData],
+    [routeStateAtom, routeState],
+  ]);
+  return <>{children}</>;
+}
 
-export function RouteApp({ routeData, initialRouteState }: RouteAppProps) {
-  const routeState = createFallbackState(routeData, initialRouteState);
+export function RouteRoot({ routeData, initialRouteState }: RouteRootProps) {
+  return (
+    <JotaiProvider>
+      <RouteStateHydrator
+        routeData={routeData}
+        initialRouteState={initialRouteState}
+      >
+        <RouteApp />
+      </RouteStateHydrator>
+    </JotaiProvider>
+  );
+}
 
-  if (routeData.kind === "auth") {
-    return <AuthRouteView routeState={routeState} />;
+export function RouteApp() {
+  const isAuthRoute = useAtomValue(isAuthRouteAtom);
+  const docId = useAtomValue(currentDocIdAtom);
+  const user = useAtomValue(currentUserAtom);
+  const bootstrap = useAtomValue(markdownBootstrapAtom);
+
+  if (isAuthRoute) {
+    return <AuthPage user={user} />;
   }
-
-  return <PageRouteView docId={routeData.docId} routeState={routeState} />;
-}
-
-function AuthRouteView({ routeState }: { routeState: InitialRouteState }) {
-  return <AuthPage user={routeState.user} />;
-}
-
-function PageRouteView({
-  docId,
-  routeState,
-}: {
-  docId: string;
-  routeState: InitialRouteState;
-}) {
   return (
     <SideMenuProvider>
       <div className="h-svh flex flex-col">
-        <Header user={routeState.user} />
+        <Header user={user} />
         <Markdown
           docId={docId}
-          bootstrap={{
-            snapshotJSON: routeState.snapshotJSON,
-            yjsUpdate: routeState.yjsUpdate,
-          }}
+          bootstrap={bootstrap}
           className="px-4 py-2 size-full pb-15 md:pb-2"
           aria-label="Main content editor/viewer of this page"
         />
@@ -284,7 +295,7 @@ const app = createApp()
     };
 
     return c.render(
-      <RouteApp routeData={routeData} initialRouteState={initialRouteState} />,
+      <RouteRoot routeData={routeData} initialRouteState={initialRouteState} />,
       { routeData, initialRouteState },
     );
   })
@@ -292,7 +303,7 @@ const app = createApp()
     const routeData: RouteData = { kind: "auth" };
     const initialRouteState = buildAuthState(c.get("user"));
     return c.render(
-      <RouteApp routeData={routeData} initialRouteState={initialRouteState} />,
+      <RouteRoot routeData={routeData} initialRouteState={initialRouteState} />,
       { routeData, initialRouteState },
     );
   })

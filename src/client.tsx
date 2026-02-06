@@ -1,5 +1,5 @@
 import { hydrateRoot } from "react-dom/client";
-import { RouteApp } from "@/app";
+import { RouteRoot } from "@/app";
 import type { InitialRouteState, RouteData } from "@/types/route";
 
 const root = document.querySelector("body");
@@ -44,6 +44,6 @@ if (root) {
   const initialRouteState = readRouteState();
   hydrateRoot(
     root,
-    <RouteApp routeData={routeData} initialRouteState={initialRouteState} />,
+    <RouteRoot routeData={routeData} initialRouteState={initialRouteState} />,
   );
 }
