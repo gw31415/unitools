@@ -1,23 +1,8 @@
 import { atom } from "jotai";
 import type { InitialRouteState, RouteData } from "@/types/route";
+import { defaultRouteState } from "./initialRouteState";
 
 const defaultRouteData: RouteData = { kind: "auth" };
-
-const defaultRouteState: InitialRouteState = {
-  docId: "",
-  yjsUpdate: "",
-  snapshotJSON: undefined,
-  user: undefined,
-};
-
-export const createFallbackRouteState = (
-  routeData: RouteData,
-  initialRouteState?: InitialRouteState,
-): InitialRouteState =>
-  initialRouteState ?? {
-    ...defaultRouteState,
-    docId: routeData.kind === "page" ? routeData.docId : "",
-  };
 
 export const routeDataAtom = atom<RouteData>(defaultRouteData);
 export const routeStateAtom = atom<InitialRouteState>(defaultRouteState);

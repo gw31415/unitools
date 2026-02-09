@@ -41,8 +41,8 @@ import { baseExtensions } from "@/lib/editorExtensions";
 import { createApp } from "@/lib/hono";
 import { headers2Record } from "@/lib/utils";
 import type { ServerAppType } from "@/server";
+import { createFallbackRouteState } from "@/store/initialRouteState";
 import {
-  createFallbackRouteState,
   currentDocIdAtom,
   currentUserAtom,
   isAuthRouteAtom,
