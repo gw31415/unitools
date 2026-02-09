@@ -3,20 +3,16 @@ import {
   startRegistration,
 } from "@simplewebauthn/browser";
 import { hc } from "hono/client";
+import { useAtomValue } from "jotai";
 import { useCallback, useMemo, useState } from "react";
 import { LoginForm } from "@/components/login-form";
-import type { User } from "@/db/schema";
 import type { ServerAppType } from "@/server";
+import { currentUserAtom } from "@/store/routeState";
 
 const normalizeUserName = (value: string) => value.trim();
 
-export default function AuthPage({
-  user,
-  redirect,
-}: {
-  user?: User;
-  redirect?: string;
-}) {
+export default function AuthPage({ redirect }: { redirect?: string }) {
+  const user = useAtomValue(currentUserAtom);
   const [userName, setUserName] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);

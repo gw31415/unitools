@@ -1,23 +1,25 @@
 import { atom } from "jotai";
-import type { InitialRouteState, RouteData } from "@/types/route";
-import { defaultRouteState } from "./initialRouteState";
+import type { User } from "@/db/schema";
+import { createSSRConfig } from "@/lib/ssr";
+import type { EditorState } from "@/types/route";
 
-const defaultRouteData: RouteData = { kind: "auth" };
-
-export const routeDataAtom = atom<RouteData>(defaultRouteData);
-export const routeStateAtom = atom<InitialRouteState>(defaultRouteState);
-
-export const isAuthRouteAtom = atom(
-  (get) => get(routeDataAtom).kind === "auth",
-);
-export const currentDocIdAtom = atom((get) => {
-  const routeData = get(routeDataAtom);
-  return routeData.kind === "page"
-    ? routeData.docId
-    : get(routeStateAtom).docId;
+export const editorStateAtom = atom<EditorState>({
+  docId: "",
+  yjsUpdate: undefined,
+  snapshotJSON: undefined,
 });
-export const currentUserAtom = atom((get) => get(routeStateAtom).user);
+
+export const currentUserAtom = atom<User | undefined>(undefined);
+
+export const documentIdAtom = atom((get) => get(editorStateAtom).docId);
+
 export const markdownBootstrapAtom = atom((get) => ({
-  snapshotJSON: get(routeStateAtom).snapshotJSON,
-  yjsUpdate: get(routeStateAtom).yjsUpdate,
+  snapshotJSON: get(editorStateAtom).snapshotJSON,
+  yjsUpdate: get(editorStateAtom).yjsUpdate,
 }));
+
+// SSR configuration - defines which atoms to serialize/hydrate
+export const ssrConfig = createSSRConfig({
+  editorState: { key: "editorState", atom: editorStateAtom },
+  user: { key: "user", atom: currentUserAtom },
+});

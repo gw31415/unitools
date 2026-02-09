@@ -1,16 +1,8 @@
 import { getSchema } from "@tiptap/core";
 import { hc } from "hono/client";
-import { Provider as JotaiProvider, useAtomValue } from "jotai";
-import { useHydrateAtoms } from "jotai/utils";
+import { useAtomValue } from "jotai";
 import { Clock, Menu, Search } from "lucide-react";
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import * as Y from "yjs";
 import { useUser } from "@/api/auth";
@@ -41,16 +33,13 @@ import { baseExtensions } from "@/lib/editorExtensions";
 import { createApp } from "@/lib/hono";
 import { headers2Record } from "@/lib/utils";
 import type { ServerAppType } from "@/server";
-import { createFallbackRouteState } from "@/store/initialRouteState";
 import {
-  currentDocIdAtom,
   currentUserAtom,
-  isAuthRouteAtom,
+  editorStateAtom,
   markdownBootstrapAtom,
-  routeDataAtom,
-  routeStateAtom,
+  ssrConfig,
 } from "@/store/routeState";
-import type { InitialRouteState, RouteData } from "@/types/route";
+import type { EditorState } from "@/types/route";
 
 const proseMirrorSchema = getSchema(baseExtensions);
 const SIDEBAR_PAGE_SIZE = 20;
@@ -58,14 +47,6 @@ const SIDEBAR_PAGE_SIZE = 20;
 type EditorListItem = {
   id: string;
   createdAt: number;
-};
-
-type EditorListResponse = {
-  items: EditorListItem[];
-  pageInfo: {
-    hasMore: boolean;
-    nextCursor: string | null;
-  };
 };
 
 const sidebarDateFormatter = new Intl.DateTimeFormat("ja-JP", {
@@ -82,52 +63,17 @@ const formatSidebarLabel = (item: EditorListItem) => {
   return `${dateLabel} · ${item.id.slice(-6)}`;
 };
 
-type RouteRootProps = {
-  routeData: RouteData;
-  initialRouteState?: InitialRouteState;
-};
-
-function RouteStateHydrator({
-  routeData,
-  initialRouteState,
-  children,
-}: RouteRootProps & { children: ReactNode }) {
-  const routeState = createFallbackRouteState(routeData, initialRouteState);
-  useHydrateAtoms([
-    [routeDataAtom, routeData],
-    [routeStateAtom, routeState],
-  ]);
-  return <>{children}</>;
-}
-
-export function RouteRoot({ routeData, initialRouteState }: RouteRootProps) {
-  return (
-    <JotaiProvider>
-      <RouteStateHydrator
-        routeData={routeData}
-        initialRouteState={initialRouteState}
-      >
-        <RouteApp />
-      </RouteStateHydrator>
-    </JotaiProvider>
-  );
-}
-
-export function RouteApp() {
-  const isAuthRoute = useAtomValue(isAuthRouteAtom);
-  const docId = useAtomValue(currentDocIdAtom);
+export function DocumentPage() {
+  const editorState = useAtomValue(editorStateAtom);
   const user = useAtomValue(currentUserAtom);
   const bootstrap = useAtomValue(markdownBootstrapAtom);
 
-  if (isAuthRoute) {
-    return <AuthPage user={user} />;
-  }
   return (
     <SideMenuProvider>
       <div className="h-svh flex flex-col">
         <Header user={user} />
         <Markdown
-          docId={docId}
+          docId={editorState.docId}
           bootstrap={bootstrap}
           className="px-4 py-2 size-full pb-15 md:pb-2"
           aria-label="Main content editor/viewer of this page"
@@ -154,7 +100,7 @@ export function RouteApp() {
         <SidebarSeparator />
         <SidebarGroup className="min-h-0 flex-1">
           <SidebarGroupLabel>Past articles</SidebarGroupLabel>
-          <EditorSidebarMenu currentDocId={docId} />
+          <EditorSidebarMenu currentDocId={editorState.docId} />
         </SidebarGroup>
       </SideMenu>
     </SideMenuProvider>
@@ -175,8 +121,10 @@ function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
   const mountedRef = useRef(true);
 
   const [items, setItems] = useState<EditorListItem[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
+  const [pageInfo, setPageInfo] = useState<{
+    hasMore: boolean;
+    nextCursor: string | null;
+  } | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [isAuthRequired, setIsAuthRequired] = useState(false);
@@ -203,7 +151,10 @@ function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
 
         if (res.status === 401) {
           setIsAuthRequired(true);
-          setHasMore(false);
+          setPageInfo({
+            hasMore: false,
+            nextCursor: pageInfo?.nextCursor ?? null,
+          });
           return;
         }
         if (!res.ok) {
@@ -211,14 +162,14 @@ function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
           return;
         }
 
-        const data = (await res.json()) as EditorListResponse;
+        const { items, pageInfo: pageInfoData } = await res.json();
         const nextSeen = args.initial
           ? new Set<string>()
           : new Set(seenIdsRef.current);
 
         setItems((prev) => {
           const merged = args.initial ? [] : [...prev];
-          for (const item of data.items) {
+          for (const item of items) {
             if (nextSeen.has(item.id)) continue;
             nextSeen.add(item.id);
             merged.push(item);
@@ -226,8 +177,7 @@ function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
           return merged;
         });
         seenIdsRef.current = nextSeen;
-        setNextCursor(data.pageInfo.nextCursor);
-        setHasMore(data.pageInfo.hasMore);
+        setPageInfo(pageInfoData);
         setIsAuthRequired(false);
       } catch (fetchError) {
         console.error(fetchError);
@@ -243,7 +193,7 @@ function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
         }
       }
     },
-    [client],
+    [client, pageInfo?.nextCursor],
   );
 
   useEffect(() => {
@@ -268,25 +218,23 @@ function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
       (entries) => {
         const visible = entries.some((entry) => entry.isIntersecting);
         if (!visible) return;
-        if (!hasMore || isFetchingMore || isInitialLoading || isAuthRequired) {
+        if (
+          !pageInfo?.hasMore ||
+          isFetchingMore ||
+          isInitialLoading ||
+          isAuthRequired
+        ) {
           return;
         }
-        if (!nextCursor) return;
-        void fetchPage({ cursor: nextCursor, initial: false });
+        if (!pageInfo?.nextCursor) return;
+        fetchPage({ cursor: pageInfo.nextCursor, initial: false });
       },
       { root, rootMargin: "240px 0px 240px 0px" },
     );
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [
-    fetchPage,
-    hasMore,
-    isAuthRequired,
-    isFetchingMore,
-    isInitialLoading,
-    nextCursor,
-  ]);
+  }, [fetchPage, isAuthRequired, isFetchingMore, isInitialLoading, pageInfo]);
 
   const handleRetry = useCallback(() => {
     if (isInitialLoading || isFetchingMore) return;
@@ -294,9 +242,9 @@ function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
       void fetchPage({ cursor: null, initial: true });
       return;
     }
-    if (!nextCursor) return;
-    void fetchPage({ cursor: nextCursor, initial: false });
-  }, [fetchPage, isFetchingMore, isInitialLoading, items.length, nextCursor]);
+    if (!pageInfo?.nextCursor) return;
+    void fetchPage({ cursor: pageInfo.nextCursor, initial: false });
+  }, [fetchPage, isFetchingMore, isInitialLoading, items.length, pageInfo]);
 
   return (
     <SidebarGroupContent className="min-h-0 flex-1">
@@ -373,15 +321,6 @@ function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
   );
 }
 
-const buildAuthState = (
-  user: InitialRouteState["user"],
-): InitialRouteState => ({
-  docId: "",
-  yjsUpdate: "",
-  snapshotJSON: undefined,
-  user,
-});
-
 const app = createApp()
   .get("/", (c) => c.redirect("/auth"))
   .get("/pages/:id", useUser, async (c) => {
@@ -394,11 +333,10 @@ const app = createApp()
       { headers },
     );
 
-    let initialRouteState: InitialRouteState = {
+    let editorState: EditorState = {
       docId,
       yjsUpdate: "",
       snapshotJSON: undefined,
-      user: c.get("user"),
     };
 
     if (res.ok) {
@@ -409,31 +347,33 @@ const app = createApp()
         doc.getXmlFragment("default"),
         proseMirrorSchema,
       );
-      initialRouteState = {
+      editorState = {
         docId,
         yjsUpdate: serialize(yjsUpdateBytes),
         snapshotJSON: rootNode.toJSON(),
-        user: c.get("user"),
       };
     }
 
-    const routeData: RouteData = {
-      kind: "page",
-      docId,
-    };
+    // Pass SSR state via props
+    const ssrState = ssrConfig.getState({
+      editorState,
+      user: c.get("user"),
+    });
 
-    return c.render(
-      <RouteRoot routeData={routeData} initialRouteState={initialRouteState} />,
-      { routeData, initialRouteState },
-    );
+    return c.render(<DocumentPage />, { ssrState });
   })
   .get("/auth", useUser, (c) => {
-    const routeData: RouteData = { kind: "auth" };
-    const initialRouteState = buildAuthState(c.get("user"));
-    return c.render(
-      <RouteRoot routeData={routeData} initialRouteState={initialRouteState} />,
-      { routeData, initialRouteState },
-    );
+    // Pass SSR state via props
+    const ssrState = ssrConfig.getState({
+      editorState: {
+        docId: "",
+        yjsUpdate: undefined,
+        snapshotJSON: undefined,
+      },
+      user: c.get("user"),
+    });
+
+    return c.render(<AuthPage />, { ssrState });
   })
   .get("*", (c) => c.notFound());
 
