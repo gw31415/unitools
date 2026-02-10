@@ -1,32 +1,36 @@
-import type { Atom, WritableAtom } from "jotai";
-import { createStore, Provider as JotaiProvider } from "jotai";
-import type { ReactNode } from "react";
+import { type Atom, createStore, Provider as JotaiProvider } from "jotai";
+
+type SSRAtomType = Record<string, unknown>;
 
 /**
  * Configuration for SSR atoms
  */
-interface SSRAtomConfig<T = unknown> {
-  atom: WritableAtom<T, [T | undefined], unknown>;
-  key: string;
-}
+type SSRAtomState<T extends SSRAtomType> = {
+  [K in keyof T]: Atom<T[K]>;
+};
 
 /**
  * SSR state that gets serialized/deserialized
  */
-type SSRState = Record<string, unknown>;
+type SSRState<T extends SSRAtomType> = T;
+
+/**
+ * Get serialized state type of an SSRAtomState
+ */
+export type SSRStateOf<A> = A extends SSRAtomState<infer V> ? V : never;
 
 /**
  * Provider that handles SSR hydration automatically
  * Creates a store with hydrated values on both server and client
  */
-export function SSRProvider({
+export function SSRProvider<T extends SSRAtomType>({
   children,
   config,
   ssrState,
 }: {
-  children: ReactNode;
-  config: SSRAtomConfig[];
-  ssrState?: SSRState;
+  children: Parameters<typeof JotaiProvider>[0]["children"];
+  config: SSRAtomState<T>;
+  ssrState?: SSRState<T>;
 }) {
   const isClient = typeof window !== "undefined";
 
@@ -35,19 +39,13 @@ export function SSRProvider({
     ? getHydratedStore(config)
     : getServerStore(config, ssrState || {});
 
-  if (isClient) {
-    console.log("[SSR Provider] Created store with hydrated values");
-  } else {
-    console.log("[SSR Provider] Created server store with SSR state");
-  }
-
   return <JotaiProvider store={store}>{children}</JotaiProvider>;
 }
 
 /**
  * Create a store with hydrated values on the client
  */
-function getHydratedStore(config: SSRAtomConfig[]) {
+function getHydratedStore<T extends SSRAtomType>(config: SSRAtomState<T>) {
   const store = createStore();
   const ssrStateElement = document.getElementById("__SSR_STATE__");
 
@@ -57,19 +55,15 @@ function getHydratedStore(config: SSRAtomConfig[]) {
   }
 
   try {
-    const state: SSRState = JSON.parse(ssrStateElement.textContent);
-    console.log("[SSR] Parsed SSR state:", state);
+    const state: SSRState<T> = JSON.parse(ssrStateElement.textContent);
 
     // Set each atom value in the store
-    for (const { key, atom } of config) {
+    for (const [key, atom] of Object.entries(config)) {
       if (key in state) {
-        const value = state[key] === null ? undefined : state[key];
+        const value = state[key] ?? undefined;
         store.set(atom, value);
-        console.log(`[SSR] Set atom "${key}":`, value);
       }
     }
-
-    console.log("[SSR] Store hydrated with", config.length, "atoms");
   } catch (error) {
     console.error("[SSR] Failed to parse state:", error);
   }
@@ -80,13 +74,16 @@ function getHydratedStore(config: SSRAtomConfig[]) {
 /**
  * Create a store with SSR values on the server
  */
-function getServerStore(config: SSRAtomConfig[], state: SSRState) {
+function getServerStore<T extends SSRAtomType>(
+  config: SSRAtomState<T>,
+  state: SSRState<T>,
+) {
   const store = createStore();
 
   // Set each atom value in the store
-  for (const { key, atom } of config) {
+  for (const [key, atom] of Object.entries(config)) {
     if (key in state) {
-      const value = state[key] === null ? undefined : state[key];
+      const value = state[key];
       store.set(atom, value);
     }
   }
@@ -95,44 +92,19 @@ function getServerStore(config: SSRAtomConfig[], state: SSRState) {
 }
 
 /**
- * Serialize atom values for SSR
- * Note: When using this in React, pass the result as children of a script tag,
- * and React will automatically handle escaping
+ * Initialize SSRAtomState
  */
-export function serializeSSRState(values: Record<string, unknown>): string {
-  return JSON.stringify(values);
+export function createSSRAtomState<T extends SSRAtomType>(
+  atomMap: SSRAtomState<T>,
+): SSRAtomState<T> {
+  return atomMap;
 }
 
 /**
- * Type-safe helper to create SSR-enabled app
+ * Initialize SSRState
  */
-export interface SSRAppContext<T extends Record<string, unknown>> {
-  config: SSRAtomConfig[];
-  getState: (values: T) => SSRState;
-}
-
-/**
- * Create SSR configuration
- */
-export function createSSRConfig<T extends Record<string, unknown>>(
-  atomMap: { [K in keyof T]: { key: string; atom: Atom<T[K]> } },
-): SSRAppContext<T> {
-  const config = Object.values(atomMap).map(
-    (v: { key: string; atom: WritableAtom<unknown, [unknown], unknown> }) => ({
-      key: v.key,
-      atom: v.atom,
-    }),
-  );
-
-  const getState = (values: T): SSRState => {
-    const state: SSRState = {};
-    for (const [key, value] of Object.entries(values)) {
-      // Include all values, even undefined, by converting to null
-      // JSON.stringify drops undefined but keeps null
-      state[key] = value === undefined ? null : value;
-    }
-    return state;
-  };
-
-  return { config, getState };
+export function createSSRState<T extends SSRAtomType>(
+  atomMap: SSRState<T>,
+): SSRState<T> {
+  return atomMap;
 }

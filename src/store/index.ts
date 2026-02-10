@@ -1,6 +1,7 @@
 import { atom } from "jotai";
 import type { User } from "@/db/schema";
-import { createSSRConfig } from "@/lib/ssr";
+import { createSSRAtomState, type SSRStateOf } from "@/lib/ssr";
+import type { ComponentName } from "@/pages";
 import type { EditorState } from "@/types/route";
 
 export const editorStateAtom = atom<EditorState>({
@@ -18,8 +19,14 @@ export const markdownBootstrapAtom = atom((get) => ({
   yjsUpdate: get(editorStateAtom).yjsUpdate,
 }));
 
+// Store the component name for client-side hydration
+export const pageAtom = atom<ComponentName | undefined>(undefined);
+
 // SSR configuration - defines which atoms to serialize/hydrate
-export const ssrConfig = createSSRConfig({
-  editorState: { key: "editorState", atom: editorStateAtom },
-  user: { key: "user", atom: currentUserAtom },
+export const ssrAtomState = createSSRAtomState({
+  pageAtom,
+  editorStateAtom,
+  currentUserAtom,
 });
+
+export type SSRStateType = SSRStateOf<typeof ssrAtomState>;

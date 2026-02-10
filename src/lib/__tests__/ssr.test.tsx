@@ -2,85 +2,22 @@ import { render } from "@testing-library/react";
 import { atom, useAtom } from "jotai";
 import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createSSRConfig, SSRProvider, serializeSSRState } from "../ssr";
+import { createSSRAtomState, SSRProvider } from "../ssr";
 
 describe("createSSRConfig", () => {
   it("should create SSR configuration from atom map", () => {
     const testAtom = atom<string>("test");
     const numberAtom = atom<number>(42);
 
-    const config = createSSRConfig({
-      test: { key: "test", atom: testAtom },
-      number: { key: "number", atom: numberAtom },
+    const config = createSSRAtomState({
+      test: testAtom,
+      number: numberAtom,
     });
 
-    expect(config.config).toHaveLength(2);
-    expect(config.config[0]).toEqual({ key: "test", atom: testAtom });
-    expect(config.config[1]).toEqual({ key: "number", atom: numberAtom });
-  });
-
-  it("should create getState function that converts values", () => {
-    const testAtom = atom<string | undefined>(undefined);
-
-    const config = createSSRConfig({
-      test: { key: "test", atom: testAtom },
+    expect(config).toEqual({
+      test: testAtom,
+      number: numberAtom,
     });
-
-    const state = config.getState({ test: "value" });
-    expect(state).toEqual({ test: "value" });
-  });
-
-  it("should convert undefined to null for JSON serialization", () => {
-    const testAtom = atom<string | undefined>(undefined);
-
-    const config = createSSRConfig({
-      test: { key: "test", atom: testAtom },
-    });
-
-    const state = config.getState({ test: undefined });
-    expect(state).toEqual({ test: null });
-  });
-
-  it("should preserve null values", () => {
-    const testAtom = atom<string | null>(null);
-
-    const config = createSSRConfig({
-      test: { key: "test", atom: testAtom },
-    });
-
-    const state = config.getState({ test: null });
-    expect(state).toEqual({ test: null });
-  });
-});
-
-describe("serializeSSRState", () => {
-  it("should serialize object to JSON string", () => {
-    const state = { test: "value", number: 42 };
-    const serialized = serializeSSRState(state);
-    expect(serialized).toBe('{"test":"value","number":42}');
-  });
-
-  it("should serialize objects containing < characters", () => {
-    const state = { xss: "<script>alert('xss')</script>" };
-    const serialized = serializeSSRState(state);
-    // React will escape this when used as children
-    expect(serialized).toContain("<script");
-    expect(JSON.parse(serialized)).toEqual(state);
-  });
-
-  it("should handle nested objects", () => {
-    const state = {
-      user: { id: "123", name: "Test" },
-      items: [1, 2, 3],
-    };
-    const serialized = serializeSSRState(state);
-    const parsed = JSON.parse(serialized);
-    expect(parsed).toEqual(state);
-  });
-
-  it("should handle empty object", () => {
-    const serialized = serializeSSRState({});
-    expect(serialized).toBe("{}");
   });
 });
 
@@ -93,8 +30,8 @@ describe("SSRProvider - Server Side", () => {
 
   it("should create store with provided ssrState on server", () => {
     const testAtom = atom<string>("default");
-    const config = createSSRConfig({
-      test: { key: "test", atom: testAtom },
+    const config = createSSRAtomState({
+      test: testAtom,
     });
 
     function TestComponent() {
@@ -102,9 +39,9 @@ describe("SSRProvider - Server Side", () => {
       return <div>{value}</div>;
     }
 
-    const ssrState = config.getState({ test: "server-value" });
+    const ssrState = { test: "server-value" };
     const html = renderToString(
-      <SSRProvider config={config.config} ssrState={ssrState}>
+      <SSRProvider config={config} ssrState={ssrState}>
         <TestComponent />
       </SSRProvider>,
     );
@@ -112,31 +49,10 @@ describe("SSRProvider - Server Side", () => {
     expect(html).toContain("server-value");
   });
 
-  it("should handle undefined values on server", () => {
-    const testAtom = atom<string | undefined>(undefined);
-    const config = createSSRConfig({
-      test: { key: "test", atom: testAtom },
-    });
-
-    function TestComponent() {
-      const [value] = useAtom(testAtom);
-      return <div>{value ?? "empty"}</div>;
-    }
-
-    const ssrState = config.getState({ test: undefined });
-    const html = renderToString(
-      <SSRProvider config={config.config} ssrState={ssrState}>
-        <TestComponent />
-      </SSRProvider>,
-    );
-
-    expect(html).toContain("empty");
-  });
-
   it("should create empty store when no ssrState provided on server", () => {
     const testAtom = atom<string>("default");
-    const config = createSSRConfig({
-      test: { key: "test", atom: testAtom },
+    const config = createSSRAtomState({
+      test: testAtom,
     });
 
     function TestComponent() {
@@ -145,7 +61,7 @@ describe("SSRProvider - Server Side", () => {
     }
 
     const html = renderToString(
-      <SSRProvider config={config.config}>
+      <SSRProvider config={config}>
         <TestComponent />
       </SSRProvider>,
     );
@@ -159,10 +75,10 @@ describe("SSRProvider - Server Side", () => {
     const numberAtom = atom<number>(0);
     const booleanAtom = atom<boolean>(false);
 
-    const config = createSSRConfig({
-      str: { key: "str", atom: stringAtom },
-      num: { key: "num", atom: numberAtom },
-      bool: { key: "bool", atom: booleanAtom },
+    const config = createSSRAtomState({
+      str: stringAtom,
+      num: numberAtom,
+      bool: booleanAtom,
     });
 
     function TestComponent() {
@@ -176,14 +92,14 @@ describe("SSRProvider - Server Side", () => {
       );
     }
 
-    const ssrState = config.getState({
+    const ssrState = {
       str: "test",
       num: 42,
       bool: true,
-    });
+    };
 
     const html = renderToString(
-      <SSRProvider config={config.config} ssrState={ssrState}>
+      <SSRProvider config={config} ssrState={ssrState}>
         <TestComponent />
       </SSRProvider>,
     );
@@ -210,8 +126,8 @@ describe("SSRProvider - Client Side", () => {
 
   it("should hydrate from __SSR_STATE__ script tag on client", () => {
     const testAtom = atom<string>("default");
-    const config = createSSRConfig({
-      test: { key: "test", atom: testAtom },
+    const config = createSSRAtomState({
+      test: testAtom,
     });
 
     // Mock SSR state in DOM
@@ -227,7 +143,7 @@ describe("SSRProvider - Client Side", () => {
     }
 
     const { getByTestId } = render(
-      <SSRProvider config={config.config}>
+      <SSRProvider config={config}>
         <TestComponent />
       </SSRProvider>,
     );
@@ -237,8 +153,8 @@ describe("SSRProvider - Client Side", () => {
 
   it("should handle missing __SSR_STATE__ on client", () => {
     const testAtom = atom<string>("default");
-    const config = createSSRConfig({
-      test: { key: "test", atom: testAtom },
+    const config = createSSRAtomState({
+      test: testAtom,
     });
 
     function TestComponent() {
@@ -247,7 +163,7 @@ describe("SSRProvider - Client Side", () => {
     }
 
     const { getByTestId } = render(
-      <SSRProvider config={config.config}>
+      <SSRProvider config={config}>
         <TestComponent />
       </SSRProvider>,
     );
@@ -256,40 +172,13 @@ describe("SSRProvider - Client Side", () => {
     expect(getByTestId("value")).toHaveTextContent("default");
   });
 
-  it("should convert null back to undefined on client", () => {
-    const testAtom = atom<string | undefined>("default");
-    const config = createSSRConfig({
-      test: { key: "test", atom: testAtom },
-    });
-
-    // Mock SSR state with null (represents undefined)
-    const script = document.createElement("script");
-    script.id = "__SSR_STATE__";
-    script.type = "application/json";
-    script.textContent = JSON.stringify({ test: null });
-    document.head.appendChild(script);
-
-    function TestComponent() {
-      const [value] = useAtom(testAtom);
-      return <div data-testid="value">{value ?? "undefined"}</div>;
-    }
-
-    const { getByTestId } = render(
-      <SSRProvider config={config.config}>
-        <TestComponent />
-      </SSRProvider>,
-    );
-
-    expect(getByTestId("value")).toHaveTextContent("undefined");
-  });
-
   it("should handle multiple atoms on client", () => {
     const stringAtom = atom<string>("default");
     const numberAtom = atom<number>(0);
 
-    const config = createSSRConfig({
-      str: { key: "str", atom: stringAtom },
-      num: { key: "num", atom: numberAtom },
+    const config = createSSRAtomState({
+      str: stringAtom,
+      num: numberAtom,
     });
 
     const script = document.createElement("script");
@@ -305,7 +194,7 @@ describe("SSRProvider - Client Side", () => {
     }
 
     const { getByTestId } = render(
-      <SSRProvider config={config.config}>
+      <SSRProvider config={config}>
         <TestComponent />
       </SSRProvider>,
     );
@@ -315,8 +204,8 @@ describe("SSRProvider - Client Side", () => {
 
   it("should handle malformed JSON gracefully", () => {
     const testAtom = atom<string>("default");
-    const config = createSSRConfig({
-      test: { key: "test", atom: testAtom },
+    const config = createSSRAtomState({
+      test: testAtom,
     });
 
     const script = document.createElement("script");
@@ -331,7 +220,7 @@ describe("SSRProvider - Client Side", () => {
     }
 
     const { getByTestId } = render(
-      <SSRProvider config={config.config}>
+      <SSRProvider config={config}>
         <TestComponent />
       </SSRProvider>,
     );
@@ -345,8 +234,8 @@ describe("SSRProvider - Client Side", () => {
     const atom1 = atom<string>("default1");
     const atom2 = atom<string>("default2");
 
-    const config = createSSRConfig({
-      atom1: { key: "atom1", atom: atom1 },
+    const config = createSSRAtomState({
+      atom1: atom1,
     });
 
     const script = document.createElement("script");
@@ -370,7 +259,7 @@ describe("SSRProvider - Client Side", () => {
     }
 
     const { getByTestId } = render(
-      <SSRProvider config={config.config}>
+      <SSRProvider config={config}>
         <TestComponent />
       </SSRProvider>,
     );
@@ -394,8 +283,8 @@ describe("SSRProvider - Complex Data Types", () => {
     type User = { id: string; name: string };
     const userAtom = atom<User | null>(null);
 
-    const config = createSSRConfig({
-      user: { key: "user", atom: userAtom },
+    const config = createSSRAtomState({
+      user: userAtom,
     });
 
     const script = document.createElement("script");
@@ -412,7 +301,7 @@ describe("SSRProvider - Complex Data Types", () => {
     }
 
     const { getByTestId } = render(
-      <SSRProvider config={config.config}>
+      <SSRProvider config={config}>
         <TestComponent />
       </SSRProvider>,
     );
@@ -423,8 +312,8 @@ describe("SSRProvider - Complex Data Types", () => {
   it("should handle array values", () => {
     const itemsAtom = atom<number[]>([]);
 
-    const config = createSSRConfig({
-      items: { key: "items", atom: itemsAtom },
+    const config = createSSRAtomState({
+      items: itemsAtom,
     });
 
     const script = document.createElement("script");
@@ -439,7 +328,7 @@ describe("SSRProvider - Complex Data Types", () => {
     }
 
     const { getByTestId } = render(
-      <SSRProvider config={config.config}>
+      <SSRProvider config={config}>
         <TestComponent />
       </SSRProvider>,
     );
@@ -455,8 +344,8 @@ describe("SSRProvider - Complex Data Types", () => {
 
     const editorAtom = atom<EditorState | null>(null);
 
-    const config = createSSRConfig({
-      editor: { key: "editor", atom: editorAtom },
+    const config = createSSRAtomState({
+      editor: editorAtom,
     });
 
     const editorState = {
@@ -476,7 +365,7 @@ describe("SSRProvider - Complex Data Types", () => {
     }
 
     const { getByTestId } = render(
-      <SSRProvider config={config.config}>
+      <SSRProvider config={config}>
         <TestComponent />
       </SSRProvider>,
     );

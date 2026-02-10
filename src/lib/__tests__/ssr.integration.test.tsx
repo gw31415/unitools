@@ -2,7 +2,7 @@ import { render } from "@testing-library/react";
 import { atom, useAtom } from "jotai";
 import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createSSRConfig, SSRProvider, serializeSSRState } from "../ssr";
+import { createSSRAtomState, SSRProvider } from "../ssr";
 
 describe("SSR Hydration Integration", () => {
   describe("Server to Client Hydration Match", () => {
@@ -16,8 +16,8 @@ describe("SSR Hydration Integration", () => {
 
     it("should render identical content on server and client", () => {
       const userAtom = atom<{ name: string } | null>(null);
-      const config = createSSRConfig({
-        user: { key: "user", atom: userAtom },
+      const config = createSSRAtomState({
+        user: userAtom,
       });
 
       function TestApp() {
@@ -30,16 +30,16 @@ describe("SSR Hydration Integration", () => {
       }
 
       // 1. Server-side rendering
-      const ssrState = config.getState({
+      const ssrState = {
         user: { name: "Alice" },
-      });
+      };
 
       // Mock server environment
       // @ts-expect-error
       delete global.window;
 
       const serverHtml = renderToString(
-        <SSRProvider config={config.config} ssrState={ssrState}>
+        <SSRProvider config={config} ssrState={ssrState}>
           <TestApp />
         </SSRProvider>,
       );
@@ -53,12 +53,12 @@ describe("SSR Hydration Integration", () => {
       const script = document.createElement("script");
       script.id = "__SSR_STATE__";
       script.type = "application/json";
-      script.textContent = serializeSSRState(ssrState);
+      script.textContent = JSON.stringify(ssrState);
       document.head.appendChild(script);
 
       // 3. Client-side hydration
       const { getByTestId } = render(
-        <SSRProvider config={config.config}>
+        <SSRProvider config={config}>
           <TestApp />
         </SSRProvider>,
       );
@@ -72,8 +72,8 @@ describe("SSR Hydration Integration", () => {
 
     it("should handle transition from logged-out to logged-in state", () => {
       const userAtom = atom<{ name: string } | null>(null);
-      const config = createSSRConfig({
-        user: { key: "user", atom: userAtom },
+      const config = createSSRAtomState({
+        user: userAtom,
       });
 
       function TestApp() {
@@ -90,12 +90,12 @@ describe("SSR Hydration Integration", () => {
       // @ts-expect-error
       delete global.window;
 
-      const ssrState = config.getState({
+      const ssrState = {
         user: { name: "Bob" },
-      });
+      };
 
       const serverHtml = renderToString(
-        <SSRProvider config={config.config} ssrState={ssrState}>
+        <SSRProvider config={config} ssrState={ssrState}>
           <TestApp />
         </SSRProvider>,
       );
@@ -110,11 +110,11 @@ describe("SSR Hydration Integration", () => {
       const script = document.createElement("script");
       script.id = "__SSR_STATE__";
       script.type = "application/json";
-      script.textContent = serializeSSRState(ssrState);
+      script.textContent = JSON.stringify(ssrState);
       document.head.appendChild(script);
 
       const { getByTestId } = render(
-        <SSRProvider config={config.config}>
+        <SSRProvider config={config}>
           <TestApp />
         </SSRProvider>,
       );
@@ -133,8 +133,8 @@ describe("SSR Hydration Integration", () => {
       };
 
       const editorAtom = atom<EditorContent | null>(null);
-      const config = createSSRConfig({
-        editor: { key: "editor", atom: editorAtom },
+      const config = createSSRAtomState({
+        editor: editorAtom,
       });
 
       function Editor() {
@@ -160,12 +160,12 @@ describe("SSR Hydration Integration", () => {
         ],
       };
 
-      const ssrState = config.getState({
+      const ssrState = {
         editor: editorContent,
-      });
+      };
 
       const serverHtml = renderToString(
-        <SSRProvider config={config.config} ssrState={ssrState}>
+        <SSRProvider config={config} ssrState={ssrState}>
           <Editor />
         </SSRProvider>,
       );
@@ -180,11 +180,11 @@ describe("SSR Hydration Integration", () => {
       const script = document.createElement("script");
       script.id = "__SSR_STATE__";
       script.type = "application/json";
-      script.textContent = serializeSSRState(ssrState);
+      script.textContent = JSON.stringify(ssrState);
       document.head.appendChild(script);
 
       const { getByTestId } = render(
-        <SSRProvider config={config.config}>
+        <SSRProvider config={config}>
           <Editor />
         </SSRProvider>,
       );
@@ -201,10 +201,10 @@ describe("SSR Hydration Integration", () => {
       const editorAtom = atom<{ content: string } | null>(null);
       const settingsAtom = atom<{ theme: string }>({ theme: "light" });
 
-      const config = createSSRConfig({
-        user: { key: "user", atom: userAtom },
-        editor: { key: "editor", atom: editorAtom },
-        settings: { key: "settings", atom: settingsAtom },
+      const config = createSSRAtomState({
+        user: userAtom,
+        editor: editorAtom,
+        settings: settingsAtom,
       });
 
       function App() {
@@ -225,14 +225,14 @@ describe("SSR Hydration Integration", () => {
       // @ts-expect-error
       delete global.window;
 
-      const ssrState = config.getState({
+      const ssrState = {
         user: { id: "1", name: "Charlie" },
         editor: { content: "Document content" },
         settings: { theme: "dark" },
-      });
+      };
 
       const serverHtml = renderToString(
-        <SSRProvider config={config.config} ssrState={ssrState}>
+        <SSRProvider config={config} ssrState={ssrState}>
           <App />
         </SSRProvider>,
       );
@@ -248,11 +248,11 @@ describe("SSR Hydration Integration", () => {
       const script = document.createElement("script");
       script.id = "__SSR_STATE__";
       script.type = "application/json";
-      script.textContent = serializeSSRState(ssrState);
+      script.textContent = JSON.stringify(ssrState);
       document.head.appendChild(script);
 
       const { getByTestId } = render(
-        <SSRProvider config={config.config}>
+        <SSRProvider config={config}>
           <App />
         </SSRProvider>,
       );
@@ -275,8 +275,8 @@ describe("SSR Hydration Integration", () => {
 
     it("should handle empty SSR state", () => {
       const testAtom = atom<string>("default");
-      const config = createSSRConfig({
-        test: { key: "test", atom: testAtom },
+      const config = createSSRAtomState({
+        test: testAtom,
       });
 
       function TestComponent() {
@@ -289,7 +289,7 @@ describe("SSR Hydration Integration", () => {
       delete global.window;
 
       const serverHtml = renderToString(
-        <SSRProvider config={config.config} ssrState={{}}>
+        <SSRProvider config={config} ssrState={undefined}>
           <TestComponent />
         </SSRProvider>,
       );
@@ -307,7 +307,7 @@ describe("SSR Hydration Integration", () => {
       document.head.appendChild(script);
 
       const { getByTestId } = render(
-        <SSRProvider config={config.config}>
+        <SSRProvider config={config}>
           <TestComponent />
         </SSRProvider>,
       );
@@ -319,8 +319,8 @@ describe("SSR Hydration Integration", () => {
 
     it("should handle content with special characters in SSR state", () => {
       const contentAtom = atom<string>("");
-      const config = createSSRConfig({
-        content: { key: "content", atom: contentAtom },
+      const config = createSSRAtomState({
+        content: contentAtom,
       });
 
       function TestComponent() {
@@ -334,7 +334,7 @@ describe("SSR Hydration Integration", () => {
       // @ts-expect-error
       delete global.window;
 
-      const ssrState = config.getState({ content: specialContent });
+      const ssrState = { content: specialContent };
       const serialized = JSON.stringify(ssrState);
 
       // JSON.stringify preserves the content as-is
@@ -342,7 +342,7 @@ describe("SSR Hydration Integration", () => {
       expect(serialized).toContain("<script");
 
       const _serverHtml = renderToString(
-        <SSRProvider config={config.config} ssrState={ssrState}>
+        <SSRProvider config={config} ssrState={ssrState}>
           <TestComponent />
         </SSRProvider>,
       );
@@ -358,7 +358,7 @@ describe("SSR Hydration Integration", () => {
       document.head.appendChild(script);
 
       const { getByTestId } = render(
-        <SSRProvider config={config.config}>
+        <SSRProvider config={config}>
           <TestComponent />
         </SSRProvider>,
       );
@@ -368,73 +368,13 @@ describe("SSR Hydration Integration", () => {
 
       script.remove();
     });
-
-    it("should handle partial state (some atoms undefined)", () => {
-      const atom1 = atom<string | undefined>(undefined);
-      const atom2 = atom<string>("default2");
-
-      const config = createSSRConfig({
-        atom1: { key: "atom1", atom: atom1 },
-        atom2: { key: "atom2", atom: atom2 },
-      });
-
-      function TestComponent() {
-        const [val1] = useAtom(atom1);
-        const [val2] = useAtom(atom2);
-        return (
-          <div>
-            <span data-testid="val1">{val1 ?? "empty"}</span>
-            <span data-testid="val2">{val2}</span>
-          </div>
-        );
-      }
-
-      // Server
-      // @ts-expect-error
-      delete global.window;
-
-      const ssrState = config.getState({
-        atom1: undefined,
-        atom2: "value2",
-      });
-
-      const serverHtml = renderToString(
-        <SSRProvider config={config.config} ssrState={ssrState}>
-          <TestComponent />
-        </SSRProvider>,
-      );
-
-      expect(serverHtml).toContain("empty");
-      expect(serverHtml).toContain("value2");
-
-      // Client
-      // @ts-expect-error
-      global.window = { document: global.document };
-
-      const script = document.createElement("script");
-      script.id = "__SSR_STATE__";
-      script.type = "application/json";
-      script.textContent = serializeSSRState(ssrState);
-      document.head.appendChild(script);
-
-      const { getByTestId } = render(
-        <SSRProvider config={config.config}>
-          <TestComponent />
-        </SSRProvider>,
-      );
-
-      expect(getByTestId("val1")).toHaveTextContent("empty");
-      expect(getByTestId("val2")).toHaveTextContent("value2");
-
-      script.remove();
-    });
   });
 
   describe("First Content Paint Verification", () => {
     it("should render same content before and after hydration", () => {
       const userAtom = atom<{ name: string } | null>(null);
-      const config = createSSRConfig({
-        user: { key: "user", atom: userAtom },
+      const config = createSSRAtomState({
+        user: userAtom,
       });
 
       function TestComponent() {
@@ -450,12 +390,12 @@ describe("SSR Hydration Integration", () => {
       // @ts-expect-error
       delete global.window;
 
-      const ssrState = config.getState({
+      const ssrState = {
         user: { name: "Dave" },
-      });
+      };
 
       const serverHtml = renderToString(
-        <SSRProvider config={config.config} ssrState={ssrState}>
+        <SSRProvider config={config} ssrState={ssrState}>
           <TestComponent />
         </SSRProvider>,
       );
@@ -471,11 +411,11 @@ describe("SSR Hydration Integration", () => {
       const script = document.createElement("script");
       script.id = "__SSR_STATE__";
       script.type = "application/json";
-      script.textContent = serializeSSRState(ssrState);
+      script.textContent = JSON.stringify(ssrState);
       document.head.appendChild(script);
 
       const { getByTestId } = render(
-        <SSRProvider config={config.config}>
+        <SSRProvider config={config}>
           <TestComponent />
         </SSRProvider>,
       );

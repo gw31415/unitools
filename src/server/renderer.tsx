@@ -1,7 +1,7 @@
 import { reactRenderer } from "@hono/react-renderer";
 import { Link, Script, ViteClient } from "vite-ssr-components/react";
 import { SSRProvider } from "@/lib/ssr";
-import { ssrConfig } from "@/store/routeState";
+import { ssrAtomState } from "@/store";
 
 export const renderer = reactRenderer(({ children, ssrState }) => {
   const title = "Unitools: compose knowledge with ease";
@@ -42,7 +42,7 @@ export const renderer = reactRenderer(({ children, ssrState }) => {
         <Script src="/src/client.tsx" defer />
       </head>
       <body>
-        <SSRProvider config={ssrConfig.config} ssrState={ssrState}>
+        <SSRProvider config={ssrAtomState} ssrState={ssrState}>
           {children}
         </SSRProvider>
       </body>

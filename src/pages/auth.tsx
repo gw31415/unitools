@@ -7,7 +7,7 @@ import { useAtomValue } from "jotai";
 import { useCallback, useMemo, useState } from "react";
 import { LoginForm } from "@/components/login-form";
 import type { ServerAppType } from "@/server";
-import { currentUserAtom } from "@/store/routeState";
+import { currentUserAtom } from "@/store";
 
 const normalizeUserName = (value: string) => value.trim();
 

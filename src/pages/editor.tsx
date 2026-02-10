@@ -1,12 +1,7 @@
-import { getSchema } from "@tiptap/core";
 import { hc } from "hono/client";
 import { useAtomValue } from "jotai";
 import { Clock, Menu, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
-import * as Y from "yjs";
-import { useUser } from "@/api/auth";
-import AuthPage from "@/app/auth";
 import { Header } from "@/components/Header";
 import Markdown from "@/components/Markdown";
 import {
@@ -28,20 +23,13 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Spinner } from "@/components/ui/spinner";
-import { serialize } from "@/lib/base64";
-import { baseExtensions } from "@/lib/editorExtensions";
-import { createApp } from "@/lib/hono";
-import { headers2Record } from "@/lib/utils";
 import type { ServerAppType } from "@/server";
 import {
   currentUserAtom,
   editorStateAtom,
   markdownBootstrapAtom,
-  ssrConfig,
-} from "@/store/routeState";
-import type { EditorState } from "@/types/route";
+} from "@/store";
 
-const proseMirrorSchema = getSchema(baseExtensions);
 const SIDEBAR_PAGE_SIZE = 20;
 
 type EditorListItem = {
@@ -63,7 +51,7 @@ const formatSidebarLabel = (item: EditorListItem) => {
   return `${dateLabel} · ${item.id.slice(-6)}`;
 };
 
-export function DocumentPage() {
+export default function DocumentPage() {
   const editorState = useAtomValue(editorStateAtom);
   const user = useAtomValue(currentUserAtom);
   const bootstrap = useAtomValue(markdownBootstrapAtom);
@@ -253,7 +241,7 @@ function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
           {items.map((item) => (
             <SidebarMenuItem key={item.id}>
               <SidebarMenuButton asChild isActive={item.id === currentDocId}>
-                <a href={`/pages/${item.id}`}>
+                <a href={`/editor/${item.id}`}>
                   <Clock />
                   <span>{formatSidebarLabel(item)}</span>
                 </a>
@@ -320,61 +308,3 @@ function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
     </SidebarGroupContent>
   );
 }
-
-const app = createApp()
-  .get("/", (c) => c.redirect("/auth"))
-  .get("/pages/:id", useUser, async (c) => {
-    const docId = c.req.param("id");
-
-    const client = hc<ServerAppType>(new URL(c.req.url).origin);
-    const headers = headers2Record(c.req.raw.headers);
-    const res = await client.api.v1.editor[":id"].doc.$get(
-      { param: { id: docId } },
-      { headers },
-    );
-
-    let editorState: EditorState = {
-      docId,
-      yjsUpdate: "",
-      snapshotJSON: undefined,
-    };
-
-    if (res.ok) {
-      const doc = new Y.Doc();
-      const yjsUpdateBytes = await res.bytes();
-      Y.applyUpdate(doc, yjsUpdateBytes);
-      const rootNode = yXmlFragmentToProseMirrorRootNode(
-        doc.getXmlFragment("default"),
-        proseMirrorSchema,
-      );
-      editorState = {
-        docId,
-        yjsUpdate: serialize(yjsUpdateBytes),
-        snapshotJSON: rootNode.toJSON(),
-      };
-    }
-
-    // Pass SSR state via props
-    const ssrState = ssrConfig.getState({
-      editorState,
-      user: c.get("user"),
-    });
-
-    return c.render(<DocumentPage />, { ssrState });
-  })
-  .get("/auth", useUser, (c) => {
-    // Pass SSR state via props
-    const ssrState = ssrConfig.getState({
-      editorState: {
-        docId: "",
-        yjsUpdate: undefined,
-        snapshotJSON: undefined,
-      },
-      user: c.get("user"),
-    });
-
-    return c.render(<AuthPage />, { ssrState });
-  })
-  .get("*", (c) => c.notFound());
-
-export default app;
