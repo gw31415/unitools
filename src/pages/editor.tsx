@@ -63,6 +63,7 @@ export default function DocumentPage() {
         <Markdown
           docId={editorState.docId}
           bootstrap={bootstrap}
+          readonly={!user}
           className="px-4 py-2 size-full pb-15 md:pb-2"
           aria-label="Main content editor/viewer of this page"
         />

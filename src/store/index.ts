@@ -12,6 +12,8 @@ export const editorStateAtom = atom<EditorState>({
 
 export const currentUserAtom = atom<User | undefined>(undefined);
 
+export const sidebarOpenAtom = atom<boolean>(true);
+
 export const documentIdAtom = atom((get) => get(editorStateAtom).docId);
 
 export const markdownBootstrapAtom = atom((get) => ({
@@ -27,6 +29,7 @@ export const ssrAtomState = createSSRAtomState({
   pageAtom,
   editorStateAtom,
   currentUserAtom,
+  sidebarOpenAtom,
 });
 
 export type SSRStateType = SSRStateOf<typeof ssrAtomState>;

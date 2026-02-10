@@ -49,11 +49,13 @@ function MarkdownView({
 function MarkdownEditor({
   editorOpts,
   onReady,
+  editable,
   className,
   ...props
 }: {
   editorOpts?: PartialEditorOptions;
   onReady?: (editor: Editor) => void;
+  editable?: boolean;
 } & HTMLAttributes<HTMLDivElement>) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Editor>(null);
@@ -61,6 +63,7 @@ function MarkdownEditor({
   useEffect(() => {
     editorRef.current = createEditor({
       element: { mount: editorContainerRef.current! },
+      editable,
       ...editorOpts,
     });
     if (editorRef.current) {
@@ -73,7 +76,7 @@ function MarkdownEditor({
       }
       editorRef.current = null;
     };
-  }, [editorOpts, onReady]);
+  }, [editorOpts, onReady, editable]);
   return (
     <div
       ref={editorContainerRef}
@@ -108,7 +111,7 @@ export default function Markdown({
   }, []);
 
   useEffect(() => {
-    if (!mounted || readonly || !docId) {
+    if (!mounted || !docId) {
       setCollabDoc(null);
       return;
     }
@@ -132,7 +135,7 @@ export default function Markdown({
       doc.destroy();
       setCollabDoc(null);
     };
-  }, [mounted, readonly, docId, yjsUpdate]);
+  }, [mounted, docId, yjsUpdate]);
 
   const editorOpts = useMemo<PartialEditorOptions | undefined>(() => {
     if (!collabDoc || !docId) return undefined;
@@ -147,14 +150,9 @@ export default function Markdown({
     };
   }, [collabDoc, docId]);
 
-  const shouldRenderEditor = mounted && !readonly && !!collabDoc;
-  return (
-    <>
-      {import.meta.env.SSR || !shouldRenderEditor ? (
-        <MarkdownView contentJSON={snapshotJSON} {...props} />
-      ) : (
-        <MarkdownEditor editorOpts={editorOpts} {...props} />
-      )}
-    </>
+  return import.meta.env.SSR || !mounted || !collabDoc ? (
+    <MarkdownView contentJSON={snapshotJSON} {...props} />
+  ) : (
+    <MarkdownEditor editorOpts={editorOpts} editable={!readonly} {...props} />
   );
 }

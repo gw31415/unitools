@@ -1,8 +1,10 @@
 import { getSchema } from "@tiptap/core";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { hc } from "hono/client";
+import { getCookie } from "hono/cookie";
 import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
-import * as Y from "yjs";
+import { applyUpdate, Doc as YDoc } from "yjs";
 import api from "@/api";
 import { useUser } from "@/api/auth";
 import { serialize } from "@/lib/base64";
@@ -12,6 +14,18 @@ import { loadComponent } from "@/pages";
 import { renderer } from "@/server/renderer";
 import type { SSRStateType } from "@/store";
 import type { EditorState } from "@/types/route";
+
+const SIDEBAR_COOKIE_NAME = "sidebar_state";
+
+/**
+ * Get sidebar open state from cookie
+ */
+function getCookieSidebarState(c: Context) {
+  const cookieValue = getCookie(c, SIDEBAR_COOKIE_NAME);
+  if (cookieValue === "true") return true;
+  if (cookieValue === "false") return false;
+  return true; // Default to open
+}
 
 const serverApp = new Hono()
   .use(renderer)
@@ -35,9 +49,9 @@ const serverApp = new Hono()
     };
 
     if (res.ok) {
-      const doc = new Y.Doc();
+      const doc = new YDoc();
       const yjsUpdateBytes = await res.bytes();
-      Y.applyUpdate(doc, yjsUpdateBytes);
+      applyUpdate(doc, yjsUpdateBytes);
       const rootNode = yXmlFragmentToProseMirrorRootNode(
         doc.getXmlFragment("default"),
         getSchema(baseExtensions),
@@ -54,6 +68,7 @@ const serverApp = new Hono()
       pageAtom: "EditorPage",
       editorStateAtom: editorState,
       currentUserAtom: c.get("user"),
+      sidebarOpenAtom: getCookieSidebarState(c),
     };
 
     const Component = await loadComponent(ssrState);
@@ -69,6 +84,7 @@ const serverApp = new Hono()
         snapshotJSON: undefined,
       },
       currentUserAtom: c.get("user"),
+      sidebarOpenAtom: getCookieSidebarState(c),
     };
 
     const Component = await loadComponent(ssrState);
