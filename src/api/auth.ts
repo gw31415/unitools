@@ -13,10 +13,12 @@ import { isoBase64URL, isoUint8Array } from "@simplewebauthn/server/helpers";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { Context, MiddlewareHandler } from "hono";
+import { env } from "hono/adapter";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { CookieOptions } from "hono/utils/cookie";
 import { ulid } from "ulid";
 import { passkeyCredentials, type User, users } from "@/db/schema";
+import { serialize } from "@/lib/base64";
 import { createApp, type Env } from "@/lib/hono";
 import { type WebAuthnChallenge, webAuthnChallengeSchema } from "@/models/auth";
 import {
@@ -200,10 +202,69 @@ async function createSession(
   );
 }
 
+/**
+ * 招待コードの検証と使用済み管理を行う
+ *
+ * 仕組み:
+ * 1. INVITATION_CODES環境変数のハッシュ(SHA-256)をキーとしてKVに未使用コード一覧を保存
+ * 2. 初回は全コードが未使用リストに含まれる
+ * 3. 使用されたコードはリストから削除され、再利用を防止
+ * 4. 環境変数が変更されるとハッシュが変わり、古いKVエントリーを削除してリセット
+ */
+async function isValidInvitation(
+  c: Context<Env>,
+  code: string | undefined,
+): Promise<boolean> {
+  if (!code) return false;
+  const { INVITATION_CODES } = env<{ INVITATION_CODES?: string }>(c);
+  if (!INVITATION_CODES || INVITATION_CODES.length === 0) {
+    return false;
+  }
+  const invitationCodes = INVITATION_CODES.split(/\s+/g);
+
+  // Create hash from INVITATION_CODES to detect changes
+  const data = new TextEncoder().encode(INVITATION_CODES);
+  const hash = serialize(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", data)),
+  );
+
+  // Clean up old KV entries from previous INVITATION_CODES versions
+  const prefix = "invitationCodes:env:";
+  const prefixWithHash = `${prefix}${hash}`;
+  let cursor: string | undefined;
+  for (;;) {
+    const result = await c.env.AUTH_KV.list({ prefix, cursor });
+    for (const key of result.keys) {
+      // Delete entries that don't match current hash
+      if (key.name !== prefixWithHash) {
+        await c.env.AUTH_KV.delete(key.name);
+      }
+    }
+    if (result.list_complete) break;
+    cursor = result.cursor;
+  }
+
+  const unused = new Set(
+    (await c.env.AUTH_KV.get<string[]>(prefixWithHash, "json")) ??
+      invitationCodes,
+  );
+
+  const ok = unused.delete(code);
+  if (ok) {
+    await c.env.AUTH_KV.put(prefixWithHash, JSON.stringify([...unused]));
+  }
+  return ok;
+}
+
 export const usersApi = createApp()
   // サインアップ
   .post("/", signupValidator, async (c) => {
-    const { username } = c.req.valid("json");
+    const { username, invitationCode } = c.req.valid("json");
+
+    // Verify invitation code from environment variable
+    if (!(await isValidInvitation(c, invitationCode))) {
+      return c.json({ error: "invalid_invitation_code" as const }, 400);
+    }
 
     const db = drizzle(c.env.DB);
     const existing = await db
