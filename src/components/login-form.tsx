@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { User } from "@/models";
+import { usernameRegex } from "@/validators/auth";
 
 type LoginFormProps = ComponentProps<"div"> & {
   user?: User;
@@ -48,6 +49,7 @@ function SignUpFormItems({ onSignup, disabled }: SignUpFormItemsProps) {
           type="text"
           placeholder="alice_123"
           autoComplete="off"
+          pattern={usernameRegex.source}
           disabled={disabled}
           required
         />

@@ -4,12 +4,9 @@ import { z } from "zod";
 import { passkeyCredentials, users } from "@/db/schema";
 import { ulidSchema } from ".";
 
-const usernameSchema = z
-  .string()
-  .trim()
-  .min(3)
-  .max(32)
-  .regex(/^[A-Za-z0-9_-]+$/);
+export const usernameRegex = /^[A-Za-z0-9_-]+$/;
+
+const usernameSchema = z.string().trim().min(3).max(32).regex(usernameRegex);
 
 const userPostSchema = createInsertSchema(users, {
   username: usernameSchema,
