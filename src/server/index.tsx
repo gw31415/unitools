@@ -10,10 +10,10 @@ import { useUser } from "@/api/auth";
 import { bytesToBase64 } from "@/lib/base64";
 import { baseExtensions } from "@/lib/editorExtensions";
 import { headers2Record } from "@/lib/utils";
+import type { EditorState } from "@/models";
 import { loadComponent } from "@/pages";
 import { renderer } from "@/server/renderer";
 import type { SSRStateType } from "@/store";
-import type { EditorState } from "@/types/route";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 

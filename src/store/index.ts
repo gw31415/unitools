@@ -1,8 +1,7 @@
 import { atom } from "jotai";
 import { createSSRAtomState, type SSRStateOf } from "@/lib/ssr";
-import type { User } from "@/models";
+import type { EditorState, User } from "@/models";
 import type { ComponentName } from "@/pages";
-import type { EditorState } from "@/types/route";
 
 export const editorStateAtom = atom<EditorState>({
   editorId: "",

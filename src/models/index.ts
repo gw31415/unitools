@@ -1,3 +1,4 @@
+import type { JSONContent } from "@tiptap/core";
 import type z from "zod";
 import type {
   passkeyCredentialInsertSchema,
@@ -18,3 +19,9 @@ export type PasskeyCredentialInsert = z.infer<
 export type WebAuthnChallenge = z.infer<typeof webAuthnChallengeSchema>;
 export type Editor = z.infer<typeof editorSelectSchema>;
 export type EditorInsert = z.infer<typeof editorInsertSchema>;
+
+export type EditorState = {
+  editorId: string;
+  yjsUpdate?: string;
+  snapshotJSON?: JSONContent;
+};
