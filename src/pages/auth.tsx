@@ -13,8 +13,6 @@ const normalizeUserName = (value: string) => value.trim();
 
 export default function AuthPage({ redirect }: { redirect?: string }) {
   const user = useAtomValue(currentUserAtom);
-  const [userName, setUserName] = useState("");
-  const [invitationCode, setInvitationCode] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const client = useMemo(
@@ -61,49 +59,54 @@ export default function AuthPage({ redirect }: { redirect?: string }) {
     }
   }, [authBusy, client, redirect]);
 
-  const handleSignup = useCallback(async () => {
-    if (!client || authBusy) return;
-    const normalizedUserName = normalizeUserName(userName);
-    if (!normalizedUserName) {
-      setAuthError("Enter a username to sign up.");
-      return;
-    }
-    setAuthBusy(true);
-    setAuthError(null);
-    try {
-      const signupRes = await client.api.v1.users.$post({
-        json: { username: normalizedUserName, invitationCode },
-      });
-      if (!signupRes.ok) {
-        const errorData = await signupRes.json().catch(() => null);
-        if (signupRes.status === 409) {
-          setAuthError("Username is already taken.");
-        } else if (errorData?.error === "invalid_invitation_code") {
-          setAuthError("Invalid invitation code. Please check and try again.");
-        } else {
-          setAuthError("Sign up failed.");
+  const handleSignup = useCallback(
+    async (username: string, invitationCode: string) => {
+      if (!client || authBusy) return;
+      const normalizedUserName = normalizeUserName(username);
+      if (!normalizedUserName) {
+        setAuthError("Enter a username to sign up.");
+        return;
+      }
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        const signupRes = await client.api.v1.users.$post({
+          json: { username: normalizedUserName, invitationCode },
+        });
+        if (!signupRes.ok) {
+          const errorData = await signupRes.json().catch(() => null);
+          if (signupRes.status === 409) {
+            setAuthError("Username is already taken.");
+          } else if (errorData?.error === "invalid_invitation_code") {
+            setAuthError(
+              "Invalid invitation code. Please check and try again.",
+            );
+          } else {
+            setAuthError("Sign up failed.");
+          }
+          return;
         }
-        return;
+        const { challenge } = await signupRes.json();
+        const response = await startRegistration({
+          optionsJSON: challenge.options,
+        });
+        const verifyRes = await client.api.v1.users["-"].challenge.$post({
+          json: { challengeId: challenge.id, ...response },
+        });
+        if (!verifyRes.ok) {
+          setAuthError("Sign up verification failed.");
+          return;
+        }
+        window.location.reload();
+      } catch (error) {
+        console.error(error);
+        setAuthError("Sign up failed. Please try again.");
+      } finally {
+        setAuthBusy(false);
       }
-      const { challenge } = await signupRes.json();
-      const response = await startRegistration({
-        optionsJSON: challenge.options,
-      });
-      const verifyRes = await client.api.v1.users["-"].challenge.$post({
-        json: { challengeId: challenge.id, ...response },
-      });
-      if (!verifyRes.ok) {
-        setAuthError("Sign up verification failed.");
-        return;
-      }
-      window.location.reload();
-    } catch (error) {
-      console.error(error);
-      setAuthError("Sign up failed. Please try again.");
-    } finally {
-      setAuthBusy(false);
-    }
-  }, [authBusy, client, userName, invitationCode]);
+    },
+    [authBusy, client],
+  );
 
   const handleLogout = useCallback(async () => {
     if (!client || authBusy) return;
@@ -129,10 +132,6 @@ export default function AuthPage({ redirect }: { redirect?: string }) {
       <div className="w-full max-w-sm">
         <LoginForm
           user={user}
-          userName={userName}
-          onChangeUserName={setUserName}
-          invitationCode={invitationCode}
-          onChangeInvitationCode={setInvitationCode}
           onSignup={handleSignup}
           onLogin={handleLogin}
           onLogout={handleLogout}
