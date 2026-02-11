@@ -2,37 +2,23 @@ import { sValidator } from "@hono/standard-validator";
 import { and, desc, eq, lt, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { Context, MiddlewareHandler } from "hono";
-import { ulid } from "ulid";
 import { yRoute } from "y-durableobjects";
-import z from "zod/v4";
+import z from "zod";
 import * as schema from "@/db/schema";
+import { b64urlToStruct, structToBase64Url } from "@/lib/base64";
 import { createApp, type Env } from "@/lib/hono";
+import { type ULID, ulid } from "@/lib/ulid";
+import type { Editor, EditorInsert } from "@/models";
+import { ulidSchema } from "@/validators";
 import { requireUser } from "./auth";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
 
 const cursorPayloadSchema = z.object({
-  id: z.ulid(),
+  id: ulidSchema,
   createdAt: z.number().int().nonnegative(),
 });
-
-type CursorPayload = z.infer<typeof cursorPayloadSchema>;
-
-const encodeCursor = (cursor: CursorPayload) =>
-  btoa(JSON.stringify(cursor))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
-
-const decodeCursor = (cursor: string): CursorPayload => {
-  const base64 = cursor
-    .replaceAll("-", "+")
-    .replaceAll("_", "/")
-    .padEnd(Math.ceil(cursor.length / 4) * 4, "=");
-  const parsed = cursorPayloadSchema.parse(JSON.parse(atob(base64)));
-  return parsed;
-};
 
 const toTimestamp = (value: unknown) =>
   value instanceof Date ? value.getTime() : Number(value);
@@ -45,9 +31,9 @@ const requireDocExists: MiddlewareHandler<Env> = async (c, next) => {
 
   const db = drizzle(c.env.DB);
   const doc = await db
-    .select({ id: schema.markdownDocs.id })
-    .from(schema.markdownDocs)
-    .where(eq(schema.markdownDocs.id, id))
+    .select({ id: schema.editors.id })
+    .from(schema.editors)
+    .where(eq(schema.editors.id, id as ULID))
     .limit(1);
 
   if (doc.length === 0) {
@@ -87,7 +73,7 @@ const editor = createApp()
               return undefined;
             }
             try {
-              return decodeCursor(s);
+              return b64urlToStruct(s, cursorPayloadSchema);
             } catch {
               ctx.addIssue({
                 code: "custom",
@@ -107,18 +93,16 @@ const editor = createApp()
       const take = limit + 1;
 
       const db = drizzle(c.env.DB, { schema });
-      const rows = await db.query.markdownDocs.findMany({
+      const rows: Editor[] = await db.query.editors.findMany({
         where: (docs) => {
           if (!query.cursor) {
             return undefined;
           }
           const cursorCreatedAt = new Date(query.cursor.createdAt);
+          const cursorId = query.cursor.id as ULID;
           return or(
             lt(docs.createdAt, cursorCreatedAt),
-            and(
-              eq(docs.createdAt, cursorCreatedAt),
-              lt(docs.id, query.cursor.id),
-            ),
+            and(eq(docs.createdAt, cursorCreatedAt), lt(docs.id, cursorId)),
           );
         },
         orderBy: (docs) => [desc(docs.createdAt), desc(docs.id)],
@@ -135,7 +119,7 @@ const editor = createApp()
       const last = items.at(-1);
       const nextCursor =
         hasMore && last
-          ? encodeCursor({ id: last.id, createdAt: last.createdAt })
+          ? structToBase64Url({ id: last.id, createdAt: last.createdAt })
           : null;
 
       return c.json({
@@ -151,20 +135,20 @@ const editor = createApp()
     const id = ulid();
     const db = drizzle(c.env.DB, { schema });
     const [res] = await db
-      .insert(schema.markdownDocs)
-      .values({ id })
+      .insert(schema.editors)
+      .values({ id } satisfies EditorInsert)
       .returning();
     // ダメおしでDOインスタンスを初期化しておく
     await getDurableObjectOfDoc(c, id).reset();
 
-    return c.json(res);
+    return c.json(res satisfies Editor);
   })
   .delete("/:id", requireUser, requireDocExists, async (c) => {
-    const id = c.req.param("id");
+    const id = c.req.param("id") as ULID;
     const db = drizzle(c.env.DB, { schema });
     const res = await db
-      .delete(schema.markdownDocs)
-      .where(eq(schema.markdownDocs.id, id))
+      .delete(schema.editors)
+      .where(eq(schema.editors.id, id))
       .returning();
     if (res.length > 0) {
       await getDurableObjectOfDoc(c, id).reset();

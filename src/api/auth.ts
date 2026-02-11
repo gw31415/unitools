@@ -16,16 +16,21 @@ import type { Context, MiddlewareHandler } from "hono";
 import { env } from "hono/adapter";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { CookieOptions } from "hono/utils/cookie";
-import { ulid } from "ulid";
-import { passkeyCredentials, type User, users } from "@/db/schema";
-import { serialize } from "@/lib/base64";
+import { passkeyCredentials, users } from "@/db/schema";
+import { bytesToBase64 } from "@/lib/base64";
 import { createApp, type Env } from "@/lib/hono";
-import { type WebAuthnChallenge, webAuthnChallengeSchema } from "@/models/auth";
+import { type ULID, ulid } from "@/lib/ulid";
+import type {
+  PasskeyCredentialInsert,
+  User,
+  WebAuthnChallenge,
+} from "@/models";
 import {
   authenticationChallengeValidator,
   registrationChallengeValidator,
   sessionInitValidator,
   signupValidator,
+  webAuthnChallengeSchema,
 } from "@/validators/auth";
 
 const PASSKEY_SESSION_COOKIE = "sid";
@@ -95,7 +100,7 @@ async function loadSessionFromRequest<EnvExtended extends Env>(
   return { user: record.user, sessionId };
 }
 
-export const deleteUserSessionsFromKv = async (
+const deleteUserSessionsFromKv = async (
   kv: CloudflareBindings["AUTH_KV"],
   userId: string,
 ) => {
@@ -183,7 +188,7 @@ function toWebAuthnAuthenticationJSON<T extends AuthenticationWebAuthnJSON>(
 async function createSession(
   c: Context<Env>,
   user: User,
-  sessionId: string,
+  sessionId: ULID,
   sessionSecret: string,
 ) {
   const sessionRecord = { user, secret: sessionSecret };
@@ -224,7 +229,7 @@ async function isValidInvitation(
 
   // Create hash from INVITATION_CODES to detect changes
   const data = new TextEncoder().encode(INVITATION_CODES);
-  const hash = serialize(
+  const hash = bytesToBase64(
     new Uint8Array(await crypto.subtle.digest("SHA-256", data)),
   );
 
@@ -376,7 +381,7 @@ export const usersApi = createApp()
         publicKey,
         counter: credential.counter,
         transports,
-      })
+      } satisfies PasskeyCredentialInsert)
       .returning();
 
     await c.env.AUTH_KV.delete(`webauthn:challenge:${payload.challengeId}`);
@@ -384,6 +389,21 @@ export const usersApi = createApp()
     const sessionId = ulid();
     const sessionSecret = createSessionSecret();
     await createSession(c, user, sessionId, sessionSecret);
+
+    return c.body(null, 204);
+  })
+  .delete("/-", requireUser, async (c) => {
+    const user = c.get("user");
+    const db = drizzle(c.env.DB);
+
+    // Delete user from database (cascade handles passkeyCredentials)
+    await db.delete(users).where(eq(users.id, user.id));
+
+    // Clean up all sessions from KV
+    await deleteUserSessionsFromKv(c.env.AUTH_KV, user.id);
+
+    // Delete session cookie
+    deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
 
     return c.body(null, 204);
   });
@@ -406,7 +426,7 @@ export const sessionsApi = createApp()
         }[]
       | undefined;
 
-    let userId: string | undefined;
+    let userId: ULID | undefined;
     if (requestedSessionId) {
       if (!requestedUserId) {
         return c.json({ error: "user_id_required" }, 400);

@@ -99,12 +99,3 @@ export function createSSRAtomState<T extends SSRAtomType>(
 ): SSRAtomState<T> {
   return atomMap;
 }
-
-/**
- * Initialize SSRState
- */
-export function createSSRState<T extends SSRAtomType>(
-  atomMap: SSRState<T>,
-): SSRState<T> {
-  return atomMap;
-}

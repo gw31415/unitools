@@ -9,8 +9,8 @@ import {
   FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import type { User } from "@/db/schema";
 import { cn } from "@/lib/utils";
+import type { User } from "@/models";
 
 type LoginFormProps = ComponentProps<"div"> & {
   user?: User;

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { SideMenuTrigger } from "@/components/SideMenu";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import type { User } from "@/db/schema";
+import type { User } from "@/models";
 
 export function Header({ user }: { user?: User }) {
   const [loading, setLoading] = useState(true);

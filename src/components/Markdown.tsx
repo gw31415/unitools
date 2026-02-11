@@ -6,7 +6,7 @@ import type { HTMLAttributes } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
-import { toUint8Array } from "@/lib/base64";
+import { b64ToUint8Array } from "@/lib/base64";
 import { baseExtensions } from "@/lib/editorExtensions";
 import { cn } from "@/lib/utils";
 
@@ -118,7 +118,7 @@ export default function Markdown({
     const doc = new Y.Doc();
     if (yjsUpdate) {
       try {
-        Y.applyUpdate(doc, toUint8Array(yjsUpdate));
+        Y.applyUpdate(doc, b64ToUint8Array(yjsUpdate));
       } catch {
         // Ignore malformed updates; live sync will repair.
       }

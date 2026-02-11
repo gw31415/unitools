@@ -7,7 +7,7 @@ import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import { applyUpdate, Doc as YDoc } from "yjs";
 import api from "@/api";
 import { useUser } from "@/api/auth";
-import { serialize } from "@/lib/base64";
+import { bytesToBase64 } from "@/lib/base64";
 import { baseExtensions } from "@/lib/editorExtensions";
 import { headers2Record } from "@/lib/utils";
 import { loadComponent } from "@/pages";
@@ -58,7 +58,7 @@ const serverApp = new Hono()
       );
       editorState = {
         docId,
-        yjsUpdate: serialize(yjsUpdateBytes),
+        yjsUpdate: bytesToBase64(yjsUpdateBytes),
         snapshotJSON: rootNode.toJSON(),
       };
     }

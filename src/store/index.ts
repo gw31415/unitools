@@ -1,6 +1,6 @@
 import { atom } from "jotai";
-import type { User } from "@/db/schema";
 import { createSSRAtomState, type SSRStateOf } from "@/lib/ssr";
+import type { User } from "@/models";
 import type { ComponentName } from "@/pages";
 import type { EditorState } from "@/types/route";
 

@@ -23,6 +23,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Spinner } from "@/components/ui/spinner";
+import type { ULID } from "@/lib/ulid";
 import type { ServerAppType } from "@/server";
 import {
   currentUserAtom,
@@ -33,7 +34,7 @@ import {
 const SIDEBAR_PAGE_SIZE = 20;
 
 type EditorListItem = {
-  id: string;
+  id: ULID;
   createdAt: number;
 };
 
@@ -159,8 +160,9 @@ function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
         setItems((prev) => {
           const merged = args.initial ? [] : [...prev];
           for (const item of items) {
-            if (nextSeen.has(item.id)) continue;
-            nextSeen.add(item.id);
+            const editorItemID = item.id as unknown as string;
+            if (nextSeen.has(editorItemID)) continue;
+            nextSeen.add(editorItemID);
             merged.push(item);
           }
           return merged;
