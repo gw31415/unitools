@@ -42,26 +42,22 @@ const serverApp = new Hono()
       { headers },
     );
 
-    let editorState: EditorState = {
-      editorId: "",
-      yjsUpdate: "",
-      snapshotJSON: undefined,
-    };
-
-    if (res.ok) {
-      const doc = new YDoc();
-      const yjsUpdateBytes = await res.bytes();
-      applyUpdate(doc, yjsUpdateBytes);
-      const rootNode = yXmlFragmentToProseMirrorRootNode(
-        doc.getXmlFragment("default"),
-        getSchema(baseExtensions),
-      );
-      editorState = {
-        editorId,
-        yjsUpdate: bytesToBase64(yjsUpdateBytes),
-        snapshotJSON: rootNode.toJSON(),
-      };
+    if (!res.ok) {
+      return c.notFound();
     }
+
+    const doc = new YDoc();
+    const yjsUpdateBytes = await res.bytes();
+    applyUpdate(doc, yjsUpdateBytes);
+    const rootNode = yXmlFragmentToProseMirrorRootNode(
+      doc.getXmlFragment("default"),
+      getSchema(baseExtensions),
+    );
+    const editorState: EditorState = {
+      editorId,
+      yjsUpdate: bytesToBase64(yjsUpdateBytes),
+      snapshotJSON: rootNode.toJSON(),
+    };
 
     // Pass SSR state via props
     const ssrState: SSRStateType = {
