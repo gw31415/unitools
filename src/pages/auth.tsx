@@ -14,6 +14,7 @@ const normalizeUserName = (value: string) => value.trim();
 export default function AuthPage({ redirect }: { redirect?: string }) {
   const user = useAtomValue(currentUserAtom);
   const [userName, setUserName] = useState("");
+  const [invitationCode, setInvitationCode] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const client = useMemo(
@@ -71,11 +72,14 @@ export default function AuthPage({ redirect }: { redirect?: string }) {
     setAuthError(null);
     try {
       const signupRes = await client.api.v1.users.$post({
-        json: { username: normalizedUserName },
+        json: { username: normalizedUserName, invitationCode },
       });
       if (!signupRes.ok) {
+        const errorData = await signupRes.json().catch(() => null);
         if (signupRes.status === 409) {
           setAuthError("Username is already taken.");
+        } else if (errorData?.error === "invalid_invitation_code") {
+          setAuthError("Invalid invitation code. Please check and try again.");
         } else {
           setAuthError("Sign up failed.");
         }
@@ -99,7 +103,7 @@ export default function AuthPage({ redirect }: { redirect?: string }) {
     } finally {
       setAuthBusy(false);
     }
-  }, [authBusy, client, userName]);
+  }, [authBusy, client, userName, invitationCode]);
 
   const handleLogout = useCallback(async () => {
     if (!client || authBusy) return;
@@ -127,6 +131,8 @@ export default function AuthPage({ redirect }: { redirect?: string }) {
           user={user}
           userName={userName}
           onChangeUserName={setUserName}
+          invitationCode={invitationCode}
+          onChangeInvitationCode={setInvitationCode}
           onSignup={handleSignup}
           onLogin={handleLogin}
           onLogout={handleLogout}

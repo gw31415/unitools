@@ -16,6 +16,8 @@ type LoginFormProps = ComponentProps<"div"> & {
   user?: User;
   userName: string;
   onChangeUserName: (next: string) => void;
+  invitationCode: string;
+  onChangeInvitationCode: (next: string) => void;
   onSignup: () => Promise<void>;
   onLogin: () => Promise<void>;
   onLogout: () => Promise<void>;
@@ -26,6 +28,8 @@ type LoginFormProps = ComponentProps<"div"> & {
 type SignUpFormItemsProps = {
   userName: string;
   onChangeUserName: (next: string) => void;
+  invitationCode: string;
+  onChangeInvitationCode: (next: string) => void;
   onSignup: () => Promise<void>;
   disabled?: boolean;
 };
@@ -33,6 +37,8 @@ type SignUpFormItemsProps = {
 function SignUpFormItems({
   userName,
   onChangeUserName,
+  invitationCode,
+  onChangeInvitationCode,
   onSignup,
   disabled,
 }: SignUpFormItemsProps) {
@@ -44,8 +50,22 @@ function SignUpFormItems({
           id="username"
           type="text"
           placeholder="alice_123"
+          autoComplete="off"
           value={userName}
           onChange={(event) => onChangeUserName(event.target.value)}
+          disabled={disabled}
+          required
+        />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="invitation-code">Invitation Code</FieldLabel>
+        <Input
+          id="invitation-code"
+          placeholder="Enter your invitation code"
+          autoComplete="off"
+          className="font-mono"
+          value={invitationCode}
+          onChange={(event) => onChangeInvitationCode(event.target.value)}
           disabled={disabled}
           required
         />
@@ -64,6 +84,8 @@ export function LoginForm({
   user,
   userName,
   onChangeUserName,
+  invitationCode,
+  onChangeInvitationCode,
   onSignup,
   onLogin,
   onLogout,
@@ -106,6 +128,8 @@ export function LoginForm({
               <SignUpFormItems
                 userName={userName}
                 onChangeUserName={onChangeUserName}
+                invitationCode={invitationCode}
+                onChangeInvitationCode={onChangeInvitationCode}
                 onSignup={onSignup}
                 disabled={authBusy}
               />
