@@ -29,23 +29,36 @@ type SignUpFormItemsProps = {
 };
 
 function SignUpFormItems({ onSignup, disabled }: SignUpFormItemsProps) {
-  const usernameRef = useRef<HTMLInputElement>(null);
-  const invitationCodeRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Update submit button disabled state based on form validity
+  const updateSubmitButtonState = () => {
+    if (formRef.current && submitButtonRef.current) {
+      const isValid = formRef.current.checkValidity();
+      submitButtonRef.current.disabled = disabled || !isValid;
+    }
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const username = usernameRef.current?.value ?? "";
-    const invitationCode = invitationCodeRef.current?.value ?? "";
+    const formData = new FormData(e.currentTarget);
+    const username = formData.get("username") as string;
+    const invitationCode = formData.get("invitation-code") as string;
     await onSignup(username, invitationCode);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-7">
+    <form
+      ref={formRef}
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-7"
+      onInput={updateSubmitButtonState}
+    >
       <Field>
         <FieldLabel htmlFor="username">Username</FieldLabel>
         <Input
-          ref={usernameRef}
-          id="username"
+          name="username"
           type="text"
           placeholder="alice_123"
           autoComplete="off"
@@ -57,8 +70,7 @@ function SignUpFormItems({ onSignup, disabled }: SignUpFormItemsProps) {
       <Field>
         <FieldLabel htmlFor="invitation-code">Invitation Code</FieldLabel>
         <Input
-          ref={invitationCodeRef}
-          id="invitation-code"
+          name="invitation-code"
           placeholder="Enter your invitation code"
           autoComplete="off"
           className="font-mono"
@@ -67,7 +79,11 @@ function SignUpFormItems({ onSignup, disabled }: SignUpFormItemsProps) {
         />
       </Field>
       <Field>
-        <Button type="submit" disabled={disabled}>
+        <Button
+          ref={submitButtonRef}
+          type="submit"
+          disabled={disabled || !formRef.current?.checkValidity()}
+        >
           Sign Up
         </Button>
       </Field>
