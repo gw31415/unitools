@@ -87,7 +87,7 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
   private async exportToR2(): Promise<void> {
     const id = this.state.id.name!;
     const markdown = this.convertToMarkdown(this.doc);
-    await this.env.UNITOOLS_R2.put(`docs/${id}.md`, markdown);
+    await this.env.UNITOOLS_R2.put(`editor/${id}.md`, markdown);
   }
 
   private convertToMarkdown(doc: Doc): string {

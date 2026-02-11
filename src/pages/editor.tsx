@@ -62,7 +62,7 @@ export default function DocumentPage() {
       <div className="h-svh flex flex-col">
         <Header user={user} />
         <Markdown
-          docId={editorState.docId}
+          editorId={editorState.editorId}
           bootstrap={bootstrap}
           readonly={!user}
           className="px-4 py-2 size-full pb-15 md:pb-2"
@@ -90,14 +90,14 @@ export default function DocumentPage() {
         <SidebarSeparator />
         <SidebarGroup className="min-h-0 flex-1">
           <SidebarGroupLabel>Past articles</SidebarGroupLabel>
-          <EditorSidebarMenu currentDocId={editorState.docId} />
+          <EditorSidebarMenu currentEditorId={editorState.editorId} />
         </SidebarGroup>
       </SideMenu>
     </SideMenuProvider>
   );
 }
 
-function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
+function EditorSidebarMenu({ currentEditorId }: { currentEditorId: string }) {
   const client = useMemo(
     () =>
       typeof window === "undefined"
@@ -243,7 +243,7 @@ function EditorSidebarMenu({ currentDocId }: { currentDocId: string }) {
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.id}>
-              <SidebarMenuButton asChild isActive={item.id === currentDocId}>
+              <SidebarMenuButton asChild isActive={item.id === currentEditorId}>
                 <a href={`/editor/${item.id}`}>
                   <Clock />
                   <span>{formatSidebarLabel(item)}</span>

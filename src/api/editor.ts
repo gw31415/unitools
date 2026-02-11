@@ -94,26 +94,29 @@ const editor = createApp()
 
       const db = drizzle(c.env.DB, { schema });
       const rows: Editor[] = await db.query.editors.findMany({
-        where: (docs) => {
+        where: (editors) => {
           if (!query.cursor) {
             return undefined;
           }
           const cursorCreatedAt = new Date(query.cursor.createdAt);
           const cursorId = query.cursor.id as ULID;
           return or(
-            lt(docs.createdAt, cursorCreatedAt),
-            and(eq(docs.createdAt, cursorCreatedAt), lt(docs.id, cursorId)),
+            lt(editors.createdAt, cursorCreatedAt),
+            and(
+              eq(editors.createdAt, cursorCreatedAt),
+              lt(editors.id, cursorId),
+            ),
           );
         },
-        orderBy: (docs) => [desc(docs.createdAt), desc(docs.id)],
+        orderBy: (editors) => [desc(editors.createdAt), desc(editors.id)],
         limit: take,
       });
 
       const hasMore = rows.length > limit;
       const pageItems = hasMore ? rows.slice(0, limit) : rows;
-      const items = pageItems.map((doc) => ({
-        id: doc.id,
-        createdAt: toTimestamp(doc.createdAt),
+      const items = pageItems.map((editor) => ({
+        id: editor.id,
+        createdAt: toTimestamp(editor.createdAt),
       }));
 
       const last = items.at(-1);

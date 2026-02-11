@@ -90,12 +90,12 @@ function MarkdownEditor({
 }
 
 export default function Markdown({
-  docId,
+  editorId,
   bootstrap,
   readonly,
   ...props
 }: {
-  docId: string;
+  editorId: string;
   bootstrap?: {
     snapshotJSON?: JSONContent | null;
     yjsUpdate?: string;
@@ -111,7 +111,7 @@ export default function Markdown({
   }, []);
 
   useEffect(() => {
-    if (!mounted || !docId) {
+    if (!mounted || !editorId) {
       setCollabDoc(null);
       return;
     }
@@ -126,7 +126,7 @@ export default function Markdown({
 
     const wsUrl = new URL("/api/v1/editor", window.location.origin);
     wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
-    const provider = new WebsocketProvider(wsUrl.toString(), docId, doc, {
+    const provider = new WebsocketProvider(wsUrl.toString(), editorId, doc, {
       connect: true,
     });
     setCollabDoc(doc);
@@ -135,10 +135,10 @@ export default function Markdown({
       doc.destroy();
       setCollabDoc(null);
     };
-  }, [mounted, docId, yjsUpdate]);
+  }, [mounted, editorId, yjsUpdate]);
 
   const editorOpts = useMemo<PartialEditorOptions | undefined>(() => {
-    if (!collabDoc || !docId) return undefined;
+    if (!collabDoc || !editorId) return undefined;
     return {
       extensions: [
         ...baseExtensions,
@@ -148,7 +148,7 @@ export default function Markdown({
         }),
       ],
     };
-  }, [collabDoc, docId]);
+  }, [collabDoc, editorId]);
 
   return import.meta.env.SSR || !mounted || !collabDoc ? (
     <MarkdownView contentJSON={snapshotJSON} {...props} />

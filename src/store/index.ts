@@ -5,7 +5,7 @@ import type { ComponentName } from "@/pages";
 import type { EditorState } from "@/types/route";
 
 export const editorStateAtom = atom<EditorState>({
-  docId: "",
+  editorId: "",
   yjsUpdate: undefined,
   snapshotJSON: undefined,
 });
@@ -14,7 +14,7 @@ export const currentUserAtom = atom<User | undefined>(undefined);
 
 export const sidebarOpenAtom = atom<boolean>(true);
 
-export const documentIdAtom = atom((get) => get(editorStateAtom).docId);
+export const documentIdAtom = atom((get) => get(editorStateAtom).editorId);
 
 export const markdownBootstrapAtom = atom((get) => ({
   snapshotJSON: get(editorStateAtom).snapshotJSON,

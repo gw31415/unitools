@@ -1,7 +1,7 @@
 import type { JSONContent } from "@tiptap/core";
 
 export type EditorState = {
-  docId: string;
+  editorId: string;
   yjsUpdate?: string;
   snapshotJSON?: JSONContent;
 };

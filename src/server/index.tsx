@@ -33,17 +33,17 @@ const serverApp = new Hono()
   .get("/robots.txt", (c) => c.text("User-agent: *\nDisallow: /\n"))
   .route("/api/v1", api)
   .get("/editor/:id", useUser, async (c) => {
-    const docId = c.req.param("id");
+    const editorId = c.req.param("id");
 
     const client = hc<ServerAppType>(new URL(c.req.url).origin);
     const headers = headers2Record(c.req.raw.headers);
     const res = await client.api.v1.editor[":id"].doc.$get(
-      { param: { id: docId } },
+      { param: { id: editorId } },
       { headers },
     );
 
     let editorState: EditorState = {
-      docId,
+      editorId: "",
       yjsUpdate: "",
       snapshotJSON: undefined,
     };
@@ -57,7 +57,7 @@ const serverApp = new Hono()
         getSchema(baseExtensions),
       );
       editorState = {
-        docId,
+        editorId,
         yjsUpdate: bytesToBase64(yjsUpdateBytes),
         snapshotJSON: rootNode.toJSON(),
       };
@@ -79,7 +79,7 @@ const serverApp = new Hono()
     const ssrState: SSRStateType = {
       pageAtom: "AuthPage",
       editorStateAtom: {
-        docId: "",
+        editorId: "",
         yjsUpdate: undefined,
         snapshotJSON: undefined,
       },
