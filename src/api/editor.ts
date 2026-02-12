@@ -10,7 +10,7 @@ import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
 import type { Editor, EditorInsert } from "@/models";
 import { ulidSchema } from "@/validators";
-import { requireUser } from "./auth";
+import { requireUser, useUser } from "./auth";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -60,7 +60,7 @@ function getDurableObjectOfDoc<T extends Env>(c: Context<T>, id: string) {
 const editor = createApp()
   .get(
     "/",
-    requireUser,
+    useUser,
     sValidator(
       "query",
       z.object({
@@ -85,6 +85,17 @@ const editor = createApp()
       }),
     ),
     async (c) => {
+      const user = c.get("user");
+      if (!user) {
+        return c.json({
+          items: [],
+          pageInfo: {
+            hasMore: false,
+            nextCursor: null,
+          },
+        });
+      }
+
       const query = c.req.valid("query");
       const limit = Math.min(
         Math.max(1, query.limit ?? DEFAULT_PAGE_SIZE),
