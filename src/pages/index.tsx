@@ -7,7 +7,11 @@ import type { SSRStateType } from "@/store";
  */
 const pages = {
   EditorPage: () => import("@/pages/editor").then((m) => m.default),
-  AuthPage: () => import("@/pages/auth").then((m) => m.default),
+  AuthPage: () =>
+    import("@/pages/auth").then((m) => {
+      const Comp = m.default;
+      return () => <Comp redirect="/editor/" />;
+    }),
 } as const;
 
 export type ComponentName = keyof typeof pages;

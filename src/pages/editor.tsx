@@ -83,7 +83,7 @@ export default function DocumentPage() {
                 <Clock />
               </EmptyMedia>
               <EmptyTitle>
-                {user ? `Welcome, ${user.name}` : "Welcome to Unitools"}
+                {user ? `Welcome, ${user.username}` : "Welcome to Unitools"}
               </EmptyTitle>
               <EmptyDescription>
                 {user
