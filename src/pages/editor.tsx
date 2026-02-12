@@ -11,6 +11,13 @@ import {
 } from "@/components/SideMenu";
 import { Button } from "@/components/ui/button";
 import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -61,13 +68,31 @@ export default function DocumentPage() {
     <SideMenuProvider>
       <div className="h-svh flex flex-col">
         <Header user={user} />
-        <Markdown
-          editorId={editorState.editorId}
-          bootstrap={bootstrap}
-          readonly={!user}
-          className="px-4 py-2 size-full pb-15 md:pb-2"
-          aria-label="Main content editor/viewer of this page"
-        />
+        {editorState.editorId ? (
+          <Markdown
+            editorId={editorState.editorId}
+            bootstrap={bootstrap}
+            readonly={!user}
+            className="px-4 py-2 size-full pb-15 md:pb-2"
+            aria-label="Main content editor/viewer of this page"
+          />
+        ) : (
+          <Empty className="flex-1">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Clock />
+              </EmptyMedia>
+              <EmptyTitle>
+                {user ? `Welcome, ${user.name}` : "Welcome to Unitools"}
+              </EmptyTitle>
+              <EmptyDescription>
+                {user
+                  ? "Select an article from the sidebar to view or edit, or create a new article to get started."
+                  : "Login is required to edit articles. You can view articles from the sidebar."}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
         <SideMenuTrigger asChild>
           <Button
             type="button"
