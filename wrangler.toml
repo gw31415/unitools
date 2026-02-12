@@ -1,6 +1,6 @@
 name = "unitools"
 compatibility_date = "2025-08-03"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 main = "./src/index.tsx"
 
 [[durable_objects.bindings]]
