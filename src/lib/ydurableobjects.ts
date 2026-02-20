@@ -1,13 +1,19 @@
 import { renderToMarkdown } from "@tiptap/static-renderer";
+import { eq, inArray } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
 import {
   YDurableObjects as BaseYDurableObjects,
   WSSharedDoc,
 } from "y-durableobjects";
 import type { Doc } from "yjs";
+import * as schema from "@/db/schema";
 import type { Env } from "@/lib/hono";
+import type { ULID } from "@/lib/ulid";
 import { baseExtensions } from "./editorExtensions";
+import { collectReferencedImageIdsFromYXmlFragment } from "./editorImageCleanup";
 
 const debounceDuration = 60000; // 1分
+const R2_BULK_DELETE_LIMIT = 1000;
 
 export class YDurableObjects extends BaseYDurableObjects<Env> {
   async reset(): Promise<void> {
@@ -68,7 +74,7 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
       clearTimeout(this.r2ExportTimer);
       this.r2ExportTimer = null;
     }
-    await this.exportToR2();
+    await Promise.all([this.exportToR2(), this.cleanupUnreferencedImages()]);
   }
 
   private async debouncedExportToR2(): Promise<void> {
@@ -88,6 +94,40 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     const id = this.state.id.name!;
     const markdown = this.convertToMarkdown(this.doc);
     await this.env.UNITOOLS_R2.put(`editor/${id}.md`, markdown);
+  }
+
+  private async cleanupUnreferencedImages(): Promise<void> {
+    const editorId = this.state.id.name as ULID | undefined;
+    if (!editorId) {
+      return;
+    }
+
+    const xmlFragment = this.doc.getXmlFragment("default");
+    const referencedImageIds =
+      collectReferencedImageIdsFromYXmlFragment(xmlFragment);
+    const db = drizzle(this.env.DB, { schema });
+
+    const images = await db
+      .select({ id: schema.images.id, storageKey: schema.images.storageKey })
+      .from(schema.images)
+      .where(eq(schema.images.editorId, editorId));
+    const staleImages = images.filter(
+      (image) => !referencedImageIds.has(image.id),
+    );
+    if (staleImages.length === 0) {
+      return;
+    }
+
+    const staleStorageKeys = staleImages.map((image) => image.storageKey);
+    for (let i = 0; i < staleStorageKeys.length; i += R2_BULK_DELETE_LIMIT) {
+      const chunk = staleStorageKeys.slice(i, i + R2_BULK_DELETE_LIMIT);
+      await this.env.UNITOOLS_R2.delete(chunk);
+    }
+
+    const staleImageIds = staleImages.map((image) => image.id);
+    await db
+      .delete(schema.images)
+      .where(inArray(schema.images.id, staleImageIds));
   }
 
   private convertToMarkdown(doc: Doc): string {
