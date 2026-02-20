@@ -19,7 +19,16 @@ class MockIntersectionObserver {
   disconnect = vi.fn();
 }
 
-global.IntersectionObserver = MockIntersectionObserver as any;
+global.IntersectionObserver =
+  MockIntersectionObserver as unknown as typeof IntersectionObserver;
+
+type MutableImportMetaEnv = ImportMetaEnv & { SSR: boolean };
+
+const importMetaEnv = import.meta.env as unknown as MutableImportMetaEnv;
+
+function setSsrForTest(value: boolean) {
+  importMetaEnv.SSR = value;
+}
 
 describe("Markdown Component", () => {
   beforeEach(() => {
@@ -27,13 +36,13 @@ describe("Markdown Component", () => {
     global.window = {
       document: global.document,
       location: { origin: "http://localhost" },
-    } as any;
+    } as unknown as Window & typeof globalThis;
   });
 
   it("should render MarkdownView in SSR mode", () => {
     // Mock SSR environment
     const originalSSR = import.meta.env.SSR;
-    (import.meta.env as any).SSR = true;
+    setSsrForTest(true);
 
     const { container } = render(
       <Markdown
@@ -54,12 +63,12 @@ describe("Markdown Component", () => {
 
     expect(container.querySelector(".tiptap")).toBeInTheDocument();
 
-    (import.meta.env as any).SSR = originalSSR;
+    setSsrForTest(originalSSR);
   });
 
   it("should render MarkdownView with image content", () => {
     const originalSSR = import.meta.env.SSR;
-    (import.meta.env as any).SSR = true;
+    setSsrForTest(true);
 
     const { container } = render(
       <Markdown
@@ -88,12 +97,12 @@ describe("Markdown Component", () => {
     expect(html).toContain("width");
     expect(html).toContain("height");
 
-    (import.meta.env as any).SSR = originalSSR;
+    setSsrForTest(originalSSR);
   });
 
   it("should handle image with dataSrc attribute", () => {
     const originalSSR = import.meta.env.SSR;
-    (import.meta.env as any).SSR = true;
+    setSsrForTest(true);
 
     const { container } = render(
       <Markdown
@@ -122,12 +131,12 @@ describe("Markdown Component", () => {
     expect(html).toContain('data-src="real-image.jpg"');
     expect(html).toContain("data:image/svg+xml");
 
-    (import.meta.env as any).SSR = originalSSR;
+    setSsrForTest(originalSSR);
   });
 
   it("should not modify uploading images", () => {
     const originalSSR = import.meta.env.SSR;
-    (import.meta.env as any).SSR = true;
+    setSsrForTest(true);
 
     const { container } = render(
       <Markdown
@@ -155,12 +164,12 @@ describe("Markdown Component", () => {
     expect(html).toContain("local-preview.jpg");
     expect(html).toContain('alt="uploading:test-token"');
 
-    (import.meta.env as any).SSR = originalSSR;
+    setSsrForTest(originalSSR);
   });
 
   it("should render with custom className", () => {
     const originalSSR = import.meta.env.SSR;
-    (import.meta.env as any).SSR = true;
+    setSsrForTest(true);
 
     const { container } = render(
       <Markdown
@@ -182,12 +191,12 @@ describe("Markdown Component", () => {
 
     expect(container.querySelector(".custom-class")).toBeInTheDocument();
 
-    (import.meta.env as any).SSR = originalSSR;
+    setSsrForTest(originalSSR);
   });
 
   it("should render empty content when snapshotJSON is null", () => {
     const originalSSR = import.meta.env.SSR;
-    (import.meta.env as any).SSR = true;
+    setSsrForTest(true);
 
     const { container } = render(
       <Markdown
@@ -200,7 +209,7 @@ describe("Markdown Component", () => {
 
     expect(container.querySelector(".tiptap")).toBeInTheDocument();
 
-    (import.meta.env as any).SSR = originalSSR;
+    setSsrForTest(originalSSR);
   });
 
   describe("Image Upload Error Handling", () => {
@@ -234,7 +243,7 @@ describe("Markdown Component", () => {
   describe("Lazy Loading", () => {
     it("should setup IntersectionObserver for images with data-src", () => {
       const originalSSR = import.meta.env.SSR;
-      (import.meta.env as any).SSR = true;
+      setSsrForTest(true);
 
       const { container } = render(
         <Markdown
@@ -262,12 +271,12 @@ describe("Markdown Component", () => {
       expect(image).toBeInTheDocument();
       expect(image?.getAttribute("data-src")).toBe("real-image.jpg");
 
-      (import.meta.env as any).SSR = originalSSR;
+      setSsrForTest(originalSSR);
     });
 
     it("should add lazy-image-pending class to images with data-src", () => {
       const originalSSR = import.meta.env.SSR;
-      (import.meta.env as any).SSR = true;
+      setSsrForTest(true);
 
       const { container } = render(
         <Markdown
@@ -296,12 +305,12 @@ describe("Markdown Component", () => {
       // The class is added by setupLazyLoading which runs in useEffect
       expect(html).toContain('data-src="real-image.jpg"');
 
-      (import.meta.env as any).SSR = originalSSR;
+      setSsrForTest(originalSSR);
     });
 
     it("should not add lazy loading to uploading images", () => {
       const originalSSR = import.meta.env.SSR;
-      (import.meta.env as any).SSR = true;
+      setSsrForTest(true);
 
       const { container } = render(
         <Markdown
@@ -327,7 +336,7 @@ describe("Markdown Component", () => {
       const image = container.querySelector("img");
       expect(image?.classList.contains("lazy-image-pending")).toBe(false);
 
-      (import.meta.env as any).SSR = originalSSR;
+      setSsrForTest(originalSSR);
     });
   });
 });
