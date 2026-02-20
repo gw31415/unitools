@@ -14,6 +14,7 @@ import { requireUser, useUser } from "./auth";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
+const R2_BULK_DELETE_LIMIT = 1000;
 
 const cursorPayloadSchema = z.object({
   id: ulidSchema,
@@ -160,11 +161,28 @@ const editor = createApp()
   .delete("/:id", requireUser, requireDocExists, async (c) => {
     const id = c.req.param("id") as ULID;
     const db = drizzle(c.env.DB, { schema });
+
+    // 削除前に画像を取得
+    const imagesToDelete = await db
+      .select({ storageKey: schema.images.storageKey })
+      .from(schema.images)
+      .where(eq(schema.images.editorId, id));
+
+    // エディタを削除（カスケードでDBの画像も削除）
     const res = await db
       .delete(schema.editors)
       .where(eq(schema.editors.id, id))
       .returning();
+
     if (res.length > 0) {
+      // R2から画像を一括削除（1000個ずつチャンク）
+      if (imagesToDelete.length > 0) {
+        const keys = imagesToDelete.map((img) => img.storageKey);
+        for (let i = 0; i < keys.length; i += R2_BULK_DELETE_LIMIT) {
+          const chunk = keys.slice(i, i + R2_BULK_DELETE_LIMIT);
+          await c.env.UNITOOLS_R2.delete(chunk);
+        }
+      }
       await getDurableObjectOfDoc(c, id).reset();
     }
 

@@ -10,6 +10,7 @@ import type {
   editorInsertSchema,
   editorSelectSchema,
 } from "@/validators/editor";
+import type { imageInsertSchema, imageSelectSchema } from "@/validators/images";
 
 export type User = z.infer<typeof userGetSchema>;
 export type PasskeyCredential = z.infer<typeof passkeyCredentialSelectSchema>;
@@ -19,6 +20,8 @@ export type PasskeyCredentialInsert = z.infer<
 export type WebAuthnChallenge = z.infer<typeof webAuthnChallengeSchema>;
 export type Editor = z.infer<typeof editorSelectSchema>;
 export type EditorInsert = z.infer<typeof editorInsertSchema>;
+export type Image = z.infer<typeof imageSelectSchema>;
+export type ImageInsert = z.infer<typeof imageInsertSchema>;
 
 export type EditorState = {
   editorId: string;
