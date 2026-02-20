@@ -98,6 +98,107 @@ function applyDimensionsToImageElement(
   image.setAttribute("height", String(dimensions.height));
 }
 
+function readImageDimensionsFromElement(
+  image: HTMLImageElement,
+): ImageDimensions | null {
+  const widthAttr = image.getAttribute("width");
+  const heightAttr = image.getAttribute("height");
+  if (!widthAttr || !heightAttr) return null;
+
+  const width = Number.parseInt(widthAttr, 10);
+  const height = Number.parseInt(heightAttr, 10);
+  if (
+    !Number.isFinite(width) ||
+    width <= 0 ||
+    !Number.isFinite(height) ||
+    height <= 0
+  ) {
+    return null;
+  }
+
+  return { width, height };
+}
+
+function applyPendingPreviewSizing(
+  image: HTMLImageElement,
+  dimensions: ImageDimensions,
+) {
+  image.classList.add("lazy-image-has-dimensions");
+  image.style.setProperty("--lazy-image-width", String(dimensions.width));
+  image.style.setProperty("--lazy-image-height", String(dimensions.height));
+}
+
+function clearPendingPreviewSizing(image: HTMLImageElement) {
+  image.classList.remove("lazy-image-has-dimensions");
+  image.style.removeProperty("--lazy-image-width");
+  image.style.removeProperty("--lazy-image-height");
+}
+
+function getAttrNumberValue(fragment: string, attrName: string): number | null {
+  const pattern = new RegExp(
+    `${attrName}\\s*=\\s*(?:"(\\d+)"|'(\\d+)'|(\\d+))`,
+    "i",
+  );
+  const match = fragment.match(pattern);
+  if (!match) return null;
+  const raw = match[1] ?? match[2] ?? match[3];
+  if (!raw) return null;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+function addClassToTag(tag: string, className: string): string {
+  const classAttrPattern = /\bclass\s*=\s*("([^"]*)"|'([^']*)')/i;
+  const classMatch = tag.match(classAttrPattern);
+  if (!classMatch) {
+    return tag.replace("<img", `<img class="${className}"`);
+  }
+  const quotedValue = classMatch[2] ?? classMatch[3] ?? "";
+  const classes = new Set(
+    quotedValue
+      .split(/\s+/)
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  classes.add(className);
+  const quote = classMatch[1].startsWith("'") ? "'" : '"';
+  const merged = `class=${quote}${Array.from(classes).join(" ")}${quote}`;
+  return tag.replace(classAttrPattern, merged);
+}
+
+function mergeInlineStyle(tag: string, styleText: string): string {
+  const styleAttrPattern = /\bstyle\s*=\s*("([^"]*)"|'([^']*)')/i;
+  const styleMatch = tag.match(styleAttrPattern);
+  if (!styleMatch) {
+    return tag.replace("<img", `<img style="${styleText}"`);
+  }
+  const existing = (styleMatch[2] ?? styleMatch[3] ?? "").trim();
+  const merged =
+    existing.length > 0
+      ? `${existing}${existing.endsWith(";") ? "" : ";"} ${styleText}`
+      : styleText;
+  const quote = styleMatch[1].startsWith("'") ? "'" : '"';
+  const styleAttr = `style=${quote}${merged}${quote}`;
+  return tag.replace(styleAttrPattern, styleAttr);
+}
+
+function decorateLazyImageHTML(html: string): string {
+  return html.replace(/<img\b[^>]*>/gi, (tag) => {
+    if (!/\bdata-src\s*=/.test(tag)) return tag;
+    const width = getAttrNumberValue(tag, "width");
+    const height = getAttrNumberValue(tag, "height");
+    if (!width || !height) return tag;
+
+    let decorated = addClassToTag(tag, "lazy-image-has-dimensions");
+    decorated = mergeInlineStyle(
+      decorated,
+      `--lazy-image-width:${width};--lazy-image-height:${height};`,
+    );
+    return decorated;
+  });
+}
+
 function setupLazyImagePreview(container: HTMLElement) {
   const preparedImages: Array<{
     image: HTMLImageElement;
@@ -136,14 +237,20 @@ function setupLazyImagePreview(container: HTMLElement) {
       image.setAttribute("data-src", dataSrc);
     }
 
-    if (!image.hasAttribute("width") || !image.hasAttribute("height")) {
+    let dimensions = readImageDimensionsFromElement(image);
+    if (!dimensions) {
       const cachedDimensions = readCachedImageDimensions(dataSrc);
       if (cachedDimensions) {
         applyDimensionsToImageElement(image, cachedDimensions);
-      } else {
-        image.classList.add("lazy-image-size-fallback");
-        image.style.aspectRatio = FALLBACK_ASPECT_RATIO;
+        dimensions = cachedDimensions;
       }
+    }
+
+    if (dimensions) {
+      applyPendingPreviewSizing(image, dimensions);
+    } else {
+      image.classList.add("lazy-image-size-fallback");
+      image.style.aspectRatio = FALLBACK_ASPECT_RATIO;
     }
 
     image.dataset.lazyPrepared = "true";
@@ -159,6 +266,7 @@ function setupLazyImagePreview(container: HTMLElement) {
 
       image.classList.remove("lazy-image-pending");
       image.classList.remove("lazy-image-size-fallback");
+      clearPendingPreviewSizing(image);
       image.style.removeProperty("aspect-ratio");
 
       if (image.naturalWidth > 0 && image.naturalHeight > 0) {
@@ -240,11 +348,14 @@ function MarkdownView({
   contentJSON?: JSONContent | null;
 } & HTMLAttributes<HTMLDivElement>) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const html = renderToHTMLString({
-    content:
-      contentJSON ?? createEditor({ element: null, content: "" }).getJSON(),
-    extensions: baseExtensions,
-  });
+  const html = useMemo(() => {
+    const rendered = renderToHTMLString({
+      content:
+        contentJSON ?? createEditor({ element: null, content: "" }).getJSON(),
+      extensions: baseExtensions,
+    });
+    return decorateLazyImageHTML(rendered);
+  }, [contentJSON]);
 
   useEffect(() => {
     if (!containerRef.current) return;
