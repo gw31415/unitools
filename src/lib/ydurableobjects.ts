@@ -12,7 +12,7 @@ import type { ULID } from "@/lib/ulid";
 import { baseExtensions } from "./editorExtensions";
 import { collectReferencedImageIdsFromYXmlFragment } from "./editorImageCleanup";
 
-const debounceDuration = 60000; // 1分
+const EXPORT_DEBOUNCE_MS = 60000; // 1分
 const R2_BULK_DELETE_LIMIT = 1000;
 
 export class YDurableObjects extends BaseYDurableObjects<Env> {
@@ -56,38 +56,45 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     );
   }
 
-  private r2ExportTimer: ReturnType<typeof setTimeout> | null = null;
-
   protected async onStart(): Promise<void> {
     await super.onStart();
 
-    // デバウンス付きのupdateリスナー
+    // デバウンス付きのupdateリスナー（DO Alarmで実装）
     this.doc.on("update", async (_update) => {
-      await this.debouncedExportToR2();
+      await this.scheduleUpdateDebounceAlarm();
     });
   }
 
   protected async cleanup(): Promise<void> {
     await super.cleanup();
-    // クリーンアップ時は即時実行
-    if (this.r2ExportTimer) {
-      clearTimeout(this.r2ExportTimer);
-      this.r2ExportTimer = null;
+    if (this.sessions.size === 0) {
+      // 最終切断時は保留中のエクスポートを無効化して即時処理
+      await this.state.storage.deleteAlarm();
+      await this.alarm();
     }
-    await Promise.all([this.exportToR2(), this.cleanupUnreferencedImages()]);
   }
 
-  private async debouncedExportToR2(): Promise<void> {
-    // 既存のタイマーをクリア
-    if (this.r2ExportTimer) {
-      clearTimeout(this.r2ExportTimer);
-    }
-
-    // 1分後に実行
-    this.r2ExportTimer = setTimeout(async () => {
+  async alarm(): Promise<void> {
+    try {
       await this.exportToR2();
-      this.r2ExportTimer = null;
-    }, debounceDuration);
+    } catch (error) {
+      console.error("Failed to export markdown on alarm", {
+        editorId: this.state.id.name,
+        error,
+      });
+    }
+    try {
+      await this.cleanupUnreferencedImages();
+    } catch (error) {
+      console.error("Failed to cleanup unreferenced images on cleanup", {
+        editorId: this.state.id.name,
+        error,
+      });
+    }
+  }
+
+  private async scheduleUpdateDebounceAlarm(): Promise<void> {
+    await this.state.storage.setAlarm(Date.now() + EXPORT_DEBOUNCE_MS);
   }
 
   private async exportToR2(): Promise<void> {
