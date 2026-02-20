@@ -79,9 +79,29 @@ const images = createApp()
             storageKey,
           })
           .returning();
-      } catch (error) {
-        await c.env.UNITOOLS_R2.delete(storageKey);
-        console.error("Failed to persist image metadata:", error);
+      } catch (dbError) {
+        // Attempt R2 cleanup, but don't let cleanup errors mask the original DB error
+        try {
+          await c.env.UNITOOLS_R2.delete(storageKey);
+        } catch (r2Error) {
+          console.error("Failed to cleanup R2 after DB error:", {
+            imageId,
+            editorId,
+            storageKey,
+            dbError,
+            r2Error,
+          });
+        }
+
+        console.error("Failed to persist image metadata:", {
+          imageId,
+          editorId,
+          storageKey,
+          filename: file.name,
+          mimeType: file.type,
+          fileSize: file.size,
+          error: dbError,
+        });
         return c.json({ error: "failed_to_save_image" } as const, 500);
       }
 

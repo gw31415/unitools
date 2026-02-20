@@ -1,35 +1,30 @@
 import { hc } from "hono/client";
 import type { ServerAppType } from "@/server";
 
-interface UploadImageOptions {
-  file: File;
-  editorId: string;
-}
-
-const client =
-  typeof window === "undefined"
-    ? null
-    : hc<ServerAppType>(window.location.origin);
-
-export async function uploadImage(options: UploadImageOptions): Promise<{
+export interface UploadResult {
   url: string;
   id: string;
-}> {
-  const { file, editorId } = options;
+}
 
-  if (!client) {
+/**
+ * Upload an image file to the server.
+ * @param file - The file to upload
+ * @param editorId - The editor ID to associate with the upload
+ * @returns The upload result containing the URL and ID
+ * @throws Error if upload fails or client is not available
+ */
+export async function uploadImage(
+  file: File,
+  editorId: string,
+): Promise<UploadResult> {
+  if (typeof window === "undefined") {
     throw new Error("Upload client is not available");
   }
 
-  if (!file.type.startsWith("image/")) {
-    throw new Error("Only image files are allowed");
-  }
+  const client = hc<ServerAppType>(window.location.origin);
 
   const response = await client.api.v1.images.$post({
-    form: {
-      file,
-      editorId,
-    },
+    form: { file, editorId },
   });
 
   if (!response.ok) {
@@ -43,13 +38,11 @@ export async function uploadImage(options: UploadImageOptions): Promise<{
       }
     } else {
       const text = await response.text();
-      if (text) {
-        message = text;
-      }
+      if (text) message = text;
     }
 
     throw new Error(message);
   }
 
-  return (await response.json()) as { url: string; id: string };
+  return response.json() as Promise<UploadResult>;
 }

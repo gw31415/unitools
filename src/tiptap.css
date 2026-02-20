@@ -1340,7 +1340,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   display: block;
 }
 
-.tiptap img[data-uploading="true"] {
+.tiptap img[data-uploading] {
   animation: upload-pulse 1.4s ease-in-out infinite;
   filter: saturate(0.75);
 }
@@ -1348,18 +1348,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 .tiptap img.lazy-image-pending {
   background-color: var(--accent);
   animation: upload-pulse 1.4s ease-in-out infinite;
-}
-
-.tiptap img.lazy-image-has-dimensions {
-  aspect-ratio: var(--lazy-image-width) / var(--lazy-image-height);
-  width: min(100%, calc(var(--lazy-image-width) * 1px));
-  height: auto;
-  object-fit: fill;
-}
-
-.tiptap img.lazy-image-size-fallback {
-  width: min(100%, 640px);
-  height: auto;
 }
 
 .tiptap img.ProseMirror-selectednode {

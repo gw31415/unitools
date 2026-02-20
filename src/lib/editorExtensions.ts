@@ -34,11 +34,10 @@ const CustomImage = Image.extend({
       },
       uploading: {
         default: false,
-        parseHTML: (element) =>
-          element.getAttribute("data-uploading") === "true",
+        parseHTML: (element) => element.hasAttribute("data-uploading"),
         renderHTML: (attributes) => {
           if (!attributes.uploading) return {};
-          return { "data-uploading": "true" };
+          return { "data-uploading": "" };
         },
       },
     };

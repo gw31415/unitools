@@ -8,42 +8,37 @@ import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 import { b64ToUint8Array } from "@/lib/base64";
 import { baseExtensions } from "@/lib/editorExtensions";
-import { uploadImage } from "@/lib/uploadImage";
 import { cn } from "@/lib/utils";
+import { uploadImage as uploadImageService } from "@/lib/imageService";
 
 type PartialEditorOptions = Partial<ConstructorParameters<typeof Editor>[0]>;
 const UPLOADING_ALT_PREFIX = "uploading:";
-const IMAGE_SIZE_CACHE_PREFIX = "unitools:image-size:";
-const LAZY_ROOT_MARGIN = "600px 0px";
-const FALLBACK_ASPECT_RATIO = "4 / 3";
 
 type ImageDimensions = {
   width: number;
   height: number;
 };
 
+// Create gray preview SVG for lazy loading
 function createGrayPreviewSrc(dimensions: ImageDimensions): string {
-  const width = Math.max(1, Math.round(dimensions.width));
-  const height = Math.max(1, Math.round(dimensions.height));
-  if (!Number.isFinite(width) || !Number.isFinite(height)) return "";
+  const { width, height } = dimensions;
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${width} ${height}'><defs><linearGradient id='g' x1='-1' x2='0'><stop stop-color='%239ca3af' stop-opacity='.28'/><stop offset='.5' stop-color='%239ca3af' stop-opacity='.44'/><stop offset='1' stop-color='%239ca3af' stop-opacity='.28'/><animate attributeName='x1' from='-1' to='1' dur='1.2s' repeatCount='indefinite'/><animate attributeName='x2' from='0' to='2' dur='1.2s' repeatCount='indefinite'/></linearGradient></defs><rect width='100%' height='100%' fill='url(%23g)'/></svg>`;
   return `data:image/svg+xml,${svg}`;
 }
 
+// Get image dimensions from file
 function getImageDimensions(file: File): Promise<ImageDimensions | null> {
   return new Promise((resolve) => {
     const objectUrl = URL.createObjectURL(file);
     const image = new Image();
 
     image.onload = () => {
-      const width = image.naturalWidth;
-      const height = image.naturalHeight;
       URL.revokeObjectURL(objectUrl);
-      if (width > 0 && height > 0) {
-        resolve({ width, height });
-        return;
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+        resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      } else {
+        resolve(null);
       }
-      resolve(null);
     };
 
     image.onerror = () => {
@@ -55,279 +50,115 @@ function getImageDimensions(file: File): Promise<ImageDimensions | null> {
   });
 }
 
-function getImageSizeCacheKey(src: string) {
-  return `${IMAGE_SIZE_CACHE_PREFIX}${encodeURIComponent(src)}`;
-}
+// Setup lazy loading for images
+function setupLazyLoading(container: HTMLElement): () => void {
+  const images = Array.from(container.querySelectorAll("img"));
+  const cleanupFunctions: Array<() => void> = [];
 
-function readCachedImageDimensions(src: string): ImageDimensions | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const raw = window.localStorage.getItem(getImageSizeCacheKey(src));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<ImageDimensions>;
-    if (
-      typeof parsed.width === "number" &&
-      Number.isFinite(parsed.width) &&
-      parsed.width > 0 &&
-      typeof parsed.height === "number" &&
-      Number.isFinite(parsed.height) &&
-      parsed.height > 0
-    ) {
-      return { width: parsed.width, height: parsed.height };
-    }
-  } catch {
-    // Ignore broken cache.
-  }
-
-  return null;
-}
-
-function writeCachedImageDimensions(src: string, dimensions: ImageDimensions) {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(
-      getImageSizeCacheKey(src),
-      JSON.stringify(dimensions),
-    );
-  } catch {
-    // Ignore storage errors.
-  }
-}
-
-function applyDimensionsToImageElement(
-  image: HTMLImageElement,
-  dimensions: ImageDimensions,
-) {
-  image.setAttribute("width", String(dimensions.width));
-  image.setAttribute("height", String(dimensions.height));
-}
-
-function readImageDimensionsFromElement(
-  image: HTMLImageElement,
-): ImageDimensions | null {
-  const widthAttr = image.getAttribute("width");
-  const heightAttr = image.getAttribute("height");
-  if (!widthAttr || !heightAttr) return null;
-
-  const width = Number.parseInt(widthAttr, 10);
-  const height = Number.parseInt(heightAttr, 10);
-  if (
-    !Number.isFinite(width) ||
-    width <= 0 ||
-    !Number.isFinite(height) ||
-    height <= 0
-  ) {
-    return null;
-  }
-
-  return { width, height };
-}
-
-function applyPendingPreviewSizing(
-  image: HTMLImageElement,
-  dimensions: ImageDimensions,
-) {
-  image.classList.add("lazy-image-has-dimensions");
-  image.style.setProperty("--lazy-image-width", String(dimensions.width));
-  image.style.setProperty("--lazy-image-height", String(dimensions.height));
-}
-
-function clearPendingPreviewSizing(image: HTMLImageElement) {
-  image.classList.remove("lazy-image-has-dimensions");
-  image.style.removeProperty("--lazy-image-width");
-  image.style.removeProperty("--lazy-image-height");
-}
-
-function decorateLazyImageContent(content: JSONContent): JSONContent {
-  const next: JSONContent = { ...content };
-
-  if (content.type === "image") {
-    const attrs = (content.attrs ?? {}) as Record<string, unknown>;
-    const alt = typeof attrs.alt === "string" ? attrs.alt : "";
-    if (!alt.startsWith(UPLOADING_ALT_PREFIX)) {
-      const src = typeof attrs.src === "string" ? attrs.src : "";
-      const dataSrc =
-        typeof attrs.dataSrc === "string" && attrs.dataSrc.length > 0
-          ? attrs.dataSrc
-          : src;
-      const width =
-        typeof attrs.width === "number"
-          ? attrs.width
-          : Number.parseInt(String(attrs.width), 10);
-      const height =
-        typeof attrs.height === "number"
-          ? attrs.height
-          : Number.parseInt(String(attrs.height), 10);
-      const hasDimensions =
-        Number.isFinite(width) &&
-        width > 0 &&
-        Number.isFinite(height) &&
-        height > 0;
-
-      if (dataSrc && !dataSrc.startsWith("data:") && hasDimensions) {
-        next.attrs = {
-          ...attrs,
-          src: createGrayPreviewSrc({ width, height }),
-          dataSrc,
-          loading: "lazy",
-          decoding: "async",
-          width,
-          height,
-        };
-      } else {
-        next.attrs = attrs;
-      }
-    } else {
-      next.attrs = attrs;
-    }
-  } else if (content.attrs) {
-    next.attrs = content.attrs;
-  }
-
-  if (content.content) {
-    next.content = content.content.map((child) =>
-      decorateLazyImageContent(child),
-    );
-  }
-
-  return next;
-}
-
-function setupLazyImagePreview(container: HTMLElement) {
-  const preparedImages: Array<{
-    image: HTMLImageElement;
-    handleLoad: () => void;
-  }> = [];
-
-  const observer =
-    typeof window !== "undefined" && "IntersectionObserver" in window
-      ? new IntersectionObserver(
-          (entries) => {
-            for (const entry of entries) {
-              if (!entry.isIntersecting) continue;
-              const image = entry.target as HTMLImageElement;
-              const dataSrc = image.getAttribute("data-src");
-              if (dataSrc && image.getAttribute("src") !== dataSrc) {
-                image.setAttribute("src", dataSrc);
-              }
-              observer?.unobserve(image);
+  let observer: IntersectionObserver | null = null;
+  if (typeof window !== "undefined" && "IntersectionObserver" in window) {
+    observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const image = entry.target as HTMLImageElement;
+            const dataSrc = image.getAttribute("data-src");
+            if (dataSrc) {
+              image.setAttribute("src", dataSrc);
+              image.classList.remove("lazy-image-pending");
             }
-          },
-          { root: null, rootMargin: LAZY_ROOT_MARGIN },
-        )
-      : null;
+            observer?.unobserve(image);
+          }
+        }
+      },
+      { rootMargin: "600px" },
+    );
+  }
 
-  for (const image of Array.from(container.querySelectorAll("img"))) {
+  for (const image of images) {
     if (image.dataset.lazyPrepared === "true") continue;
 
     const alt = image.getAttribute("alt") ?? "";
     if (alt.startsWith(UPLOADING_ALT_PREFIX)) continue;
 
-    const src = image.getAttribute("src") ?? "";
-    const dataSrc = image.getAttribute("data-src") ?? src;
+    const dataSrc = image.getAttribute("data-src");
     if (!dataSrc || dataSrc.startsWith("data:")) continue;
-
-    if (!image.getAttribute("data-src")) {
-      image.setAttribute("data-src", dataSrc);
-    }
-
-    let dimensions = readImageDimensionsFromElement(image);
-    if (!dimensions) {
-      const cachedDimensions = readCachedImageDimensions(dataSrc);
-      if (cachedDimensions) {
-        applyDimensionsToImageElement(image, cachedDimensions);
-        dimensions = cachedDimensions;
-      }
-    }
-
-    if (dimensions) {
-      applyPendingPreviewSizing(image, dimensions);
-    } else {
-      image.classList.add("lazy-image-size-fallback");
-      image.style.aspectRatio = FALLBACK_ASPECT_RATIO;
-    }
 
     image.dataset.lazyPrepared = "true";
     image.classList.add("lazy-image-pending");
-    image.loading = "lazy";
-    image.decoding = "async";
-    image.setAttribute(
-      "src",
-      dimensions ? createGrayPreviewSrc(dimensions) : "",
-    );
 
     const handleLoad = () => {
-      const loadedSrc = image.getAttribute("src");
       const currentDataSrc = image.getAttribute("data-src");
-      if (!loadedSrc || !currentDataSrc || loadedSrc !== currentDataSrc) return;
-
-      image.classList.remove("lazy-image-pending");
-      image.classList.remove("lazy-image-size-fallback");
-      clearPendingPreviewSizing(image);
-      image.style.removeProperty("aspect-ratio");
-
-      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
-        const dimensions = {
-          width: image.naturalWidth,
-          height: image.naturalHeight,
-        };
-        applyDimensionsToImageElement(image, dimensions);
-        writeCachedImageDimensions(currentDataSrc, dimensions);
+      const currentSrc = image.getAttribute("src");
+      if (currentDataSrc && currentSrc === currentDataSrc) {
+        if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+          image.setAttribute("width", String(image.naturalWidth));
+          image.setAttribute("height", String(image.naturalHeight));
+        }
       }
     };
 
     image.addEventListener("load", handleLoad);
+    cleanupFunctions.push(() => image.removeEventListener("load", handleLoad));
+
     if (observer) {
       observer.observe(image);
+      cleanupFunctions.push(() => observer.unobserve(image));
     } else {
       image.setAttribute("src", dataSrc);
     }
-
-    preparedImages.push({ image, handleLoad });
   }
 
   return () => {
-    for (const { image, handleLoad } of preparedImages) {
-      image.removeEventListener("load", handleLoad);
-      observer?.unobserve(image);
+    for (const cleanup of cleanupFunctions) {
+      cleanup();
     }
     observer?.disconnect();
   };
 }
 
-function createUploadToken() {
-  if (
-    typeof crypto !== "undefined" &&
-    typeof crypto.randomUUID === "function"
-  ) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
+// Decorate content with lazy loading attributes
+function decorateLazyImages(content: JSONContent): JSONContent {
+  if (content.type === "image") {
+    const attrs = (content.attrs ?? {}) as Record<string, unknown>;
+    const alt = typeof attrs.alt === "string" ? attrs.alt : "";
 
-function findPlaceholderImage(editor: Editor, uploadToken: string) {
-  const expectedAlt = `${UPLOADING_ALT_PREFIX}${uploadToken}`;
-  let result:
-    | {
-        pos: number;
-        attrs: Record<string, unknown>;
+    if (!alt.startsWith(UPLOADING_ALT_PREFIX)) {
+      const dataSrc =
+        typeof attrs.dataSrc === "string" && attrs.dataSrc.length > 0
+          ? attrs.dataSrc
+          : (typeof attrs.src === "string" ? attrs.src : "");
+
+      if (
+        dataSrc &&
+        !dataSrc.startsWith("data:") &&
+        typeof attrs.width === "number" &&
+        typeof attrs.height === "number" &&
+        attrs.width > 0 &&
+        attrs.height > 0
+      ) {
+        return {
+          ...content,
+          attrs: {
+            ...attrs,
+            src: createGrayPreviewSrc({ width: attrs.width, height: attrs.height }),
+            dataSrc,
+            loading: "lazy",
+            decoding: "async",
+          },
+        };
       }
-    | undefined;
-
-  editor.state.doc.descendants((node, pos) => {
-    if (node.type.name !== "image") {
-      return;
     }
+  }
 
-    if (node.attrs.alt === expectedAlt) {
-      result = { pos, attrs: node.attrs as Record<string, unknown> };
-      return false;
-    }
-  });
+  if (content.content) {
+    return {
+      ...content,
+      content: content.content.map(decorateLazyImages),
+    };
+  }
 
-  return result;
+  return content;
 }
 
 function createEditor(options: PartialEditorOptions = {}) {
@@ -348,20 +179,18 @@ function MarkdownView({
 } & HTMLAttributes<HTMLDivElement>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const html = useMemo(() => {
-    const normalizedContent = contentJSON
-      ? decorateLazyImageContent(contentJSON)
-      : createEditor({ element: null, content: "" }).getJSON();
-    const rendered = renderToHTMLString({
-      content: normalizedContent,
+    const content = contentJSON ?? createEditor({ element: null, content: "" }).getJSON();
+    return renderToHTMLString({
+      content: decorateLazyImages(content),
       extensions: baseExtensions,
     });
-    return rendered;
   }, [contentJSON]);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    return setupLazyImagePreview(containerRef.current);
-  });
+    if (containerRef.current) {
+      return setupLazyLoading(containerRef.current);
+    }
+  }, [html]);
 
   return (
     <div
@@ -393,66 +222,118 @@ function MarkdownEditor({
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Editor>(null);
 
-  const uploadImageAndInsert = useCallback(
-    async (file: File, editor: Editor) => {
-      const { from } = editor.state.selection;
-      const uploadToken = createUploadToken();
+  // Insert placeholder image while uploading
+  const insertUploadPlaceholder = useCallback(
+    (editor: Editor, file: File, position: number) => {
+      const uploadToken = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const localPreviewUrl = URL.createObjectURL(file);
-      const dimensions = await getImageDimensions(file);
 
-      // ローカル画像情報でアップロード中プレビューを挿入
       editor
         .chain()
         .focus()
-        .insertContentAt(from, {
+        .insertContentAt(position, {
           type: "image",
           attrs: {
             src: localPreviewUrl,
             alt: `${UPLOADING_ALT_PREFIX}${uploadToken}`,
             uploading: true,
-            width: dimensions?.width ?? null,
-            height: dimensions?.height ?? null,
+            width: null,
+            height: null,
           },
         })
         .run();
 
+      return { uploadToken, localPreviewUrl };
+    },
+    [],
+  );
+
+  // Find placeholder node by upload token
+  const findPlaceholderByToken = useCallback(
+    (editor: Editor, uploadToken: string) => {
+      let result: { pos: number; attrs: Record<string, unknown> } | undefined;
+
+      editor.state.doc.descendants((node, pos) => {
+        if (
+          node.type.name === "image" &&
+          node.attrs.alt === `${UPLOADING_ALT_PREFIX}${uploadToken}`
+        ) {
+          result = { pos, attrs: node.attrs as Record<string, unknown> };
+          return false;
+        }
+      });
+
+      return result;
+    },
+    [],
+  );
+
+  // Replace placeholder with uploaded image
+  const replaceUploadPlaceholder = useCallback(
+    (
+      editor: Editor,
+      uploadToken: string,
+      file: File,
+      dimensions: ImageDimensions | null,
+      result: { url: string; id: string },
+    ) => {
+      const placeholder = findPlaceholderByToken(editor, uploadToken);
+      if (!placeholder) return;
+
+      const { tr } = editor.state;
+      tr.setNodeMarkup(placeholder.pos, undefined, {
+        src: dimensions ? createGrayPreviewSrc(dimensions) : result.url,
+        dataSrc: result.url,
+        alt: file.name,
+        uploading: false,
+        width: dimensions?.width ?? null,
+        height: dimensions?.height ?? null,
+      });
+      editor.view.dispatch(tr);
+    },
+    [findPlaceholderByToken],
+  );
+
+  // Remove placeholder on error
+  const removeUploadPlaceholder = useCallback(
+    (editor: Editor, uploadToken: string) => {
+      const placeholder = findPlaceholderByToken(editor, uploadToken);
+      if (!placeholder) return;
+
+      const { tr } = editor.state;
+      tr.delete(placeholder.pos, placeholder.pos + 1);
+      editor.view.dispatch(tr);
+    },
+    [findPlaceholderByToken],
+  );
+
+  const uploadImageAndInsert = useCallback(
+    async (file: File, editor: Editor) => {
+      const { from } = editor.state.selection;
+      const dimensions = await getImageDimensions(file);
+      const { uploadToken, localPreviewUrl } = insertUploadPlaceholder(
+        editor,
+        file,
+        from,
+      );
+
       try {
-        const result = await uploadImage({ file, editorId: editorId! });
-        const placeholder = findPlaceholderImage(editor, uploadToken);
-        if (!placeholder) {
-          URL.revokeObjectURL(localPreviewUrl);
-          return;
-        }
-
-        if (dimensions) {
-          writeCachedImageDimensions(result.url, dimensions);
-        }
-
-        // 通常画像は灰色プレビュー + 近傍で遅延ダウンロード
-        const { tr } = editor.state;
-        tr.setNodeMarkup(placeholder.pos, undefined, {
-          ...placeholder.attrs,
-          src: dimensions ? createGrayPreviewSrc(dimensions) : "",
-          dataSrc: result.url,
-          alt: file.name,
-          uploading: false,
-          width: dimensions?.width ?? null,
-          height: dimensions?.height ?? null,
-        });
-        editor.view.dispatch(tr);
+        const result = await uploadImageService(file, editorId!);
+        replaceUploadPlaceholder(editor, uploadToken, file, dimensions, result);
       } catch (error) {
-        const placeholder = findPlaceholderImage(editor, uploadToken);
-        if (placeholder) {
-          const { tr } = editor.state;
-          tr.deleteRange(placeholder.pos, placeholder.pos + 1);
-          editor.view.dispatch(tr);
-        }
-        console.error("Upload failed:", error);
+        removeUploadPlaceholder(editor, uploadToken);
+        console.error("Upload failed:", {
+          fileName: file.name,
+          fileSize: file.size,
+          editorId,
+          uploadToken,
+          error,
+        });
       } finally {
         URL.revokeObjectURL(localPreviewUrl);
       }
     },
-    [editorId],
+    [editorId, insertUploadPlaceholder, replaceUploadPlaceholder, removeUploadPlaceholder],
   );
 
   useEffect(() => {
@@ -504,22 +385,20 @@ function MarkdownEditor({
     if (!editor) return;
 
     const container = editor.view.dom as HTMLElement;
-    const cleanups: Array<() => void> = [];
-    cleanups.push(setupLazyImagePreview(container));
+    let cleanup = setupLazyLoading(container);
 
     const refresh = () => {
-      cleanups.push(setupLazyImagePreview(container));
+      cleanup?.();
+      cleanup = setupLazyLoading(container);
     };
 
     editor.on("update", refresh);
 
     return () => {
       editor.off("update", refresh);
-      for (const cleanup of cleanups) {
-        cleanup();
-      }
+      cleanup?.();
     };
-  });
+  }, []);
 
   return (
     <div
