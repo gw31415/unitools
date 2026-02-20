@@ -42,3 +42,17 @@ export const editors = sqliteTable("editors", {
   id: ulid("id").primaryKey(),
   createdAt,
 });
+
+export const images = sqliteTable("images", {
+  id: ulid("id").primaryKey(),
+  createdAt,
+
+  editorId: ulid("editor_id")
+    .notNull()
+    .references(() => editors.id, { onDelete: "cascade" }),
+
+  filename: text("filename").notNull(),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(),
+  storageKey: text("storage_key").notNull().unique(),
+});
