@@ -86,9 +86,15 @@ export default function DocumentPage() {
                 {user ? `Welcome, ${user.username}` : "Welcome to Unitools"}
               </EmptyTitle>
               <EmptyDescription>
-                {user
-                  ? "Select an article from the sidebar to view or edit, or create a new article to get started."
-                  : "Login is required to edit articles. You can view articles from the sidebar."}
+                {user ? (
+                  "Select an article from the sidebar to view or edit, or create a new article to get started."
+                ) : (
+                  <>
+                    <a href="/auth">Login</a>
+                    is required to edit articles. You can view articles from the
+                    sidebar.
+                  </>
+                )}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

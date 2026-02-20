@@ -32,7 +32,7 @@ const serverApp = new Hono()
   // Currently development only disallows all robots
   .get("/robots.txt", (c) => c.text("User-agent: *\nDisallow: /\n"))
   .route("/api/v1", api)
-  .get("/editor/", useUser, async (c) => {
+  .get("/editor", useUser, async (c) => {
     // Pass SSR state via props (no editor ID - show welcome page)
     const ssrState: SSRStateType = {
       pageAtom: "EditorPage",
@@ -101,6 +101,9 @@ const serverApp = new Hono()
 
     const Component = await loadComponent(ssrState);
     return c.render(<Component />, { ssrState });
+  })
+  .get("/", useUser, async (c) => {
+    return c.get("user") ? c.redirect("/editor") : c.redirect("/auth");
   });
 
 export type ServerAppType = typeof serverApp;
