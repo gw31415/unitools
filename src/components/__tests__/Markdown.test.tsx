@@ -1,7 +1,7 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
-import Markdown from "../Markdown";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as imageService from "@/lib/imageService";
+import Markdown from "../Markdown";
 
 // Mock dependencies
 vi.mock("@/lib/base64", () => ({
@@ -208,7 +208,9 @@ describe("Markdown Component", () => {
       const mockError = new Error("Network error");
       vi.mocked(imageService.uploadImage).mockRejectedValue(mockError);
 
-      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
 
       // Create a mock file
       const mockFile = new File(["test"], "test.jpg", { type: "image/jpeg" });
@@ -220,7 +222,10 @@ describe("Markdown Component", () => {
       }
 
       // Verify the service was called
-      expect(imageService.uploadImage).toHaveBeenCalledWith(mockFile, "test-editor");
+      expect(imageService.uploadImage).toHaveBeenCalledWith(
+        mockFile,
+        "test-editor",
+      );
 
       consoleErrorSpy.mockRestore();
     });

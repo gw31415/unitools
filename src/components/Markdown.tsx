@@ -8,8 +8,8 @@ import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 import { b64ToUint8Array } from "@/lib/base64";
 import { baseExtensions } from "@/lib/editorExtensions";
-import { cn } from "@/lib/utils";
 import { uploadImage as uploadImageService } from "@/lib/imageService";
+import { cn } from "@/lib/utils";
 
 type PartialEditorOptions = Partial<ConstructorParameters<typeof Editor>[0]>;
 const UPLOADING_ALT_PREFIX = "uploading:";
@@ -127,7 +127,9 @@ function decorateLazyImages(content: JSONContent): JSONContent {
       const dataSrc =
         typeof attrs.dataSrc === "string" && attrs.dataSrc.length > 0
           ? attrs.dataSrc
-          : (typeof attrs.src === "string" ? attrs.src : "");
+          : typeof attrs.src === "string"
+            ? attrs.src
+            : "";
 
       if (
         dataSrc &&
@@ -141,7 +143,10 @@ function decorateLazyImages(content: JSONContent): JSONContent {
           ...content,
           attrs: {
             ...attrs,
-            src: createGrayPreviewSrc({ width: attrs.width, height: attrs.height }),
+            src: createGrayPreviewSrc({
+              width: attrs.width,
+              height: attrs.height,
+            }),
             dataSrc,
             loading: "lazy",
             decoding: "async",
@@ -179,7 +184,8 @@ function MarkdownView({
 } & HTMLAttributes<HTMLDivElement>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const html = useMemo(() => {
-    const content = contentJSON ?? createEditor({ element: null, content: "" }).getJSON();
+    const content =
+      contentJSON ?? createEditor({ element: null, content: "" }).getJSON();
     return renderToHTMLString({
       content: decorateLazyImages(content),
       extensions: baseExtensions,
@@ -190,7 +196,7 @@ function MarkdownView({
     if (containerRef.current) {
       return setupLazyLoading(containerRef.current);
     }
-  }, [html]);
+  }, []);
 
   return (
     <div
@@ -333,7 +339,12 @@ function MarkdownEditor({
         URL.revokeObjectURL(localPreviewUrl);
       }
     },
-    [editorId, insertUploadPlaceholder, replaceUploadPlaceholder, removeUploadPlaceholder],
+    [
+      editorId,
+      insertUploadPlaceholder,
+      replaceUploadPlaceholder,
+      removeUploadPlaceholder,
+    ],
   );
 
   useEffect(() => {

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { Editor } from "@tiptap/core";
+import { describe, expect, it } from "vitest";
 import { baseExtensions } from "../editorExtensions";
 
 describe("editorExtensions", () => {
@@ -78,7 +78,7 @@ describe("editorExtensions", () => {
       });
 
       const html = editor.getHTML();
-      expect(html).toContain('data-uploading');
+      expect(html).toContain("data-uploading");
 
       editor.destroy();
     });
