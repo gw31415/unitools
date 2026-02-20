@@ -1330,3 +1330,41 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     font: inherit;
   }
 }
+
+/* Image styles */
+.tiptap img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 1rem 0;
+  display: block;
+}
+
+.tiptap img[data-uploading="true"] {
+  animation: upload-pulse 1.4s ease-in-out infinite;
+  filter: saturate(0.75);
+}
+
+.tiptap img.lazy-image-pending {
+  background-color: var(--accent);
+  animation: upload-pulse 1.4s ease-in-out infinite;
+}
+
+.tiptap img.lazy-image-size-fallback {
+  width: min(100%, 640px);
+  height: auto;
+}
+
+.tiptap img.ProseMirror-selectednode {
+  outline: 3px solid var(--focus-outlineColor);
+}
+
+@keyframes upload-pulse {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
