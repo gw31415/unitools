@@ -148,6 +148,30 @@ function getAttrNumberValue(fragment: string, attrName: string): number | null {
   return parsed;
 }
 
+function getAttrStringValue(fragment: string, attrName: string): string | null {
+  const pattern = new RegExp(
+    `${attrName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+    "i",
+  );
+  const match = fragment.match(pattern);
+  if (!match) return null;
+  const raw = match[1] ?? match[2] ?? match[3];
+  if (!raw) return null;
+  return raw.trim();
+}
+
+function setOrAddAttr(tag: string, attrName: string, value: string): string {
+  const attrPattern = new RegExp(
+    `\\b${attrName}\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s>]+)`,
+    "i",
+  );
+  const attrValue = `${attrName}="${value}"`;
+  if (attrPattern.test(tag)) {
+    return tag.replace(attrPattern, attrValue);
+  }
+  return tag.replace("<img", `<img ${attrValue}`);
+}
+
 function addClassToTag(tag: string, className: string): string {
   const classAttrPattern = /\bclass\s*=\s*("([^"]*)"|'([^']*)')/i;
   const classMatch = tag.match(classAttrPattern);
@@ -185,16 +209,34 @@ function mergeInlineStyle(tag: string, styleText: string): string {
 
 function decorateLazyImageHTML(html: string): string {
   return html.replace(/<img\b[^>]*>/gi, (tag) => {
-    if (!/\bdata-src\s*=/.test(tag)) return tag;
+    const alt = getAttrStringValue(tag, "alt") ?? "";
+    if (alt.startsWith(UPLOADING_ALT_PREFIX)) return tag;
+
+    const src = getAttrStringValue(tag, "src") ?? "";
+    const dataSrc = getAttrStringValue(tag, "data-src") ?? src;
+    if (!dataSrc || dataSrc.startsWith("data:")) return tag;
+
+    let decorated = setOrAddAttr(tag, "data-src", dataSrc);
+    decorated = setOrAddAttr(decorated, "src", GRAY_PREVIEW_SRC);
+    decorated = setOrAddAttr(decorated, "loading", "lazy");
+    decorated = setOrAddAttr(decorated, "decoding", "async");
+    decorated = addClassToTag(decorated, "lazy-image-pending");
+
     const width = getAttrNumberValue(tag, "width");
     const height = getAttrNumberValue(tag, "height");
-    if (!width || !height) return tag;
-
-    let decorated = addClassToTag(tag, "lazy-image-has-dimensions");
-    decorated = mergeInlineStyle(
-      decorated,
-      `--lazy-image-width:${width};--lazy-image-height:${height};`,
-    );
+    if (width && height) {
+      decorated = addClassToTag(decorated, "lazy-image-has-dimensions");
+      decorated = mergeInlineStyle(
+        decorated,
+        `--lazy-image-width:${width};--lazy-image-height:${height};`,
+      );
+    } else {
+      decorated = addClassToTag(decorated, "lazy-image-size-fallback");
+      decorated = mergeInlineStyle(
+        decorated,
+        `aspect-ratio:${FALLBACK_ASPECT_RATIO};`,
+      );
+    }
     return decorated;
   });
 }
