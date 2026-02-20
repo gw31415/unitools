@@ -12,8 +12,6 @@ import { uploadImage } from "@/lib/uploadImage";
 import { cn } from "@/lib/utils";
 
 type PartialEditorOptions = Partial<ConstructorParameters<typeof Editor>[0]>;
-const GRAY_PREVIEW_SRC =
-  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxIDEnIHByZXNlcnZlQXNwZWN0UmF0aW89J25vbmUnPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0nZycgeDE9Jy0xJyB4Mj0nMCc+PHN0b3Agc3RvcC1jb2xvcj0nJTIzOWNhM2FmJyBzdG9wLW9wYWNpdHk9Jy4yOCcvPjxzdG9wIG9mZnNldD0nLjUnIHN0b3AtY29sb3I9JyUyMzljYTNhZicgc3RvcC1vcGFjaXR5PScuNDQnLz48c3RvcCBvZmZzZXQ9JzEnIHN0b3AtY29sb3I9JyUyMzljYTNhZicgc3RvcC1vcGFjaXR5PScuMjgnLz48YW5pbWF0ZSBhdHRyaWJ1dGVOYW1lPSd4MScgZnJvbT0nLTEnIHRvPScxJyBkdXI9JzEuMnMnIHJlcGVhdENvdW50PSdpbmRlZmluaXRlJy8+PGFuaW1hdGUgYXR0cmlidXRlTmFtZT0neDInIGZyb209JzAnIHRvPScyJyBkdXI9JzEuMnMnIHJlcGVhdENvdW50PSdpbmRlZmluaXRlJy8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9JzEnIGhlaWdodD0nMScgZmlsbD0ndXJsKCUyM2cpJy8+PC9zdmc+";
 const UPLOADING_ALT_PREFIX = "uploading:";
 const IMAGE_SIZE_CACHE_PREFIX = "unitools:image-size:";
 const LAZY_ROOT_MARGIN = "600px 0px";
@@ -23,6 +21,14 @@ type ImageDimensions = {
   width: number;
   height: number;
 };
+
+function createGrayPreviewSrc(dimensions: ImageDimensions): string {
+  const width = Math.max(1, Math.round(dimensions.width));
+  const height = Math.max(1, Math.round(dimensions.height));
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return "";
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${width} ${height}'><defs><linearGradient id='g' x1='-1' x2='0'><stop stop-color='%239ca3af' stop-opacity='.28'/><stop offset='.5' stop-color='%239ca3af' stop-opacity='.44'/><stop offset='1' stop-color='%239ca3af' stop-opacity='.28'/><animate attributeName='x1' from='-1' to='1' dur='1.2s' repeatCount='indefinite'/><animate attributeName='x2' from='0' to='2' dur='1.2s' repeatCount='indefinite'/></linearGradient></defs><rect width='100%' height='100%' fill='url(%23g)'/></svg>`;
+  return `data:image/svg+xml,${svg}`;
+}
 
 function getImageDimensions(file: File): Promise<ImageDimensions | null> {
   return new Promise((resolve) => {
@@ -134,111 +140,59 @@ function clearPendingPreviewSizing(image: HTMLImageElement) {
   image.style.removeProperty("--lazy-image-height");
 }
 
-function getAttrNumberValue(fragment: string, attrName: string): number | null {
-  const pattern = new RegExp(
-    `${attrName}\\s*=\\s*(?:"(\\d+)"|'(\\d+)'|(\\d+))`,
-    "i",
-  );
-  const match = fragment.match(pattern);
-  if (!match) return null;
-  const raw = match[1] ?? match[2] ?? match[3];
-  if (!raw) return null;
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return parsed;
-}
+function decorateLazyImageContent(content: JSONContent): JSONContent {
+  const next: JSONContent = { ...content };
 
-function getAttrStringValue(fragment: string, attrName: string): string | null {
-  const pattern = new RegExp(
-    `${attrName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
-    "i",
-  );
-  const match = fragment.match(pattern);
-  if (!match) return null;
-  const raw = match[1] ?? match[2] ?? match[3];
-  if (!raw) return null;
-  return raw.trim();
-}
+  if (content.type === "image") {
+    const attrs = (content.attrs ?? {}) as Record<string, unknown>;
+    const alt = typeof attrs.alt === "string" ? attrs.alt : "";
+    if (!alt.startsWith(UPLOADING_ALT_PREFIX)) {
+      const src = typeof attrs.src === "string" ? attrs.src : "";
+      const dataSrc =
+        typeof attrs.dataSrc === "string" && attrs.dataSrc.length > 0
+          ? attrs.dataSrc
+          : src;
+      const width =
+        typeof attrs.width === "number"
+          ? attrs.width
+          : Number.parseInt(String(attrs.width), 10);
+      const height =
+        typeof attrs.height === "number"
+          ? attrs.height
+          : Number.parseInt(String(attrs.height), 10);
+      const hasDimensions =
+        Number.isFinite(width) &&
+        width > 0 &&
+        Number.isFinite(height) &&
+        height > 0;
 
-function setOrAddAttr(tag: string, attrName: string, value: string): string {
-  const attrPattern = new RegExp(
-    `\\b${attrName}\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s>]+)`,
-    "i",
-  );
-  const attrValue = `${attrName}="${value}"`;
-  if (attrPattern.test(tag)) {
-    return tag.replace(attrPattern, attrValue);
-  }
-  return tag.replace("<img", `<img ${attrValue}`);
-}
-
-function addClassToTag(tag: string, className: string): string {
-  const classAttrPattern = /\bclass\s*=\s*("([^"]*)"|'([^']*)')/i;
-  const classMatch = tag.match(classAttrPattern);
-  if (!classMatch) {
-    return tag.replace("<img", `<img class="${className}"`);
-  }
-  const quotedValue = classMatch[2] ?? classMatch[3] ?? "";
-  const classes = new Set(
-    quotedValue
-      .split(/\s+/)
-      .map((value) => value.trim())
-      .filter(Boolean),
-  );
-  classes.add(className);
-  const quote = classMatch[1].startsWith("'") ? "'" : '"';
-  const merged = `class=${quote}${Array.from(classes).join(" ")}${quote}`;
-  return tag.replace(classAttrPattern, merged);
-}
-
-function mergeInlineStyle(tag: string, styleText: string): string {
-  const styleAttrPattern = /\bstyle\s*=\s*("([^"]*)"|'([^']*)')/i;
-  const styleMatch = tag.match(styleAttrPattern);
-  if (!styleMatch) {
-    return tag.replace("<img", `<img style="${styleText}"`);
-  }
-  const existing = (styleMatch[2] ?? styleMatch[3] ?? "").trim();
-  const merged =
-    existing.length > 0
-      ? `${existing}${existing.endsWith(";") ? "" : ";"} ${styleText}`
-      : styleText;
-  const quote = styleMatch[1].startsWith("'") ? "'" : '"';
-  const styleAttr = `style=${quote}${merged}${quote}`;
-  return tag.replace(styleAttrPattern, styleAttr);
-}
-
-function decorateLazyImageHTML(html: string): string {
-  return html.replace(/<img\b[^>]*>/gi, (tag) => {
-    const alt = getAttrStringValue(tag, "alt") ?? "";
-    if (alt.startsWith(UPLOADING_ALT_PREFIX)) return tag;
-
-    const src = getAttrStringValue(tag, "src") ?? "";
-    const dataSrc = getAttrStringValue(tag, "data-src") ?? src;
-    if (!dataSrc || dataSrc.startsWith("data:")) return tag;
-
-    let decorated = setOrAddAttr(tag, "data-src", dataSrc);
-    decorated = setOrAddAttr(decorated, "src", GRAY_PREVIEW_SRC);
-    decorated = setOrAddAttr(decorated, "loading", "lazy");
-    decorated = setOrAddAttr(decorated, "decoding", "async");
-    decorated = addClassToTag(decorated, "lazy-image-pending");
-
-    const width = getAttrNumberValue(tag, "width");
-    const height = getAttrNumberValue(tag, "height");
-    if (width && height) {
-      decorated = addClassToTag(decorated, "lazy-image-has-dimensions");
-      decorated = mergeInlineStyle(
-        decorated,
-        `--lazy-image-width:${width};--lazy-image-height:${height};`,
-      );
+      if (dataSrc && !dataSrc.startsWith("data:") && hasDimensions) {
+        next.attrs = {
+          ...attrs,
+          src: createGrayPreviewSrc({ width, height }),
+          dataSrc,
+          loading: "lazy",
+          decoding: "async",
+          width,
+          height,
+        };
+      } else {
+        next.attrs = attrs;
+      }
     } else {
-      decorated = addClassToTag(decorated, "lazy-image-size-fallback");
-      decorated = mergeInlineStyle(
-        decorated,
-        `aspect-ratio:${FALLBACK_ASPECT_RATIO};`,
-      );
+      next.attrs = attrs;
     }
-    return decorated;
-  });
+  } else if (content.attrs) {
+    next.attrs = content.attrs;
+  }
+
+  if (content.content) {
+    next.content = content.content.map((child) =>
+      decorateLazyImageContent(child),
+    );
+  }
+
+  return next;
 }
 
 function setupLazyImagePreview(container: HTMLElement) {
@@ -299,7 +253,10 @@ function setupLazyImagePreview(container: HTMLElement) {
     image.classList.add("lazy-image-pending");
     image.loading = "lazy";
     image.decoding = "async";
-    image.setAttribute("src", GRAY_PREVIEW_SRC);
+    image.setAttribute(
+      "src",
+      dimensions ? createGrayPreviewSrc(dimensions) : "",
+    );
 
     const handleLoad = () => {
       const loadedSrc = image.getAttribute("src");
@@ -391,12 +348,14 @@ function MarkdownView({
 } & HTMLAttributes<HTMLDivElement>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const html = useMemo(() => {
+    const normalizedContent = contentJSON
+      ? decorateLazyImageContent(contentJSON)
+      : createEditor({ element: null, content: "" }).getJSON();
     const rendered = renderToHTMLString({
-      content:
-        contentJSON ?? createEditor({ element: null, content: "" }).getJSON(),
+      content: normalizedContent,
       extensions: baseExtensions,
     });
-    return decorateLazyImageHTML(rendered);
+    return rendered;
   }, [contentJSON]);
 
   useEffect(() => {
@@ -473,7 +432,7 @@ function MarkdownEditor({
         const { tr } = editor.state;
         tr.setNodeMarkup(placeholder.pos, undefined, {
           ...placeholder.attrs,
-          src: GRAY_PREVIEW_SRC,
+          src: dimensions ? createGrayPreviewSrc(dimensions) : "",
           dataSrc: result.url,
           alt: file.name,
           uploading: false,
