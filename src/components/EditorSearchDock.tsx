@@ -151,7 +151,7 @@ export function EditorSearchDock({
       }}
     >
       {open ? (
-        <div className="mb-2 overflow-hidden rounded-2xl border border-white/35 bg-background/80 p-2 shadow-xl shadow-black/10 backdrop-blur-xl supports-backdrop-filter:bg-background/65 dark:border-white/10">
+        <div className="mb-2 overflow-hidden rounded-2xl border border-black/10 bg-background/60 p-2 shadow-xl shadow-black/10 backdrop-blur-xl supports-backdrop-filter:bg-background/45 dark:border-white/10 dark:bg-background/60 dark:supports-backdrop-filter:bg-background/45">
           <div className="text-muted-foreground px-2 py-1 text-xs">
             {normalizedQuery.length === 0
               ? "Recent articles"
@@ -220,7 +220,7 @@ export function EditorSearchDock({
         </div>
       ) : null}
       <div
-        className="flex items-center rounded-full border border-white/40 bg-background/70 shadow-lg shadow-black/5 backdrop-blur-xl supports-backdrop-filter:bg-background/55 dark:border-white/15 transition-all duration-300 ease-out"
+        className="flex items-center rounded-full border border-black/15 bg-background/60 supports-backdrop-filter:bg-background/45 shadow-lg shadow-black/5 backdrop-blur-xl dark:border-white/15 transition-all duration-300 ease-out"
         style={{
           padding: `${DOCK_SPACING}px`,
           gap: `${DOCK_SPACING}px`,
@@ -306,7 +306,7 @@ export function EditorSearchDock({
               }
             }}
             placeholder="Search articles..."
-            className="h-10 rounded-full border-0 bg-background/55 shadow-none"
+            className="h-10 rounded-full border-0 bg-background/45 shadow-none"
             aria-label="Search articles"
           />
         </div>
