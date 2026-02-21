@@ -10,7 +10,7 @@ const pages = {
   AuthPage: () =>
     import("@/pages/auth").then((m) => {
       const Comp = m.default;
-      return () => <Comp redirect="/editor/" />;
+      return () => <Comp redirect="/editor" />;
     }),
 } as const;
 
