@@ -13,6 +13,7 @@ import type { Env } from "@/lib/hono";
 import type { ULID } from "@/lib/ulid";
 import { baseExtensions } from "./editorExtensions";
 import { collectReferencedImageIdsFromYXmlFragment } from "./editorImageCleanup";
+import { normalizeMarkdownExportContent } from "./markdownExport";
 
 const EXPORT_DEBOUNCE_MS = 60000; // 1分
 const R2_BULK_DELETE_LIMIT = 1000;
@@ -176,8 +177,9 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
       doc.getXmlFragment("default"),
       getSchema(baseExtensions),
     );
+    const normalizedContent = normalizeMarkdownExportContent(rootNode.toJSON());
     return renderToMarkdown({
-      content: rootNode.toJSON(),
+      content: normalizedContent,
       extensions: baseExtensions,
     });
   }
