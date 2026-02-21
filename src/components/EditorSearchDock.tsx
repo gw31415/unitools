@@ -2,25 +2,13 @@ import { Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatEditorLabel } from "@/lib/editorLabel";
 
 export type SearchDockItem = {
   id: string;
   createdAt: number;
+  title?: string;
 };
-
-const sidebarDateFormatter = new Intl.DateTimeFormat("ja-JP", {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
-function formatSidebarLabel(item: SearchDockItem) {
-  const date = new Date(item.createdAt);
-  const dateLabel = Number.isNaN(date.getTime())
-    ? "Invalid date"
-    : sidebarDateFormatter.format(date).replaceAll("/", "-");
-  return `${dateLabel} · ${item.id.slice(-6)}`;
-}
 
 export function EditorSearchDock({
   value,
@@ -77,7 +65,7 @@ export function EditorSearchDock({
       ? items.slice(0, 6)
       : items
           .filter((item) =>
-            formatSidebarLabel(item).toLowerCase().includes(normalizedQuery),
+            formatEditorLabel(item).toLowerCase().includes(normalizedQuery),
           )
           .slice(0, 6);
   const selectItem = useCallback(
@@ -213,7 +201,7 @@ export function EditorSearchDock({
                   <span
                     className={item.id === currentEditorId ? "font-medium" : ""}
                   >
-                    {formatSidebarLabel(item)}
+                    {formatEditorLabel(item)}
                   </span>
                 </Button>
               ))

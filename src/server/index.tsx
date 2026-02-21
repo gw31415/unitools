@@ -1,4 +1,6 @@
 import { getSchema } from "@tiptap/core";
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { hc } from "hono/client";
@@ -7,8 +9,10 @@ import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import { applyUpdate, Doc as YDoc } from "yjs";
 import api from "@/api";
 import { useUser } from "@/api/auth";
+import * as schema from "@/db/schema";
 import { bytesToBase64 } from "@/lib/base64";
 import { baseExtensions } from "@/lib/editorExtensions";
+import type { ULID } from "@/lib/ulid";
 import { headers2Record } from "@/lib/utils";
 import type { EditorState } from "@/models";
 import { loadComponent } from "@/pages";
@@ -38,6 +42,8 @@ const serverApp = new Hono()
       pageAtom: "EditorPage",
       editorStateAtom: {
         editorId: "",
+        createdAt: undefined,
+        title: undefined,
         yjsUpdate: undefined,
         snapshotJSON: undefined,
       },
@@ -50,6 +56,22 @@ const serverApp = new Hono()
   })
   .get("/editor/:id", useUser, async (c) => {
     const editorId = c.req.param("id");
+    const db = drizzle(c.env.DB, { schema });
+    const editorMeta = await db.query.editors.findFirst({
+      where: eq(schema.editors.id, editorId as ULID),
+      columns: {
+        createdAt: true,
+        title: true,
+      },
+    });
+    if (!editorMeta) {
+      return c.notFound();
+    }
+    const title = editorMeta.title ?? undefined;
+    const createdAt =
+      editorMeta.createdAt instanceof Date
+        ? editorMeta.createdAt.getTime()
+        : Number(editorMeta.createdAt);
 
     const client = hc<ServerAppType>(new URL(c.req.url).origin);
     const headers = headers2Record(c.req.raw.headers);
@@ -71,6 +93,8 @@ const serverApp = new Hono()
     );
     const editorState: EditorState = {
       editorId,
+      createdAt,
+      title,
       yjsUpdate: bytesToBase64(yjsUpdateBytes),
       snapshotJSON: rootNode.toJSON(),
     };
@@ -92,6 +116,8 @@ const serverApp = new Hono()
       pageAtom: "AuthPage",
       editorStateAtom: {
         editorId: "",
+        createdAt: undefined,
+        title: undefined,
         yjsUpdate: undefined,
         snapshotJSON: undefined,
       },

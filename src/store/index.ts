@@ -5,6 +5,8 @@ import type { ComponentName } from "@/pages";
 
 export const editorStateAtom = atom<EditorState>({
   editorId: "",
+  createdAt: undefined,
+  title: undefined,
   yjsUpdate: undefined,
   snapshotJSON: undefined,
 });

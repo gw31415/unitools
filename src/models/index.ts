@@ -25,6 +25,8 @@ export type ImageInsert = z.infer<typeof imageInsertSchema>;
 
 export type EditorState = {
   editorId: string;
+  createdAt?: number;
+  title?: string;
   yjsUpdate?: string;
   snapshotJSON?: JSONContent;
 };

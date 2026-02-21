@@ -10,6 +10,7 @@ import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
 import type { Editor, EditorInsert } from "@/models";
 import { ulidSchema } from "@/validators";
+import { editorTitleInputSchema } from "@/validators/editor";
 import { requireUser, useUser } from "./auth";
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -129,6 +130,7 @@ const editor = createApp()
       const items = pageItems.map((editor) => ({
         id: editor.id,
         createdAt: toTimestamp(editor.createdAt),
+        title: editor.title ?? undefined,
       }));
 
       const last = items.at(-1);
@@ -146,18 +148,58 @@ const editor = createApp()
       });
     },
   )
-  .post("/", requireUser, async (c) => {
-    const id = ulid();
-    const db = drizzle(c.env.DB, { schema });
-    const [res] = await db
-      .insert(schema.editors)
-      .values({ id } satisfies EditorInsert)
-      .returning();
-    // ダメおしでDOインスタンスを初期化しておく
-    await getDurableObjectOfDoc(c, id).reset();
+  .post(
+    "/",
+    requireUser,
+    sValidator(
+      "json",
+      z
+        .object({
+          title: editorTitleInputSchema,
+        })
+        .optional(),
+    ),
+    async (c) => {
+      const id = ulid();
+      const body = c.req.valid("json");
+      const title = body?.title;
+      const db = drizzle(c.env.DB, { schema });
+      const [res] = await db
+        .insert(schema.editors)
+        .values({ id, title } satisfies EditorInsert)
+        .returning();
+      // ダメおしでDOインスタンスを初期化しておく
+      await getDurableObjectOfDoc(c, id).reset();
 
-    return c.json(res satisfies Editor);
-  })
+      return c.json(res satisfies Editor);
+    },
+  )
+  .patch(
+    "/:id",
+    requireUser,
+    requireDocExists,
+    sValidator(
+      "json",
+      z.object({
+        title: editorTitleInputSchema,
+      }),
+    ),
+    async (c) => {
+      const id = c.req.param("id") as ULID;
+      const { title } = c.req.valid("json");
+      const db = drizzle(c.env.DB, { schema });
+      const [res] = await db
+        .update(schema.editors)
+        .set({ title: title ?? null })
+        .where(eq(schema.editors.id, id))
+        .returning();
+
+      if (!res) {
+        return c.notFound();
+      }
+      return c.json(res satisfies Editor);
+    },
+  )
   .delete("/:id", requireUser, requireDocExists, async (c) => {
     const id = c.req.param("id") as ULID;
     const db = drizzle(c.env.DB, { schema });
