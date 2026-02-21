@@ -1,3 +1,4 @@
+import { getSchema } from "@tiptap/core";
 import { renderToMarkdown } from "@tiptap/static-renderer";
 import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
@@ -5,6 +6,7 @@ import {
   YDurableObjects as BaseYDurableObjects,
   WSSharedDoc,
 } from "y-durableobjects";
+import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import type { Doc } from "yjs";
 import * as schema from "@/db/schema";
 import type { Env } from "@/lib/hono";
@@ -14,8 +16,15 @@ import { collectReferencedImageIdsFromYXmlFragment } from "./editorImageCleanup"
 
 const EXPORT_DEBOUNCE_MS = 60000; // 1分
 const R2_BULK_DELETE_LIMIT = 1000;
+const EDITOR_ID_STORAGE_KEY = "editorId";
 
 export class YDurableObjects extends BaseYDurableObjects<Env> {
+  override createRoom(roomId: string): WebSocket {
+    const client = super.createRoom(roomId);
+    void this.state.storage.put(EDITOR_ID_STORAGE_KEY, roomId);
+    return client;
+  }
+
   async reset(): Promise<void> {
     for (const ws of this.state.getWebSockets()) {
       await this.unregisterWebSocket(ws);
@@ -98,13 +107,16 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
   }
 
   private async exportToR2(): Promise<void> {
-    const id = this.state.id.name!;
+    const id = await this.resolveEditorId();
+    if (!id) {
+      return;
+    }
     const markdown = this.convertToMarkdown(this.doc);
     await this.env.UNITOOLS_R2.put(`editor/${id}.md`, markdown);
   }
 
   private async cleanupUnreferencedImages(): Promise<void> {
-    const editorId = this.state.id.name as ULID | undefined;
+    const editorId = await this.resolveEditorId();
     if (!editorId) {
       return;
     }
@@ -137,9 +149,35 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
       .where(inArray(schema.images.id, staleImageIds));
   }
 
+  private async resolveEditorId(): Promise<ULID | undefined> {
+    const namedId = this.state.id.name as ULID | undefined;
+    if (namedId) {
+      return namedId;
+    }
+
+    for (const ws of this.state.getWebSockets()) {
+      const attachment = ws.deserializeAttachment() as
+        | { roomId?: string }
+        | undefined;
+      const roomId = attachment?.roomId as ULID | undefined;
+      if (roomId) {
+        return roomId;
+      }
+    }
+
+    const storedId = await this.state.storage.get<string>(
+      EDITOR_ID_STORAGE_KEY,
+    );
+    return storedId as ULID | undefined;
+  }
+
   private convertToMarkdown(doc: Doc): string {
+    const rootNode = yXmlFragmentToProseMirrorRootNode(
+      doc.getXmlFragment("default"),
+      getSchema(baseExtensions),
+    );
     return renderToMarkdown({
-      content: doc,
+      content: rootNode.toJSON(),
       extensions: baseExtensions,
     });
   }
