@@ -108,40 +108,52 @@ export default function DocumentPage() {
   }, [editorState.editorId, handleFocusEditor]);
 
   return (
-    <div className="h-svh flex flex-col">
+    <div className="min-h-svh flex flex-col">
       <Header user={user} />
-      {editorState.editorId ? (
-        <Markdown
-          editorId={editorState.editorId}
-          bootstrap={bootstrap}
-          readonly={!user}
-          tabIndex={-1}
-          className="px-4 py-2 size-full pb-24"
-          aria-label="Main content editor/viewer of this page"
-        />
-      ) : (
-        <Empty className="flex-1">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Clock />
-            </EmptyMedia>
-            <EmptyTitle>
-              {user ? `Welcome, ${user.username}` : "Welcome to Unitools"}
-            </EmptyTitle>
-            <EmptyDescription>
-              {user ? (
-                "Use the search dock below to open an article."
-              ) : (
-                <>
-                  <a href="/auth">Login</a>
-                  is required to edit articles. You can view articles from the
-                  search dock.
-                </>
-              )}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      )}
+      <main
+        className={`flex-1 min-h-0 ${
+          editorState.editorId ? "bg-[var(--markdown-surface)]" : ""
+        }`}
+      >
+        {editorState.editorId ? (
+          <div className="container mx-auto w-full px-4 sm:px-6 lg:px-8 h-full">
+            <div className="mx-auto w-full max-w-4xl h-full">
+              <Markdown
+                editorId={editorState.editorId}
+                bootstrap={bootstrap}
+                readonly={!user}
+                tabIndex={-1}
+                className="w-full py-2 pb-24"
+                aria-label="Main content editor/viewer of this page"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="container mx-auto w-full px-4 sm:px-6 lg:px-8 h-full">
+            <Empty className="h-full">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Clock />
+                </EmptyMedia>
+                <EmptyTitle>
+                  {user ? `Welcome, ${user.username}` : "Welcome to Unitools"}
+                </EmptyTitle>
+                <EmptyDescription>
+                  {user ? (
+                    "Use the search dock below to open an article."
+                  ) : (
+                    <>
+                      <a href="/auth">Login</a>
+                      is required to edit articles. You can view articles from
+                      the search dock.
+                    </>
+                  )}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          </div>
+        )}
+      </main>
       <EditorSearchDock
         value={searchValue}
         onValueChange={setSearchValue}
