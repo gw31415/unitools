@@ -87,10 +87,18 @@ export default function DocumentPage() {
     }
   }, []);
 
-  const handleNavigateToEditor = useCallback((editorId: string) => {
-    sessionStorage.setItem(FOCUS_EDITOR_ON_LOAD_KEY, "1");
-    window.location.assign(`/editor/${editorId}`);
-  }, []);
+  const handleNavigateToEditor = useCallback(
+    (editorId: string, options?: { focusEditor?: boolean }) => {
+      const shouldFocusEditor = options?.focusEditor ?? true;
+      if (shouldFocusEditor) {
+        sessionStorage.setItem(FOCUS_EDITOR_ON_LOAD_KEY, "1");
+      } else {
+        sessionStorage.removeItem(FOCUS_EDITOR_ON_LOAD_KEY);
+      }
+      window.location.assign(`/editor/${editorId}`);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!client) return;

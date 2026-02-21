@@ -43,7 +43,10 @@ export function EditorSearchDock({
   onRetry: () => void;
   currentEditorId: string;
   onRequestFocusEditor: () => void;
-  onNavigateToEditor: (editorId: string) => void;
+  onNavigateToEditor: (
+    editorId: string,
+    options?: { focusEditor?: boolean },
+  ) => void;
 }) {
   const DOCK_SPACING = 8;
   const SEARCH_BUTTON_SIZE = 40;
@@ -58,6 +61,7 @@ export function EditorSearchDock({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
   const suppressOpenOnChangeRef = useRef(false);
+  const touchSelectionRef = useRef(false);
   const normalizedQuery = value.trim().toLowerCase();
   const openSearch = useCallback((selectText = true) => {
     setOpen(true);
@@ -77,15 +81,17 @@ export function EditorSearchDock({
           )
           .slice(0, 6);
   const selectItem = useCallback(
-    (item: SearchDockItem) => {
+    (item: SearchDockItem, focusEditor = true) => {
       if (item.id === currentEditorId) {
         setOpen(false);
         inputRef.current?.blur();
-        onRequestFocusEditor();
+        if (focusEditor) {
+          onRequestFocusEditor();
+        }
         return;
       }
       setOpen(false);
-      onNavigateToEditor(item.id);
+      onNavigateToEditor(item.id, { focusEditor });
     },
     [currentEditorId, onNavigateToEditor, onRequestFocusEditor],
   );
@@ -190,8 +196,13 @@ export function EditorSearchDock({
                   }`}
                   onPointerDown={(event) => {
                     event.preventDefault();
+                    touchSelectionRef.current = event.pointerType === "touch";
                   }}
-                  onClick={() => selectItem(item)}
+                  onClick={() => {
+                    const focusEditor = !touchSelectionRef.current;
+                    touchSelectionRef.current = false;
+                    selectItem(item, focusEditor);
+                  }}
                   onMouseEnter={() => {
                     const index = panelItems.findIndex(
                       (panelItem) => panelItem.id === item.id,
@@ -293,7 +304,7 @@ export function EditorSearchDock({
                 e.preventDefault();
                 const selected = panelItems[activeIndex] ?? panelItems[0];
                 if (!selected) return;
-                selectItem(selected);
+                selectItem(selected, true);
                 return;
               }
 
