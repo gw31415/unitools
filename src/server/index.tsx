@@ -30,7 +30,7 @@ function getCookieSidebarState(c: Context) {
 const serverApp = new Hono()
   .use(renderer)
   // Currently development only disallows all robots
-  .get("/robots.txt", (c) => c.text("User-agent: *\nDisallow: /\n"))
+  .get("/robots.txt", (c) => c.text("User-agent: *\nDisallow: /api/*\n"))
   .route("/api/v1", api)
   .get("/editor", useUser, async (c) => {
     // Pass SSR state via props (no editor ID - show welcome page)
