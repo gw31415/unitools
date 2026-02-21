@@ -45,9 +45,11 @@ export function EditorSearchDock({
   onRequestFocusEditor: () => void;
   onNavigateToEditor: (editorId: string) => void;
 }) {
-  const FAB_SIZE = 48;
+  const DOCK_SPACING = 8;
+  const SEARCH_BUTTON_SIZE = 40;
+  const FAB_SIZE = SEARCH_BUTTON_SIZE + DOCK_SPACING * 2;
   const DOCK_MAX_WIDTH = 672;
-  const HORIZONTAL_GUTTER = 16;
+  const OUTER_GUTTER = 16;
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [viewportWidth, setViewportWidth] = useState(
@@ -74,6 +76,19 @@ export function EditorSearchDock({
             formatSidebarLabel(item).toLowerCase().includes(normalizedQuery),
           )
           .slice(0, 6);
+  const selectItem = useCallback(
+    (item: SearchDockItem) => {
+      if (item.id === currentEditorId) {
+        setOpen(false);
+        inputRef.current?.blur();
+        onRequestFocusEditor();
+        return;
+      }
+      setOpen(false);
+      onNavigateToEditor(item.id);
+    },
+    [currentEditorId, onNavigateToEditor, onRequestFocusEditor],
+  );
 
   useEffect(() => {
     if (!open || panelItems.length === 0) {
@@ -108,11 +123,11 @@ export function EditorSearchDock({
 
   const openDockWidth = Math.max(
     FAB_SIZE,
-    Math.min(DOCK_MAX_WIDTH, viewportWidth - HORIZONTAL_GUTTER * 2),
+    Math.min(DOCK_MAX_WIDTH, viewportWidth - OUTER_GUTTER * 2),
   );
   const dockWidth = open ? openDockWidth : FAB_SIZE;
   const translateX = open
-    ? Math.max(0, (viewportWidth - dockWidth) / 2 - HORIZONTAL_GUTTER)
+    ? Math.max(0, (viewportWidth - dockWidth) / 2 - OUTER_GUTTER)
     : 0;
 
   return (
@@ -168,29 +183,27 @@ export function EditorSearchDock({
               panelItems.map((item) => (
                 <Button
                   key={item.id}
-                  asChild
+                  type="button"
                   variant="ghost"
-                  className={`h-auto justify-start rounded-xl px-2 py-2 text-left ${
+                  className={`h-auto w-full justify-start rounded-xl px-2 py-2 text-left ${
                     panelItems[activeIndex]?.id === item.id ? "bg-muted" : ""
                   }`}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                  }}
+                  onClick={() => selectItem(item)}
+                  onMouseEnter={() => {
+                    const index = panelItems.findIndex(
+                      (panelItem) => panelItem.id === item.id,
+                    );
+                    if (index >= 0) setActiveIndex(index);
+                  }}
                 >
-                  <a
-                    href={`/editor/${item.id}`}
-                    onMouseEnter={() => {
-                      const index = panelItems.findIndex(
-                        (panelItem) => panelItem.id === item.id,
-                      );
-                      if (index >= 0) setActiveIndex(index);
-                    }}
+                  <span
+                    className={item.id === currentEditorId ? "font-medium" : ""}
                   >
-                    <span
-                      className={
-                        item.id === currentEditorId ? "font-medium" : ""
-                      }
-                    >
-                      {formatSidebarLabel(item)}
-                    </span>
-                  </a>
+                    {formatSidebarLabel(item)}
+                  </span>
                 </Button>
               ))
             ) : (
@@ -207,9 +220,11 @@ export function EditorSearchDock({
         </div>
       ) : null}
       <div
-        className={`flex items-center rounded-full border border-white/40 bg-background/70 shadow-lg shadow-black/5 backdrop-blur-xl supports-[backdrop-filter]:bg-background/55 dark:border-white/15 transition-all duration-300 ease-out ${
-          open ? "gap-2 p-2" : "p-1"
-        }`}
+        className="flex items-center rounded-full border border-white/40 bg-background/70 shadow-lg shadow-black/5 backdrop-blur-xl supports-backdrop-filter:bg-background/55 dark:border-white/15 transition-all duration-300 ease-out"
+        style={{
+          padding: `${DOCK_SPACING}px`,
+          gap: `${DOCK_SPACING}px`,
+        }}
       >
         <Button
           type="button"
@@ -218,19 +233,19 @@ export function EditorSearchDock({
           className="size-10 shrink-0 rounded-full transition-all duration-300 ease-out"
           onClick={() => openSearch()}
           aria-label="Open search"
+          tabIndex={open ? 0 : -1}
         >
           <Search className="size-5" />
         </Button>
         <div
           className={`relative transition-all duration-300 ease-out ${
-            open
-              ? "ml-0 flex-1 opacity-100"
-              : "pointer-events-none ml-0 w-0 opacity-0"
+            open ? "flex-1 opacity-100" : "hidden opacity-0"
           }`}
         >
           <Input
             ref={inputRef}
             type="search"
+            tabIndex={open ? 0 : -1}
             value={value}
             onChange={(e) => {
               onValueChange(e.target.value);
@@ -278,13 +293,7 @@ export function EditorSearchDock({
                 e.preventDefault();
                 const selected = panelItems[activeIndex] ?? panelItems[0];
                 if (!selected) return;
-                if (selected.id === currentEditorId) {
-                  setOpen(false);
-                  inputRef.current?.blur();
-                  onRequestFocusEditor();
-                  return;
-                }
-                onNavigateToEditor(selected.id);
+                selectItem(selected);
                 return;
               }
 
