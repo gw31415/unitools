@@ -1354,6 +1354,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   outline: 3px solid var(--focus-outlineColor);
 }
 
+/* Caption Style */
+.tiptap p:has(> img) {
+  font-style: italic;
+  color: var(--fgColor-muted);
+}
+
 @keyframes upload-pulse {
 
   0%,

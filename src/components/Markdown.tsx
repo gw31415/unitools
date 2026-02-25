@@ -1,5 +1,4 @@
-import type { JSONContent } from "@tiptap/core";
-import { Editor } from "@tiptap/core";
+import { Editor, type JSONContent, Node } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
 import { renderToHTMLString } from "@tiptap/static-renderer";
 import type { HTMLAttributes } from "react";
@@ -175,6 +174,41 @@ function createEditor(options: PartialEditorOptions = {}) {
   });
 }
 
+const TrailingBreakNode = Node.create({
+  name: "trailingBreak",
+  inline: true,
+  group: "inline",
+  atom: true,
+  selectable: false,
+  renderHTML() {
+    return ["br", { class: "ProseMirror-trailingBreak" }];
+  },
+});
+
+// SSR時に空キャプションが削除されることに対するワークアラウンド
+function decorateImageOnlyParagraphTrailingBreak(
+  content: JSONContent,
+): JSONContent {
+  const next: JSONContent = content.content
+    ? {
+        ...content,
+        content: content.content.map(decorateImageOnlyParagraphTrailingBreak),
+      }
+    : content;
+
+  if (next.type !== "paragraph") return next;
+
+  const paragraphContent = next.content ?? [];
+  const hasImageOnly =
+    paragraphContent.length === 1 && paragraphContent[0]?.type === "image";
+  if (!hasImageOnly) return next;
+
+  return {
+    ...next,
+    content: [...paragraphContent, { type: "trailingBreak" }],
+  };
+}
+
 function MarkdownView({
   contentJSON,
   className,
@@ -187,8 +221,10 @@ function MarkdownView({
     const content =
       contentJSON ?? createEditor({ element: null, content: "" }).getJSON();
     return renderToHTMLString({
-      content: decorateLazyImages(content),
-      extensions: baseExtensions,
+      content: decorateImageOnlyParagraphTrailingBreak(
+        decorateLazyImages(content),
+      ),
+      extensions: [...baseExtensions, TrailingBreakNode],
     });
   }, [contentJSON]);
 
