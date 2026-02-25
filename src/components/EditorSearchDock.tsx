@@ -41,6 +41,7 @@ export function EditorSearchDock({
   const FAB_SIZE = SEARCH_BUTTON_SIZE + DOCK_SPACING * 2;
   const DOCK_MAX_WIDTH = 672;
   const OUTER_GUTTER = 16;
+  const CLOSE_ANIMATION_MS = 300;
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [viewportWidth, setViewportWidth] = useState(
@@ -48,6 +49,7 @@ export function EditorSearchDock({
   );
   const inputRef = useRef<HTMLInputElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
+  const navigationTimerRef = useRef<number | null>(null);
   const suppressOpenOnChangeRef = useRef(false);
   const touchSelectionRef = useRef(false);
   const normalizedQuery = value.trim().toLowerCase();
@@ -79,7 +81,13 @@ export function EditorSearchDock({
         return;
       }
       setOpen(false);
-      onNavigateToEditor(item.id, { focusEditor });
+      inputRef.current?.blur();
+      if (navigationTimerRef.current !== null) {
+        window.clearTimeout(navigationTimerRef.current);
+      }
+      navigationTimerRef.current = window.setTimeout(() => {
+        onNavigateToEditor(item.id, { focusEditor });
+      }, CLOSE_ANIMATION_MS);
     },
     [currentEditorId, onNavigateToEditor, onRequestFocusEditor],
   );
@@ -91,6 +99,14 @@ export function EditorSearchDock({
     }
     setActiveIndex((prev) => Math.min(prev, panelItems.length - 1));
   }, [open, panelItems.length]);
+
+  useEffect(() => {
+    return () => {
+      if (navigationTimerRef.current !== null) {
+        window.clearTimeout(navigationTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
