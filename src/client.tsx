@@ -3,6 +3,23 @@ import { SSRProvider } from "@/lib/ssr";
 import { loadComponent } from "@/pages";
 import { type SSRStateType, ssrAtomState } from "@/store";
 
+function reserveHydrationHeight(): () => void {
+  const body = document.body;
+  const previousMinHeight = body.style.minHeight;
+  const height = Math.max(
+    body.getBoundingClientRect().height,
+    body.scrollHeight,
+    document.documentElement.scrollHeight,
+  );
+  if (height > 0) {
+    body.style.minHeight = `${height}px`;
+  }
+
+  return () => {
+    body.style.minHeight = previousMinHeight;
+  };
+}
+
 // Read the component name from SSR state
 const ssrStateElement = document.getElementById("__SSR_STATE__");
 
@@ -19,16 +36,18 @@ if (!ssrStateElement?.textContent) {
       }
 
       // Dynamically load the component
-      const root = document.querySelector("body");
-      if (root) {
-        const Component = await loadComponent(state);
-        hydrateRoot(
-          root,
-          <SSRProvider config={ssrAtomState}>
-            <Component />
-          </SSRProvider>,
-        );
-      }
+      const Component = await loadComponent(state);
+      const releaseReservedHeight = reserveHydrationHeight();
+      hydrateRoot(
+        document.body,
+        <SSRProvider config={ssrAtomState}>
+          <Component />
+        </SSRProvider>,
+      );
+
+      window.setTimeout(() => {
+        releaseReservedHeight();
+      }, 1000);
     } catch (error) {
       console.error("[Client] Failed to load component:", error);
     }
