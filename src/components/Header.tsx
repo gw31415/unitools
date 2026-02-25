@@ -18,6 +18,7 @@ import type { User } from "@/models";
 import type { ServerAppType } from "@/server";
 
 const MAX_TITLE_LENGTH = 20;
+const TITLE_DIALOG_ID = "title-dialog-8f3a2c7d";
 type FormSubmitEvent = Parameters<
   NonNullable<ComponentProps<"form">["onSubmit"]>
 >[0];
@@ -45,7 +46,6 @@ export function Header({
     initialTitle?.trim() || undefined,
   );
   const [displayTitle, setDisplayTitle] = useState(title);
-
   const client = useMemo(
     () =>
       typeof window === "undefined"
@@ -144,19 +144,20 @@ export function Header({
   return (
     <header className="h-10 sticky flex items-center gap-2 px-2 py-1 border-b">
       <Dialog open={isTitleDialogOpen} onOpenChange={handleOpenChange}>
-        <DialogTrigger asChild>
+        <DialogTrigger asChild aria-controls={TITLE_DIALOG_ID}>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="max-w-[min(60vw,24rem)] justify-start px-3 text-left"
             aria-label="Article title"
+            aria-controls={TITLE_DIALOG_ID}
             disabled={!user || !editorId}
           >
             <span className="truncate">{displayTitle}</span>
           </Button>
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent id={TITLE_DIALOG_ID}>
           <form onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle>Edit title</DialogTitle>
