@@ -100,6 +100,42 @@ describe("Markdown Component", () => {
     setSsrForTest(originalSSR);
   });
 
+  it("should add ProseMirror trailingBreak inside image-only paragraph in SSR", () => {
+    const originalSSR = import.meta.env.SSR;
+    setSsrForTest(true);
+
+    const { container } = render(
+      <Markdown
+        editorId="test-editor"
+        bootstrap={{
+          snapshotJSON: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [
+                  {
+                    type: "image",
+                    attrs: {
+                      src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><rect width='1' height='1'/></svg>",
+                      alt: "Test image",
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        }}
+      />,
+    );
+
+    const html = container.querySelector(".tiptap")?.innerHTML;
+    expect(html).toContain("<p><img");
+    expect(html).toContain('<br class="ProseMirror-trailingBreak"></p>');
+
+    setSsrForTest(originalSSR);
+  });
+
   it("should handle image with dataSrc attribute", () => {
     const originalSSR = import.meta.env.SSR;
     setSsrForTest(true);
