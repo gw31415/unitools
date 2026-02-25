@@ -68,7 +68,11 @@ export function Header({
     setIsCreating(true);
 
     try {
-      const res = await client.api.v1.editor.$post();
+      const res = await client.api.v1.editor.$post({
+        json: {
+          title: "",
+        },
+      });
 
       if (!res.ok) {
         console.error("Failed to create new article");

@@ -67,7 +67,7 @@ const serverApp = new Hono()
     if (!editorMeta) {
       return c.notFound();
     }
-    const title = editorMeta.title ?? undefined;
+    const title = editorMeta.title.trim() || undefined;
     const createdAt =
       editorMeta.createdAt instanceof Date
         ? editorMeta.createdAt.getTime()

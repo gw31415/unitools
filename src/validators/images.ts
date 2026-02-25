@@ -3,9 +3,10 @@ import { images } from "@/db/schema";
 import { ulidSchema } from ".";
 
 export const imageInsertSchema = createInsertSchema(images, {
-  id: ulidSchema,
+  // id: ulidSchema,
   editorId: ulidSchema,
 }).omit({
+  id: true,
   createdAt: true,
 });
 

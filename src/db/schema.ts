@@ -41,7 +41,7 @@ export const passkeyCredentials = sqliteTable("passkey_credentials", {
 export const editors = sqliteTable("editors", {
   id: ulid("id").primaryKey(),
   createdAt,
-  title: text("title"),
+  title: text("title").notNull().default(""),
 });
 
 export const images = sqliteTable("images", {
