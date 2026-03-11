@@ -244,9 +244,9 @@ export function EditorSearchDock({
     Math.min(DOCK_MAX_WIDTH, viewportWidth - OUTER_GUTTER * 2),
   );
   const dockWidth = open ? openDockWidth : FAB_SIZE;
-  const translateX = open
-    ? Math.max(0, (viewportWidth - dockWidth) / 2 - OUTER_GUTTER)
-    : 0;
+
+  // Calculate position: when open, center horizontally; when closed, use FAB position
+  const dockLeft = open ? (viewportWidth - dockWidth) / 2 : fabPosition.x;
 
   return (
     <div
@@ -254,9 +254,8 @@ export function EditorSearchDock({
       className="pointer-events-auto fixed z-50"
       style={{
         width: `${dockWidth}px`,
-        left: `${fabPosition.x}px`,
+        left: `${dockLeft}px`,
         top: `${fabPosition.y}px`,
-        transform: `translateX(${translateX}px)`,
         transitionProperty: isDragging ? "none" : "transform, width, left, top",
         transitionDuration: "300ms",
         transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
