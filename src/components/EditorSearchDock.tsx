@@ -10,6 +10,13 @@ export type SearchDockItem = {
   title?: string;
 };
 
+export const DOCK_SPACING = 8;
+export const SEARCH_BUTTON_SIZE = 40;
+export const FAB_SIZE = SEARCH_BUTTON_SIZE + DOCK_SPACING * 2;
+const DOCK_MAX_WIDTH = 672;
+const OUTER_GUTTER = 16;
+const CLOSE_ANIMATION_MS = 300;
+
 export function EditorSearchDock({
   value,
   onValueChange,
@@ -36,12 +43,6 @@ export function EditorSearchDock({
     options?: { focusEditor?: boolean },
   ) => void;
 }) {
-  const DOCK_SPACING = 8;
-  const SEARCH_BUTTON_SIZE = 40;
-  const FAB_SIZE = SEARCH_BUTTON_SIZE + DOCK_SPACING * 2;
-  const DOCK_MAX_WIDTH = 672;
-  const OUTER_GUTTER = 16;
-  const CLOSE_ANIMATION_MS = 300;
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [viewportWidth, setViewportWidth] = useState(
