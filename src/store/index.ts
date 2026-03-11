@@ -11,7 +11,7 @@ export const editorStateAtom = atom<EditorState>({
   snapshotJSON: undefined,
 });
 
-export const currentUserAtom = atom<User | undefined>(undefined);
+export const currentUserAtom = atom<User | undefined>();
 
 export const sidebarOpenAtom = atom<boolean>(true);
 
@@ -23,7 +23,7 @@ export const markdownBootstrapAtom = atom((get) => ({
 }));
 
 // Store the component name for client-side hydration
-export const pageAtom = atom<ComponentName | undefined>(undefined);
+export const pageAtom = atom<ComponentName | undefined>();
 
 // Document title for SEO and page display
 export const documentTitleAtom = atom<string | undefined>();
