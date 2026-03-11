@@ -4,8 +4,7 @@ import { SSRProvider } from "@/lib/ssr";
 import { ssrAtomState } from "@/store";
 
 export const renderer = reactRenderer(({ children, ssrState }) => {
-  const title =
-    ssrState?.documentTitleAtom ?? "Unitools: compose knowledge with ease";
+  const title = ssrState?.documentTitleAtom ?? "Unitools: compose knowledge with ease";
   const description = "WYSIWYG Markdown editor for seamless content creation;";
 
   return (

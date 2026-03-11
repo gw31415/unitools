@@ -157,9 +157,7 @@ export default function DocumentPage() {
                 readonly={!user}
                 tabIndex={-1}
                 className="w-full py-2 flex-1"
-                style={{
-                  paddingBottom: `calc(${FAB_CLEARANCE}px + var(--safe-area-bottom, 0px) + var(--keyboard-offset, 0px))`,
-                }}
+                style={{ paddingBottom: `${FAB_CLEARANCE}px` }}
                 aria-label="Main content editor/viewer of this page"
               />
             </div>

@@ -132,44 +132,6 @@ export function EditorSearchDock({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // モバイルSafariでキーボード表示時にFABが浮く問題を解決
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.visualViewport) return;
-
-    const updateKeyboardOffset = () => {
-      const vv = window.visualViewport;
-      if (!vv) return;
-
-      // キーボードが表示されているときのオフセットを計算
-      // vh - svh 分の差を検出してCSS変数に設定
-      const offset = window.innerHeight - vv.height - vv.offsetTop;
-      const keyboardOffset = Math.max(0, offset);
-
-      document.documentElement.style.setProperty(
-        "--keyboard-offset",
-        `${keyboardOffset}px`,
-      );
-    };
-
-    // 初期化時に実行
-    updateKeyboardOffset();
-
-    // visualViewportの変更を監視
-    window.visualViewport.addEventListener("resize", updateKeyboardOffset);
-    window.visualViewport.addEventListener("scroll", updateKeyboardOffset);
-
-    return () => {
-      window.visualViewport?.removeEventListener(
-        "resize",
-        updateKeyboardOffset,
-      );
-      window.visualViewport?.removeEventListener(
-        "scroll",
-        updateKeyboardOffset,
-      );
-    };
-  }, []);
-
   const openDockWidth = Math.max(
     FAB_SIZE,
     Math.min(DOCK_MAX_WIDTH, viewportWidth - OUTER_GUTTER * 2),
@@ -182,12 +144,11 @@ export function EditorSearchDock({
   return (
     <div
       ref={dockRef}
-      className="pointer-events-auto fixed left-4 z-50"
+      className="pointer-events-auto fixed bottom-4 left-4 z-50"
       style={{
-        bottom: "calc(1rem + var(--safe-area-bottom) + var(--keyboard-offset))",
         width: `${dockWidth}px`,
         transform: `translateX(${translateX}px)`,
-        transitionProperty: "transform, width, bottom",
+        transitionProperty: "transform, width",
         transitionDuration: "300ms",
         transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
       }}
