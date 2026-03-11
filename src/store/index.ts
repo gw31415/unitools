@@ -3,6 +3,11 @@ import { createSSRAtomState, type SSRStateOf } from "@/lib/ssr";
 import type { EditorState, User } from "@/models";
 import type { ComponentName } from "@/pages";
 
+export type FabPosition = {
+  x: number;
+  y: number;
+};
+
 export const editorStateAtom = atom<EditorState>({
   editorId: "",
   createdAt: undefined,
@@ -14,6 +19,8 @@ export const editorStateAtom = atom<EditorState>({
 export const currentUserAtom = atom<User | undefined>();
 
 export const sidebarOpenAtom = atom<boolean>(true);
+
+export const fabPositionAtom = atom<FabPosition>({ x: 16, y: 16 });
 
 export const documentIdAtom = atom((get) => get(editorStateAtom).editorId);
 
@@ -34,6 +41,7 @@ export const ssrAtomState = createSSRAtomState({
   editorStateAtom,
   currentUserAtom,
   sidebarOpenAtom,
+  fabPositionAtom,
   documentTitleAtom,
 });
 

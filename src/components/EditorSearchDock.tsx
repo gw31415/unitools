@@ -1,8 +1,19 @@
+import { useAtomValue } from "jotai";
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatEditorLabel } from "@/lib/editorLabel";
+import { type FabPosition, fabPositionAtom } from "@/store";
+
+const FAB_POSITION_COOKIE = "fab_position";
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
+
+function setFabPositionCookie(position: FabPosition): void {
+  if (typeof document === "undefined") return;
+  const value = encodeURIComponent(JSON.stringify(position));
+  document.cookie = `${FAB_POSITION_COOKIE}=${value}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax`;
+}
 
 export type SearchDockItem = {
   id: string;
@@ -48,11 +59,22 @@ export function EditorSearchDock({
   const [viewportWidth, setViewportWidth] = useState(
     typeof window === "undefined" ? 1024 : window.innerWidth,
   );
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const hasActuallyMovedRef = useRef(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
   const navigationTimerRef = useRef<number | null>(null);
   const suppressOpenOnChangeRef = useRef(false);
   const touchSelectionRef = useRef(false);
+
+  // Use SSR state for FAB position
+  const ssrFabPosition = useAtomValue(fabPositionAtom);
+  const [fabPosition, setFabPosition] = useState(ssrFabPosition);
   const normalizedQuery = value.trim().toLowerCase();
   const openSearch = useCallback((selectText = true) => {
     setOpen(true);
@@ -109,6 +131,91 @@ export function EditorSearchDock({
     };
   }, []);
 
+  const handleDragStart = useCallback(
+    (clientX: number, clientY: number) => {
+      setIsDragging(true);
+      hasActuallyMovedRef.current = false;
+      setDragStartPos({ x: clientX, y: clientY });
+      setDragOffset({
+        x: clientX - fabPosition.x,
+        y: clientY - fabPosition.y,
+      });
+    },
+    [fabPosition],
+  );
+
+  const handleDragMove = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!isDragging) return;
+
+      const dragThreshold = 5; // pixels
+      const deltaX = Math.abs(clientX - dragStartPos.x);
+      const deltaY = Math.abs(clientY - dragStartPos.y);
+
+      if (deltaX > dragThreshold || deltaY > dragThreshold) {
+        hasActuallyMovedRef.current = true;
+      }
+
+      if (!hasActuallyMovedRef.current) return;
+
+      const newX = clientX - dragOffset.x;
+      const newY = clientY - dragOffset.y;
+
+      // Constrain to viewport bounds with margin
+      const margin = 16;
+      const maxX = window.innerWidth - FAB_SIZE - margin;
+      const maxY = window.innerHeight - FAB_SIZE - margin;
+
+      setFabPosition({
+        x: Math.max(margin, Math.min(maxX, newX)),
+        y: Math.max(margin, Math.min(maxY, newY)),
+      });
+    },
+    [isDragging, dragOffset, dragStartPos],
+  );
+
+  const handleDragEnd = useCallback(() => {
+    if (!isDragging) return;
+    const hasMoved = hasActuallyMovedRef.current;
+    setIsDragging(false);
+
+    // Only snap and save if actually dragged
+    if (!hasMoved) return;
+
+    // Snap to nearest edge (left or right)
+    const viewportCenter = window.innerWidth / 2;
+    const margin = 16;
+    const snappedX =
+      fabPosition.x + FAB_SIZE / 2 < viewportCenter
+        ? margin
+        : window.innerWidth - FAB_SIZE - margin;
+
+    const snappedPosition = { x: snappedX, y: fabPosition.y };
+    setFabPosition(snappedPosition);
+    setFabPositionCookie(snappedPosition);
+  }, [isDragging, fabPosition]);
+
+  // Global drag move and end handlers
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      handleDragMove(e.clientX, e.clientY);
+    };
+
+    const handleMouseUp = () => {
+      handleDragEnd();
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging, handleDragMove, handleDragEnd]);
+
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       if (
@@ -144,11 +251,13 @@ export function EditorSearchDock({
   return (
     <div
       ref={dockRef}
-      className="pointer-events-auto fixed bottom-4 left-4 z-50"
+      className="pointer-events-auto fixed z-50"
       style={{
         width: `${dockWidth}px`,
+        left: `${fabPosition.x}px`,
+        top: `${fabPosition.y}px`,
         transform: `translateX(${translateX}px)`,
-        transitionProperty: "transform, width",
+        transitionProperty: isDragging ? "none" : "transform, width, left, top",
         transitionDuration: "300ms",
         transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
       }}
@@ -247,9 +356,20 @@ export function EditorSearchDock({
           size="icon"
           variant="ghost"
           className="size-10 shrink-0 rounded-full transition-all duration-300 ease-out"
-          onClick={() => openSearch()}
+          onClick={() => {
+            if (!hasActuallyMovedRef.current) {
+              openSearch();
+            }
+          }}
+          onMouseDown={(e) => {
+            // Only start drag on left button
+            if (e.button === 0) {
+              handleDragStart(e.clientX, e.clientY);
+            }
+          }}
           aria-label="Open search"
           tabIndex={open ? 0 : -1}
+          style={{ cursor: isDragging ? "grabbing" : "grab" }}
         >
           <Search className="size-5" />
         </Button>
