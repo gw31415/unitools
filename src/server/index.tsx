@@ -49,6 +49,7 @@ const serverApp = new Hono()
       },
       currentUserAtom: c.get("user"),
       sidebarOpenAtom: getCookieSidebarState(c),
+      documentTitleAtom: undefined,
     };
 
     const Component = await loadComponent(ssrState);
@@ -105,6 +106,7 @@ const serverApp = new Hono()
       editorStateAtom: editorState,
       currentUserAtom: c.get("user"),
       sidebarOpenAtom: getCookieSidebarState(c),
+      documentTitleAtom: title ? `${title} | Unitools` : undefined,
     };
 
     const Component = await loadComponent(ssrState);
@@ -123,6 +125,7 @@ const serverApp = new Hono()
       },
       currentUserAtom: c.get("user"),
       sidebarOpenAtom: getCookieSidebarState(c),
+      documentTitleAtom: "Sign In - Unitools",
     };
 
     const Component = await loadComponent(ssrState);

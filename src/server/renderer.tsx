@@ -4,11 +4,7 @@ import { SSRProvider } from "@/lib/ssr";
 import { ssrAtomState } from "@/store";
 
 export const renderer = reactRenderer(({ children, ssrState }) => {
-  // Use document title if available, otherwise use default title
-  // TODO: Markdown 由来の title 設定の責務はpage側に移すべき
-  const title = ssrState?.editorStateAtom?.title
-    ? `${ssrState.editorStateAtom.title} | Unitools`
-    : "Unitools: compose knowledge with ease";
+  const title = ssrState?.documentTitleAtom ?? "Unitools: compose knowledge with ease";
   const description = "WYSIWYG Markdown editor for seamless content creation;";
 
   return (

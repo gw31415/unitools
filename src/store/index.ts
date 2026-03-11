@@ -25,12 +25,16 @@ export const markdownBootstrapAtom = atom((get) => ({
 // Store the component name for client-side hydration
 export const pageAtom = atom<ComponentName | undefined>(undefined);
 
+// Document title for SEO and page display
+export const documentTitleAtom = atom<string | undefined>();
+
 // SSR configuration - defines which atoms to serialize/hydrate
 export const ssrAtomState = createSSRAtomState({
   pageAtom,
   editorStateAtom,
   currentUserAtom,
   sidebarOpenAtom,
+  documentTitleAtom,
 });
 
 export type SSRStateType = SSRStateOf<typeof ssrAtomState>;
