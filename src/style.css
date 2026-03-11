@@ -5,7 +5,14 @@
 html,
 body {
   height: 100%;
+  height: 100dvh;
   height: -webkit-fill-available;
+}
+
+/* モバイルSafariでキーボード表示時のFAB位置調整用CSS変数 */
+:root {
+  --keyboard-offset: 0px;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 *:focus {
