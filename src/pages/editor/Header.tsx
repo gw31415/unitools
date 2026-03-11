@@ -1,7 +1,8 @@
 import { hc } from "hono/client";
+import { useAtomValue } from "jotai";
 import { Plus } from "lucide-react";
 import type { ComponentProps } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,8 +15,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import type { User } from "@/models";
+import { formatEditorLabel } from "@/lib/editorLabel";
 import type { ServerAppType } from "@/server";
+import { currentUserAtom, editorStateAtom } from "@/store";
 
 const MAX_TITLE_LENGTH = 20;
 const TITLE_DIALOG_ID = "title-dialog-8f3a2c7d";
@@ -23,29 +25,14 @@ type FormSubmitEvent = Parameters<
   NonNullable<ComponentProps<"form">["onSubmit"]>
 >[0];
 
-export function Header({
-  user,
-  title,
-  fallbackTitle,
-  editorId,
-  initialTitle,
-}: {
-  user?: User;
-  title: string;
-  fallbackTitle: string;
-  editorId?: string;
-  initialTitle?: string;
-}) {
-  const [loading, setLoading] = useState(true);
+export function Header() {
+  const user = useAtomValue(currentUserAtom);
+  const editorState = useAtomValue(editorStateAtom);
   const [isCreating, setIsCreating] = useState(false);
   const [isTitleDialogOpen, setIsTitleDialogOpen] = useState(false);
   const [titleInput, setTitleInput] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
-  const [currentTitle, setCurrentTitle] = useState<string | undefined>(
-    initialTitle?.trim() || undefined,
-  );
-  const [displayTitle, setDisplayTitle] = useState(title);
   const client = useMemo(
     () =>
       typeof window === "undefined"
@@ -54,14 +41,17 @@ export function Header({
     [],
   );
 
-  useEffect(() => {
-    setLoading(false);
-  }, []);
+  // Calculate display title from editor state
+  const displayTitle = useMemo(() => {
+    if (!editorState.editorId) return "";
+    return formatEditorLabel({
+      id: editorState.editorId,
+      createdAt: editorState.createdAt ?? Number.NaN,
+      title: editorState.title,
+    });
+  }, [editorState.editorId, editorState.createdAt, editorState.title]);
 
-  useEffect(() => {
-    setCurrentTitle(initialTitle?.trim() || undefined);
-    setDisplayTitle(title);
-  }, [initialTitle, title]);
+  const currentTitle = editorState.title;
 
   const handleCreateEditor = useCallback(async () => {
     if (!client || !user || isCreating) return;
@@ -102,7 +92,7 @@ export function Header({
   );
 
   const handleSaveTitle = useCallback(async () => {
-    if (!client || !editorId || !user || isSavingTitle) return;
+    if (!client || !editorState.editorId || !user || isSavingTitle) return;
     setIsSavingTitle(true);
     setTitleError(null);
 
@@ -111,7 +101,7 @@ export function Header({
 
     try {
       const res = await client.api.v1.editor[":id"].$patch({
-        param: { id: editorId },
+        param: { id: editorState.editorId },
         json: { title: nextTitle },
       });
 
@@ -120,16 +110,15 @@ export function Header({
         return;
       }
 
-      setCurrentTitle(nextTitle);
-      setDisplayTitle(nextTitle ?? fallbackTitle);
-      setIsTitleDialogOpen(false);
+      // Reload the page to reflect the updated title
+      window.location.reload();
     } catch (error) {
       console.error(error);
       setTitleError("Failed to update title.");
     } finally {
       setIsSavingTitle(false);
     }
-  }, [client, editorId, fallbackTitle, isSavingTitle, titleInput, user]);
+  }, [client, editorState.editorId, isSavingTitle, titleInput, user]);
 
   const isDeleteAction = Boolean(currentTitle) && titleInput.trim() === "";
   const confirmLabel = isDeleteAction ? "Delete title" : "Save title";
@@ -152,7 +141,7 @@ export function Header({
             className="max-w-[min(60vw,24rem)] justify-start px-3 text-left"
             aria-label="Article title"
             aria-controls={TITLE_DIALOG_ID}
-            disabled={!user || !editorId}
+            disabled={!user || !editorState.editorId}
           >
             <span className="truncate">{displayTitle}</span>
           </Button>
@@ -197,7 +186,7 @@ export function Header({
       <Button
         size="icon"
         variant="ghost"
-        disabled={loading || !user || isCreating}
+        disabled={!user || isCreating}
         onClick={handleCreateEditor}
         aria-label="Create new article"
       >

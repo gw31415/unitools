@@ -7,7 +7,6 @@ import {
   FAB_SIZE,
   type SearchDockItem,
 } from "@/components/EditorSearchDock";
-import { Header } from "@/components/Header";
 import Markdown from "@/components/Markdown";
 import {
   Empty,
@@ -16,7 +15,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { formatEditorLabel } from "@/lib/editorLabel";
+import { Header } from "@/pages/editor/Header";
 import type { ServerAppType } from "@/server";
 import {
   currentUserAtom,
@@ -120,29 +119,9 @@ export default function DocumentPage() {
     return () => window.clearTimeout(timer);
   }, [editorState.editorId, handleFocusEditor]);
 
-  const headerTitle = editorState.editorId
-    ? formatEditorLabel({
-        id: editorState.editorId,
-        createdAt: editorState.createdAt ?? Number.NaN,
-        title: editorState.title,
-      })
-    : "";
-  const headerFallbackTitle = editorState.editorId
-    ? formatEditorLabel({
-        id: editorState.editorId,
-        createdAt: editorState.createdAt ?? Number.NaN,
-      })
-    : "";
-
   return (
     <div className="min-h-dvh flex flex-col">
-      <Header
-        user={user}
-        title={headerTitle}
-        fallbackTitle={headerFallbackTitle}
-        editorId={editorState.editorId || undefined}
-        initialTitle={editorState.title}
-      />
+      <Header />
       <main
         className={`flex-1 min-h-0 ${
           editorState.editorId ? "bg-(--markdown-surface)" : ""
