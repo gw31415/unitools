@@ -31,7 +31,6 @@ export const DOCK_SPACING = 8;
 export const SEARCH_BUTTON_SIZE = 40;
 export const FAB_SIZE = SEARCH_BUTTON_SIZE + DOCK_SPACING * 2;
 const DOCK_MAX_WIDTH = 672;
-const OUTER_GUTTER = 16;
 const CLOSE_ANIMATION_MS = 300;
 const FAB_MARGIN = 16;
 
@@ -403,7 +402,7 @@ export function EditorSearchDock({
 
   const openDockWidth = Math.max(
     FAB_SIZE,
-    Math.min(DOCK_MAX_WIDTH, viewportWidth - OUTER_GUTTER * 2),
+    Math.min(DOCK_MAX_WIDTH, viewportWidth - FAB_MARGIN * 2),
   );
   const dockWidth = open ? openDockWidth : FAB_SIZE;
   const clampedFabPosition = clampFabPosition(fabPosition, viewportHeight);
