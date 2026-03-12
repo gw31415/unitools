@@ -158,18 +158,21 @@ export function EditorSearchDock({
       setFabPositionCookie(clamped);
     }
 
-    if (rightAnchorTimerRef.current !== null) {
-      window.clearTimeout(rightAnchorTimerRef.current);
-      rightAnchorTimerRef.current = null;
-    }
     if (clamped.horizontal === "right") {
       // Use right anchor only for first paint, then normalize to left-based positioning.
+      if (rightAnchorTimerRef.current !== null) {
+        window.clearTimeout(rightAnchorTimerRef.current);
+      }
       setAnchorMode("right");
       rightAnchorTimerRef.current = window.setTimeout(() => {
         setAnchorMode("left");
         rightAnchorTimerRef.current = null;
-      }, 0);
+      }, CLOSE_ANIMATION_MS);
     } else {
+      if (rightAnchorTimerRef.current !== null) {
+        window.clearTimeout(rightAnchorTimerRef.current);
+        rightAnchorTimerRef.current = null;
+      }
       setAnchorMode("left");
     }
   }, [ssrFabPosition]);
@@ -306,16 +309,12 @@ export function EditorSearchDock({
     };
     setFabPosition(snappedPosition);
     setFabPositionCookie(snappedPosition);
-    if (snappedPosition.horizontal === "right") {
-      // Keep right anchor briefly, then normalize to left-based positioning.
-      setAnchorMode("right");
-      rightAnchorTimerRef.current = window.setTimeout(() => {
-        setAnchorMode("left");
-        rightAnchorTimerRef.current = null;
-      }, CLOSE_ANIMATION_MS);
-    } else {
-      setAnchorMode("left");
+    // Keep drag-release snap animations on `left` so both directions interpolate.
+    if (rightAnchorTimerRef.current !== null) {
+      window.clearTimeout(rightAnchorTimerRef.current);
+      rightAnchorTimerRef.current = null;
     }
+    setAnchorMode("left");
   }, [isDragging, dragVisualPosition]);
 
   // Global drag move and end handlers
