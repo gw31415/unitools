@@ -1,6 +1,12 @@
 import { useAtomValue } from "jotai";
 import { Search } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatEditorLabel } from "@/lib/editorLabel";
@@ -27,6 +33,54 @@ export const FAB_SIZE = SEARCH_BUTTON_SIZE + DOCK_SPACING * 2;
 const DOCK_MAX_WIDTH = 672;
 const OUTER_GUTTER = 16;
 const CLOSE_ANIMATION_MS = 300;
+const FAB_MARGIN = 16;
+
+function getClientViewportSize(): { width: number; height: number } {
+  if (typeof window === "undefined") {
+    return { width: 1024, height: 768 };
+  }
+  const visualViewportWidth = window.visualViewport?.width;
+  const visualViewportHeight = window.visualViewport?.height;
+  return {
+    width:
+      typeof visualViewportWidth === "number" && visualViewportWidth > 0
+        ? Math.floor(visualViewportWidth)
+        : window.innerWidth,
+    height:
+      typeof visualViewportHeight === "number" && visualViewportHeight > 0
+        ? Math.floor(visualViewportHeight)
+        : window.innerHeight,
+  };
+}
+
+function clampFabBottom(bottom: number, viewportHeight: number): number {
+  const maxBottom = Math.max(
+    FAB_MARGIN,
+    viewportHeight - FAB_SIZE - FAB_MARGIN,
+  );
+  return Math.max(FAB_MARGIN, Math.min(maxBottom, bottom));
+}
+
+function clampFabPosition(
+  position: FabPosition,
+  viewportHeight: number,
+): FabPosition {
+  return {
+    horizontal: position.horizontal,
+    bottom: clampFabBottom(position.bottom, viewportHeight),
+  };
+}
+
+function getFabLeft(
+  horizontal: FabPosition["horizontal"],
+  viewportWidth: number,
+): number {
+  const minLeft = 0;
+  const maxLeft = Math.max(0, viewportWidth - FAB_SIZE);
+  const targetLeft =
+    horizontal === "left" ? FAB_MARGIN : viewportWidth - FAB_SIZE - FAB_MARGIN;
+  return Math.max(minLeft, Math.min(maxLeft, targetLeft));
+}
 
 export function EditorSearchDock({
   value,
@@ -57,7 +111,10 @@ export function EditorSearchDock({
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [viewportWidth, setViewportWidth] = useState(
-    typeof window === "undefined" ? 1024 : window.innerWidth,
+    () => getClientViewportSize().width,
+  );
+  const [viewportHeight, setViewportHeight] = useState(
+    () => getClientViewportSize().height,
   );
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number }>({
@@ -65,16 +122,41 @@ export function EditorSearchDock({
     y: 0,
   });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [dragVisualPosition, setDragVisualPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
   const hasActuallyMovedRef = useRef(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
   const navigationTimerRef = useRef<number | null>(null);
   const suppressOpenOnChangeRef = useRef(false);
   const touchSelectionRef = useRef(false);
+  const rightAnchorTimerRef = useRef<number | null>(null);
 
   // Use SSR state for FAB position
   const ssrFabPosition = useAtomValue(fabPositionAtom);
   const [fabPosition, setFabPosition] = useState(ssrFabPosition);
+  const [anchorMode, setAnchorMode] = useState<"left" | "right">(
+    ssrFabPosition.horizontal === "right" ? "right" : "left",
+  );
+
+  // Ensure first client paint uses a clamped position and up-to-date viewport.
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const nextViewport = getClientViewportSize();
+    setViewportWidth(nextViewport.width);
+    setViewportHeight(nextViewport.height);
+
+    const clamped = clampFabPosition(ssrFabPosition, nextViewport.height);
+    setFabPosition(clamped);
+    if (
+      clamped.horizontal !== ssrFabPosition.horizontal ||
+      clamped.bottom !== ssrFabPosition.bottom
+    ) {
+      setFabPositionCookie(clamped);
+    }
+  }, [ssrFabPosition]);
   const normalizedQuery = value.trim().toLowerCase();
   const openSearch = useCallback((selectText = true) => {
     setOpen(true);
@@ -133,15 +215,23 @@ export function EditorSearchDock({
 
   const handleDragStart = useCallback(
     (clientX: number, clientY: number) => {
+      if (rightAnchorTimerRef.current !== null) {
+        window.clearTimeout(rightAnchorTimerRef.current);
+        rightAnchorTimerRef.current = null;
+      }
+      setAnchorMode("left");
       setIsDragging(true);
       hasActuallyMovedRef.current = false;
       setDragStartPos({ x: clientX, y: clientY });
+      const fabLeft = getFabLeft(fabPosition.horizontal, viewportWidth);
+      const fabTop = viewportHeight - FAB_SIZE - fabPosition.bottom;
+      setDragVisualPosition({ left: fabLeft, top: fabTop });
       setDragOffset({
-        x: clientX - fabPosition.x,
-        y: clientY - fabPosition.y,
+        x: clientX - fabLeft,
+        y: clientY - fabTop,
       });
     },
-    [fabPosition],
+    [fabPosition, viewportWidth, viewportHeight],
   );
 
   const handleDragMove = useCallback(
@@ -160,16 +250,14 @@ export function EditorSearchDock({
 
       const newX = clientX - dragOffset.x;
       const newY = clientY - dragOffset.y;
+      const viewport = getClientViewportSize();
 
       // Constrain to viewport bounds with margin
-      const margin = 16;
-      const maxX = window.innerWidth - FAB_SIZE - margin;
-      const maxY = window.innerHeight - FAB_SIZE - margin;
-
-      setFabPosition({
-        x: Math.max(margin, Math.min(maxX, newX)),
-        y: Math.max(margin, Math.min(maxY, newY)),
-      });
+      const maxX = viewport.width - FAB_SIZE - FAB_MARGIN;
+      const maxY = viewport.height - FAB_SIZE - FAB_MARGIN;
+      const clampedX = Math.max(FAB_MARGIN, Math.min(maxX, newX));
+      const clampedY = Math.max(FAB_MARGIN, Math.min(maxY, newY));
+      setDragVisualPosition({ left: clampedX, top: clampedY });
     },
     [isDragging, dragOffset, dragStartPos],
   );
@@ -178,22 +266,37 @@ export function EditorSearchDock({
     if (!isDragging) return;
     const hasMoved = hasActuallyMovedRef.current;
     setIsDragging(false);
+    const currentVisualPosition = dragVisualPosition;
+    setDragVisualPosition(null);
 
     // Only snap and save if actually dragged
     if (!hasMoved) return;
+    if (!currentVisualPosition) return;
+    const viewport = getClientViewportSize();
 
     // Snap to nearest edge (left or right)
-    const viewportCenter = window.innerWidth / 2;
-    const margin = 16;
-    const snappedX =
-      fabPosition.x + FAB_SIZE / 2 < viewportCenter
-        ? margin
-        : window.innerWidth - FAB_SIZE - margin;
-
-    const snappedPosition = { x: snappedX, y: fabPosition.y };
+    const viewportCenter = viewport.width / 2;
+    const currentLeft = currentVisualPosition.left;
+    const snappedPosition: FabPosition = {
+      horizontal:
+        currentLeft + FAB_SIZE / 2 < viewportCenter ? "left" : "right",
+      bottom: clampFabBottom(
+        viewport.height - FAB_SIZE - currentVisualPosition.top,
+        viewport.height,
+      ),
+    };
     setFabPosition(snappedPosition);
     setFabPositionCookie(snappedPosition);
-  }, [isDragging, fabPosition]);
+    if (snappedPosition.horizontal === "right") {
+      setAnchorMode("left");
+      rightAnchorTimerRef.current = window.setTimeout(() => {
+        setAnchorMode("right");
+        rightAnchorTimerRef.current = null;
+      }, CLOSE_ANIMATION_MS);
+    } else {
+      setAnchorMode("left");
+    }
+  }, [isDragging, dragVisualPosition]);
 
   // Global drag move and end handlers
   useEffect(() => {
@@ -234,9 +337,52 @@ export function EditorSearchDock({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const handleResize = () => setViewportWidth(window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    const syncViewport = () => {
+      const nextViewport = getClientViewportSize();
+      setViewportWidth(nextViewport.width);
+      setViewportHeight(nextViewport.height);
+    };
+
+    syncViewport();
+    const rafId = window.requestAnimationFrame(syncViewport);
+    const timerId = window.setTimeout(syncViewport, 300);
+
+    window.addEventListener("resize", syncViewport);
+    window.addEventListener("orientationchange", syncViewport);
+    window.addEventListener("pageshow", syncViewport);
+    window.addEventListener("load", syncViewport);
+    window.visualViewport?.addEventListener("resize", syncViewport);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(timerId);
+      window.removeEventListener("resize", syncViewport);
+      window.removeEventListener("orientationchange", syncViewport);
+      window.removeEventListener("pageshow", syncViewport);
+      window.removeEventListener("load", syncViewport);
+      window.visualViewport?.removeEventListener("resize", syncViewport);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const clamped = clampFabPosition(fabPosition, viewportHeight);
+    if (
+      clamped.horizontal === fabPosition.horizontal &&
+      clamped.bottom === fabPosition.bottom
+    ) {
+      return;
+    }
+    setFabPosition(clamped);
+    setFabPositionCookie(clamped);
+  }, [fabPosition, viewportHeight]);
+
+  useEffect(() => {
+    return () => {
+      if (rightAnchorTimerRef.current !== null) {
+        window.clearTimeout(rightAnchorTimerRef.current);
+      }
+    };
   }, []);
 
   const openDockWidth = Math.max(
@@ -244,9 +390,29 @@ export function EditorSearchDock({
     Math.min(DOCK_MAX_WIDTH, viewportWidth - OUTER_GUTTER * 2),
   );
   const dockWidth = open ? openDockWidth : FAB_SIZE;
+  const clampedFabPosition = clampFabPosition(fabPosition, viewportHeight);
+  const closedDockLeft = getFabLeft(
+    clampedFabPosition.horizontal,
+    viewportWidth,
+  );
+  const closedDockBottom = clampedFabPosition.bottom;
+  const useRightAnchor =
+    anchorMode === "right" &&
+    !open &&
+    !isDragging &&
+    !dragVisualPosition &&
+    clampedFabPosition.horizontal === "right";
 
   // Calculate position: when open, center horizontally; when closed, use FAB position
-  const dockLeft = open ? (viewportWidth - dockWidth) / 2 : fabPosition.x;
+  const dockLeft = open
+    ? (viewportWidth - dockWidth) / 2
+    : dragVisualPosition
+      ? dragVisualPosition.left
+      : closedDockLeft;
+  const dockBottom =
+    dragVisualPosition && !open
+      ? Math.max(FAB_MARGIN, viewportHeight - FAB_SIZE - dragVisualPosition.top)
+      : closedDockBottom;
 
   return (
     <div
@@ -254,8 +420,9 @@ export function EditorSearchDock({
       className="pointer-events-auto fixed z-50"
       style={{
         width: `${dockWidth}px`,
-        left: `${dockLeft}px`,
-        top: `${fabPosition.y}px`,
+        left: useRightAnchor ? undefined : `${dockLeft}px`,
+        right: useRightAnchor ? `${FAB_MARGIN}px` : undefined,
+        bottom: `${dockBottom}px`,
         transitionProperty: isDragging ? "none" : "width, left",
         transitionDuration: "300ms",
         transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",

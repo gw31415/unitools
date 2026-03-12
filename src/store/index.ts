@@ -4,8 +4,8 @@ import type { EditorState, User } from "@/models";
 import type { ComponentName } from "@/pages";
 
 export type FabPosition = {
-  x: number;
-  y: number;
+  horizontal: "left" | "right";
+  bottom: number;
 };
 
 export const editorStateAtom = atom<EditorState>({
@@ -20,7 +20,10 @@ export const currentUserAtom = atom<User | undefined>();
 
 export const sidebarOpenAtom = atom<boolean>(true);
 
-export const fabPositionAtom = atom<FabPosition>({ x: 16, y: 16 });
+export const fabPositionAtom = atom<FabPosition>({
+  horizontal: "left",
+  bottom: 16,
+});
 
 export const documentIdAtom = atom((get) => get(editorStateAtom).editorId);
 

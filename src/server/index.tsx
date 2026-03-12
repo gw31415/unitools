@@ -39,10 +39,23 @@ function getCookieFabPosition(c: Context): FabPosition {
   const cookieValue = getCookie(c, FAB_POSITION_COOKIE);
   if (cookieValue) {
     try {
-      return JSON.parse(decodeURIComponent(cookieValue));
+      const parsed = JSON.parse(decodeURIComponent(cookieValue)) as {
+        horizontal?: unknown;
+        bottom?: unknown;
+      } | null;
+      if (
+        parsed &&
+        (parsed.horizontal === "left" || parsed.horizontal === "right") &&
+        typeof parsed.bottom === "number"
+      ) {
+        return {
+          horizontal: parsed.horizontal,
+          bottom: parsed.bottom,
+        };
+      }
     } catch {}
   }
-  return { x: 16, y: 16 }; // Default position
+  return { horizontal: "left", bottom: 16 }; // Default position
 }
 
 const serverApp = new Hono()
