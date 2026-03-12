@@ -16,9 +16,16 @@ const FAB_POSITION_COOKIE = "fab_position";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
 function setFabPositionCookie(position: FabPosition): void {
-  if (typeof document === "undefined") return;
-  const value = encodeURIComponent(JSON.stringify(position));
-  document.cookie = `${FAB_POSITION_COOKIE}=${value}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax`;
+  if (typeof window === "undefined") return;
+  const cookieStore = globalThis.cookieStore;
+  if (!cookieStore) return;
+
+  void cookieStore.set({
+    name: FAB_POSITION_COOKIE,
+    value: encodeURIComponent(JSON.stringify(position)),
+    path: "/",
+    expires: Date.now() + COOKIE_MAX_AGE * 1000,
+  });
 }
 
 export type SearchDockItem = {
