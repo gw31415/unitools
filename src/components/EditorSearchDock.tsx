@@ -256,7 +256,7 @@ export function EditorSearchDock({
         width: `${dockWidth}px`,
         left: `${dockLeft}px`,
         top: `${fabPosition.y}px`,
-        transitionProperty: isDragging ? "none" : "transform, width, left, top",
+        transitionProperty: isDragging ? "none" : "width, left",
         transitionDuration: "300ms",
         transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
       }}
@@ -270,7 +270,7 @@ export function EditorSearchDock({
       }}
     >
       {open ? (
-        <div className="mb-2 overflow-hidden rounded-2xl border border-black/10 bg-background/60 p-2 shadow-xl shadow-black/10 backdrop-blur-xl supports-backdrop-filter:bg-background/45 dark:border-white/10 dark:bg-background/60 dark:supports-backdrop-filter:bg-background/45">
+        <div className="absolute right-0 bottom-[calc(100%+8px)] left-0 overflow-hidden rounded-2xl border border-black/10 bg-background/60 p-2 shadow-xl shadow-black/10 backdrop-blur-xl supports-backdrop-filter:bg-background/45 dark:border-white/10 dark:bg-background/60 dark:supports-backdrop-filter:bg-background/45">
           <div className="text-muted-foreground px-2 py-1 text-xs">
             {normalizedQuery.length === 0
               ? "Recent articles"
