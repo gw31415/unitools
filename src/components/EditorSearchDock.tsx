@@ -133,6 +133,7 @@ export function EditorSearchDock({
   const suppressOpenOnChangeRef = useRef(false);
   const touchSelectionRef = useRef(false);
   const rightAnchorTimerRef = useRef<number | null>(null);
+  const activePointerIdRef = useRef<number | null>(null);
 
   // Use SSR state for FAB position
   const ssrFabPosition = useAtomValue(fabPositionAtom);
@@ -302,20 +303,35 @@ export function EditorSearchDock({
   useEffect(() => {
     if (!isDragging) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
+      if (
+        activePointerIdRef.current !== null &&
+        e.pointerId !== activePointerIdRef.current
+      ) {
+        return;
+      }
       handleDragMove(e.clientX, e.clientY);
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = (e: PointerEvent) => {
+      if (
+        activePointerIdRef.current !== null &&
+        e.pointerId !== activePointerIdRef.current
+      ) {
+        return;
+      }
+      activePointerIdRef.current = null;
       handleDragEnd();
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
 
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
     };
   }, [isDragging, handleDragMove, handleDragEnd]);
 
@@ -527,15 +543,19 @@ export function EditorSearchDock({
               openSearch();
             }
           }}
-          onMouseDown={(e) => {
-            // Only start drag on left button
-            if (e.button === 0) {
-              handleDragStart(e.clientX, e.clientY);
-            }
+          onPointerDown={(e) => {
+            // Only start drag on primary mouse button, or any touch/pen contact.
+            if (e.pointerType === "mouse" && e.button !== 0) return;
+            activePointerIdRef.current = e.pointerId;
+            e.currentTarget.setPointerCapture(e.pointerId);
+            handleDragStart(e.clientX, e.clientY);
           }}
           aria-label="Open search"
           tabIndex={open ? 0 : -1}
-          style={{ cursor: isDragging ? "grabbing" : "grab" }}
+          style={{
+            cursor: isDragging ? "grabbing" : "grab",
+            touchAction: "none",
+          }}
         >
           <Search className="size-5" />
         </Button>
