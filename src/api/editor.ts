@@ -27,20 +27,16 @@ const toTimestamp = (value: unknown) =>
 
 const requireDocExists: MiddlewareHandler<Env> = async (c, next) => {
   const id = c.req.param("id");
-  if (!id) {
-    return c.notFound();
-  }
+  if (!id) return c.notFound();
 
   const db = drizzle(c.env.DB);
-  const doc = await db
+  const [doc] = await db
     .select({ id: schema.editors.id })
     .from(schema.editors)
     .where(eq(schema.editors.id, id as ULID))
     .limit(1);
 
-  if (doc.length === 0) {
-    return c.notFound();
-  }
+  if (!doc) return c.notFound();
 
   await next();
 };
@@ -107,20 +103,16 @@ const editor = createApp()
 
       const db = drizzle(c.env.DB, { schema });
       const rows: Editor[] = await db.query.editors.findMany({
-        where: (editors) => {
-          if (!query.cursor) {
-            return undefined;
-          }
-          const cursorCreatedAt = new Date(query.cursor.createdAt);
-          const cursorId = query.cursor.id as ULID;
-          return or(
-            lt(editors.createdAt, cursorCreatedAt),
-            and(
-              eq(editors.createdAt, cursorCreatedAt),
-              lt(editors.id, cursorId),
-            ),
-          );
-        },
+        where: (editors) =>
+          query.cursor
+            ? or(
+                lt(editors.createdAt, new Date(query.cursor.createdAt)),
+                and(
+                  eq(editors.createdAt, new Date(query.cursor.createdAt)),
+                  lt(editors.id, query.cursor.id as ULID),
+                ),
+              )
+            : undefined,
         orderBy: (editors) => [desc(editors.createdAt), desc(editors.id)],
         limit: take,
       });
@@ -201,8 +193,9 @@ const editor = createApp()
       if (imagesToDelete.length > 0) {
         const keys = imagesToDelete.map((img) => img.storageKey);
         for (let i = 0; i < keys.length; i += R2_BULK_DELETE_LIMIT) {
-          const chunk = keys.slice(i, i + R2_BULK_DELETE_LIMIT);
-          await c.env.UNITOOLS_R2.delete(chunk);
+          await c.env.UNITOOLS_R2.delete(
+            keys.slice(i, i + R2_BULK_DELETE_LIMIT),
+          );
         }
       }
       await getDurableObjectOfDoc(c, id).reset();

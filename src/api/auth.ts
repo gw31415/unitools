@@ -75,16 +75,18 @@ async function loadSessionFromRequest<EnvExtended extends Env>(
   user: User;
   sessionId: string;
 } | null> {
+  const clearSessionCookie = () =>
+    deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
   const sessionToken = getCookie(c, PASSKEY_SESSION_COOKIE);
 
   if (!sessionToken) {
-    deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
+    clearSessionCookie();
     return null;
   }
 
   const [userId, sessionId, secret] = sessionToken.split(":");
   if (!userId || !sessionId || !secret) {
-    deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
+    clearSessionCookie();
     return null;
   }
 
@@ -93,7 +95,7 @@ async function loadSessionFromRequest<EnvExtended extends Env>(
     "json",
   );
   if (!record || record.secret !== secret || record.user.id !== userId) {
-    deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
+    clearSessionCookie();
     return null;
   }
 
@@ -108,16 +110,8 @@ const deleteUserSessionsFromKv = async (
   let cursor: string | undefined;
   for (;;) {
     const result = await kv.list({ prefix, cursor });
-    if (result.keys.length > 0) {
-      await Promise.all(
-        result.keys.map(async (key) => {
-          await kv.delete(key.name);
-        }),
-      );
-    }
-    if (result.list_complete) {
-      break;
-    }
+    await Promise.all(result.keys.map((key) => kv.delete(key.name)));
+    if (result.list_complete) break;
     cursor = result.cursor;
   }
 };
@@ -127,9 +121,7 @@ export const useUser: MiddlewareHandler<{
   Variables: { user: User | undefined };
 }> = async (c, next) => {
   const session = await loadSessionFromRequest(c);
-  if (session) {
-    c.set("user", session.user);
-  }
+  if (session) c.set("user", session.user);
   await next();
 };
 
@@ -138,10 +130,7 @@ export const requireUser: MiddlewareHandler<{
   Variables: { user: User };
 }> = async (c, next) => {
   const session = await loadSessionFromRequest(c);
-  if (!session) {
-    return c.json({ authenticated: false }, 401);
-  }
-
+  if (!session) return c.json({ authenticated: false }, 401);
   c.set("user", session.user);
   await next();
 };
@@ -154,10 +143,7 @@ const requireSid: MiddlewareHandler<{
   };
 }> = async (c, next) => {
   const session = await loadSessionFromRequest(c);
-  if (!session) {
-    return c.json({ authenticated: false }, 401);
-  }
-
+  if (!session) return c.json({ authenticated: false }, 401);
   c.set("sessionId", session.sessionId);
   c.set("userId", session.user.id);
   await next();
@@ -169,19 +155,8 @@ function createSessionSecret() {
   return isoBase64URL.fromBuffer(bytes);
 }
 
-function toWebAuthnResponseJSON<T extends RegistrationWebAuthnJSON>(
-  payload: T,
-) {
-  const response = { ...payload } satisfies RegistrationResponseJSON;
-  delete (response as Partial<T>).challengeId;
-  return response;
-}
-
-function toWebAuthnAuthenticationJSON<T extends AuthenticationWebAuthnJSON>(
-  payload: T,
-) {
-  const response = { ...payload } satisfies AuthenticationResponseJSON;
-  delete (response as Partial<T>).challengeId;
+function removeChallengeId<T extends { challengeId: string }>(payload: T) {
+  const { challengeId: _challengeId, ...response } = payload;
   return response;
 }
 
@@ -191,10 +166,9 @@ async function createSession(
   sessionId: ULID,
   sessionSecret: string,
 ) {
-  const sessionRecord = { user, secret: sessionSecret };
   await c.env.AUTH_KV.put(
     sessionKey(user.id, sessionId),
-    JSON.stringify(sessionRecord),
+    JSON.stringify({ user, secret: sessionSecret }),
     {
       expirationTtl: SESSION_TTL_SECONDS,
     },
@@ -222,9 +196,7 @@ async function isValidInvitation(
 ): Promise<boolean> {
   if (!code) return false;
   const { INVITATION_CODES } = env<{ INVITATION_CODES?: string }>(c);
-  if (!INVITATION_CODES || INVITATION_CODES.length === 0) {
-    return false;
-  }
+  if (!INVITATION_CODES) return false;
   const invitationCodes = INVITATION_CODES.split(/\s+/g);
 
   // Create hash from INVITATION_CODES to detect changes
@@ -338,7 +310,7 @@ export const usersApi = createApp()
     let verification: VerifiedRegistrationResponse;
     try {
       verification = await verifyRegistrationResponse({
-        response: toWebAuthnResponseJSON(payload),
+        response: removeChallengeId(payload) as RegistrationResponseJSON,
         expectedChallenge: challengeRecord.challenge,
         expectedOrigin,
         expectedRPID: rpID,
@@ -514,7 +486,7 @@ export const sessionsApi = createApp()
     let verification: VerifiedAuthenticationResponse;
     try {
       verification = await verifyAuthenticationResponse({
-        response: toWebAuthnAuthenticationJSON(payload),
+        response: removeChallengeId(payload) as AuthenticationResponseJSON,
         expectedChallenge: challengeRecord.challenge,
         expectedOrigin,
         expectedRPID: rpID,

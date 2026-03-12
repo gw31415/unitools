@@ -1,7 +1,7 @@
 import { hc } from "hono/client";
 import { useAtomValue } from "jotai";
 import { Clock } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   EditorSearchDock,
   type SearchDockItem,
@@ -24,18 +24,32 @@ import {
 
 const SIDEBAR_PAGE_SIZE = 20;
 const FOCUS_EDITOR_ON_LOAD_KEY = "focus-editor-on-load";
+const getClient = () =>
+  typeof window === "undefined"
+    ? null
+    : hc<ServerAppType>(window.location.origin);
+
+function focusEditorElement() {
+  const root = document.querySelector(
+    '[aria-label="Main content editor/viewer of this page"]',
+  );
+  if (!root) return;
+  const editable = root.querySelector(
+    '[contenteditable="true"]',
+  ) as HTMLElement | null;
+  if (editable) {
+    editable.focus();
+    return;
+  }
+  if (root instanceof HTMLElement) {
+    root.focus();
+  }
+}
 
 export default function DocumentPage() {
   const editorState = useAtomValue(editorStateAtom);
   const user = useAtomValue(currentUserAtom);
   const bootstrap = useAtomValue(markdownBootstrapAtom);
-  const client = useMemo(
-    () =>
-      typeof window === "undefined"
-        ? null
-        : hc<ServerAppType>(window.location.origin),
-    [],
-  );
   const [searchValue, setSearchValue] = useState("");
   const [searchItems, setSearchItems] = useState<SearchDockItem[]>([]);
   const [isSearchLoading, setIsSearchLoading] = useState(true);
@@ -43,6 +57,7 @@ export default function DocumentPage() {
   const [isSearchAuthRequired, setIsSearchAuthRequired] = useState(false);
 
   const fetchSearchItems = useCallback(async () => {
+    const client = getClient();
     if (!client) return;
     setIsSearchLoading(true);
     setSearchError(null);
@@ -68,52 +83,34 @@ export default function DocumentPage() {
     } finally {
       setIsSearchLoading(false);
     }
-  }, [client]);
-
-  const handleFocusEditor = useCallback(() => {
-    const root = document.querySelector(
-      '[aria-label="Main content editor/viewer of this page"]',
-    );
-    if (!root) return;
-    const editable = root.querySelector(
-      '[contenteditable="true"]',
-    ) as HTMLElement | null;
-    if (editable) {
-      editable.focus();
-      return;
-    }
-    if (root instanceof HTMLElement) {
-      root.focus();
-    }
   }, []);
 
-  const handleNavigateToEditor = useCallback(
-    (editorId: string, options?: { focusEditor?: boolean }) => {
-      const shouldFocusEditor = options?.focusEditor ?? true;
-      if (shouldFocusEditor) {
-        sessionStorage.setItem(FOCUS_EDITOR_ON_LOAD_KEY, "1");
-      } else {
-        sessionStorage.removeItem(FOCUS_EDITOR_ON_LOAD_KEY);
-      }
-      window.location.assign(`/editor/${editorId}`);
-    },
-    [],
-  );
+  const handleNavigateToEditor = (
+    editorId: string,
+    options?: { focusEditor?: boolean },
+  ) => {
+    const shouldFocusEditor = options?.focusEditor ?? true;
+    if (shouldFocusEditor) {
+      sessionStorage.setItem(FOCUS_EDITOR_ON_LOAD_KEY, "1");
+    } else {
+      sessionStorage.removeItem(FOCUS_EDITOR_ON_LOAD_KEY);
+    }
+    window.location.assign(`/editor/${editorId}`);
+  };
 
   useEffect(() => {
-    if (!client) return;
     void fetchSearchItems();
-  }, [client, fetchSearchItems]);
+  }, [fetchSearchItems]);
 
   useEffect(() => {
     if (!editorState.editorId) return;
     if (sessionStorage.getItem(FOCUS_EDITOR_ON_LOAD_KEY) !== "1") return;
     sessionStorage.removeItem(FOCUS_EDITOR_ON_LOAD_KEY);
     const timer = window.setTimeout(() => {
-      handleFocusEditor();
+      focusEditorElement();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [editorState.editorId, handleFocusEditor]);
+  }, [editorState.editorId]);
 
   return (
     <div className="min-h-dvh flex flex-col">
@@ -171,7 +168,7 @@ export default function DocumentPage() {
         error={searchError}
         onRetry={fetchSearchItems}
         currentEditorId={editorState.editorId}
-        onRequestFocusEditor={handleFocusEditor}
+        onRequestFocusEditor={focusEditorElement}
         onNavigateToEditor={handleNavigateToEditor}
       />
     </div>

@@ -4,26 +4,24 @@ import {
 } from "@simplewebauthn/browser";
 import { hc } from "hono/client";
 import { useAtomValue } from "jotai";
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 import { LoginForm } from "@/components/login-form";
 import type { ServerAppType } from "@/server";
 import { currentUserAtom } from "@/store";
 
 const normalizeUserName = (value: string) => value.trim();
+const getClient = () =>
+  typeof window === "undefined"
+    ? null
+    : hc<ServerAppType>(window.location.origin);
 
 export default function AuthPage({ redirect }: { redirect?: string }) {
   const user = useAtomValue(currentUserAtom);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
-  const client = useMemo(
-    () =>
-      typeof window === "undefined"
-        ? null
-        : hc<ServerAppType>(window.location.origin),
-    [],
-  );
 
-  const handleLogin = useCallback(async () => {
+  const handleLogin = async () => {
+    const client = getClient();
     if (!client || authBusy) return;
     setAuthBusy(true);
     setAuthError(null);
@@ -57,58 +55,55 @@ export default function AuthPage({ redirect }: { redirect?: string }) {
     } finally {
       setAuthBusy(false);
     }
-  }, [authBusy, client, redirect]);
+  };
 
-  const handleSignup = useCallback(
-    async (username: string, invitationCode: string) => {
-      if (!client || authBusy) return;
-      const normalizedUserName = normalizeUserName(username);
-      if (!normalizedUserName) {
-        setAuthError("Enter a username to sign up.");
+  const handleSignup = async (username: string, invitationCode: string) => {
+    const client = getClient();
+    if (!client || authBusy) return;
+    const normalizedUserName = normalizeUserName(username);
+    if (!normalizedUserName) {
+      setAuthError("Enter a username to sign up.");
+      return;
+    }
+    setAuthBusy(true);
+    setAuthError(null);
+    try {
+      const signupRes = await client.api.v1.users.$post({
+        json: { username: normalizedUserName, invitationCode },
+      });
+      if (!signupRes.ok) {
+        const errorData = await signupRes.json().catch(() => null);
+        if (signupRes.status === 409) {
+          setAuthError("Username is already taken.");
+        } else if (errorData?.error === "invalid_invitation_code") {
+          setAuthError("Invalid invitation code. Please check and try again.");
+        } else {
+          setAuthError("Sign up failed.");
+        }
         return;
       }
-      setAuthBusy(true);
-      setAuthError(null);
-      try {
-        const signupRes = await client.api.v1.users.$post({
-          json: { username: normalizedUserName, invitationCode },
-        });
-        if (!signupRes.ok) {
-          const errorData = await signupRes.json().catch(() => null);
-          if (signupRes.status === 409) {
-            setAuthError("Username is already taken.");
-          } else if (errorData?.error === "invalid_invitation_code") {
-            setAuthError(
-              "Invalid invitation code. Please check and try again.",
-            );
-          } else {
-            setAuthError("Sign up failed.");
-          }
-          return;
-        }
-        const { challenge } = await signupRes.json();
-        const response = await startRegistration({
-          optionsJSON: challenge.options,
-        });
-        const verifyRes = await client.api.v1.users["-"].challenge.$post({
-          json: { challengeId: challenge.id, ...response },
-        });
-        if (!verifyRes.ok) {
-          setAuthError("Sign up verification failed.");
-          return;
-        }
-        window.location.reload();
-      } catch (error) {
-        console.error(error);
-        setAuthError("Sign up failed. Please try again.");
-      } finally {
-        setAuthBusy(false);
+      const { challenge } = await signupRes.json();
+      const response = await startRegistration({
+        optionsJSON: challenge.options,
+      });
+      const verifyRes = await client.api.v1.users["-"].challenge.$post({
+        json: { challengeId: challenge.id, ...response },
+      });
+      if (!verifyRes.ok) {
+        setAuthError("Sign up verification failed.");
+        return;
       }
-    },
-    [authBusy, client],
-  );
+      window.location.reload();
+    } catch (error) {
+      console.error(error);
+      setAuthError("Sign up failed. Please try again.");
+    } finally {
+      setAuthBusy(false);
+    }
+  };
 
-  const handleLogout = useCallback(async () => {
+  const handleLogout = async () => {
+    const client = getClient();
     if (!client || authBusy) return;
     setAuthBusy(true);
     setAuthError(null);
@@ -125,7 +120,7 @@ export default function AuthPage({ redirect }: { redirect?: string }) {
     } finally {
       setAuthBusy(false);
     }
-  }, [authBusy, client]);
+  };
 
   return (
     <div className="bg-background flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">

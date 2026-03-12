@@ -1,8 +1,7 @@
 import { hc } from "hono/client";
 import { useAtomValue } from "jotai";
 import { Plus } from "lucide-react";
-import type { ComponentProps } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,9 +20,10 @@ import { currentUserAtom, editorStateAtom } from "@/store";
 
 const MAX_TITLE_LENGTH = 20;
 const TITLE_DIALOG_ID = "title-dialog-8f3a2c7d";
-type FormSubmitEvent = Parameters<
-  NonNullable<ComponentProps<"form">["onSubmit"]>
->[0];
+const getClient = () =>
+  typeof window === "undefined"
+    ? null
+    : hc<ServerAppType>(window.location.origin);
 
 export function Header() {
   const user = useAtomValue(currentUserAtom);
@@ -33,27 +33,18 @@ export function Header() {
   const [titleInput, setTitleInput] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
-  const client = useMemo(
-    () =>
-      typeof window === "undefined"
-        ? null
-        : hc<ServerAppType>(window.location.origin),
-    [],
-  );
 
   // Calculate display title from editor state
-  const displayTitle = useMemo(() => {
-    if (!editorState.editorId) return "";
-    return formatEditorLabel({
-      id: editorState.editorId,
-      createdAt: editorState.createdAt ?? Number.NaN,
-      title: editorState.title,
-    });
-  }, [editorState.editorId, editorState.createdAt, editorState.title]);
+  const displayTitle = editorState.editorId
+    ? formatEditorLabel({
+        id: editorState.editorId,
+        createdAt: editorState.createdAt ?? Number.NaN,
+        title: editorState.title,
+      })
+    : "";
 
-  const currentTitle = editorState.title;
-
-  const handleCreateEditor = useCallback(async () => {
+  const handleCreateEditor = async () => {
+    const client = getClient();
     if (!client || !user || isCreating) return;
     setIsCreating(true);
 
@@ -70,7 +61,6 @@ export function Header() {
       }
 
       const newEditor = await res.json();
-
       // Navigate to the new editor
       window.location.href = `/editor/${newEditor.id}`;
     } catch (fetchError) {
@@ -78,26 +68,23 @@ export function Header() {
     } finally {
       setIsCreating(false);
     }
-  }, [client, user, isCreating]);
+  };
 
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      setIsTitleDialogOpen(open);
-      if (open) {
-        setTitleInput(currentTitle ?? "");
-        setTitleError(null);
-      }
-    },
-    [currentTitle],
-  );
+  const handleOpenChange = (open: boolean) => {
+    setIsTitleDialogOpen(open);
+    if (open) {
+      setTitleInput(editorState.title ?? "");
+      setTitleError(null);
+    }
+  };
 
-  const handleSaveTitle = useCallback(async () => {
+  const handleSaveTitle = async () => {
+    const client = getClient();
     if (!client || !editorState.editorId || !user || isSavingTitle) return;
     setIsSavingTitle(true);
     setTitleError(null);
 
-    const normalizedTitle = titleInput.trim();
-    const nextTitle = normalizedTitle || undefined;
+    const nextTitle = titleInput.trim() || undefined;
 
     try {
       const res = await client.api.v1.editor[":id"].$patch({
@@ -109,7 +96,6 @@ export function Header() {
         setTitleError("Failed to update title.");
         return;
       }
-
       // Reload the page to reflect the updated title
       window.location.reload();
     } catch (error) {
@@ -118,17 +104,10 @@ export function Header() {
     } finally {
       setIsSavingTitle(false);
     }
-  }, [client, editorState.editorId, isSavingTitle, titleInput, user]);
+  };
 
-  const isDeleteAction = Boolean(currentTitle) && titleInput.trim() === "";
+  const isDeleteAction = Boolean(editorState.title) && titleInput.trim() === "";
   const confirmLabel = isDeleteAction ? "Delete title" : "Save title";
-  const handleSubmit = useCallback(
-    (event: FormSubmitEvent) => {
-      event.preventDefault();
-      void handleSaveTitle();
-    },
-    [handleSaveTitle],
-  );
 
   return (
     <header className="h-10 sticky flex items-center gap-2 px-2 py-1 border-b">
@@ -147,7 +126,12 @@ export function Header() {
           </Button>
         </DialogTrigger>
         <DialogContent id={TITLE_DIALOG_ID}>
-          <form onSubmit={handleSubmit}>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSaveTitle();
+            }}
+          >
             <DialogHeader>
               <DialogTitle>Edit title</DialogTitle>
               <DialogDescription>
