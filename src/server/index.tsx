@@ -19,18 +19,7 @@ import { loadComponent } from "@/pages";
 import { renderer } from "@/server/renderer";
 import type { FabPosition, SSRStateType } from "@/store";
 
-const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const FAB_POSITION_COOKIE = "fab_position";
-
-/**
- * Get sidebar open state from cookie
- */
-function getCookieSidebarState(c: Context) {
-  const cookieValue = getCookie(c, SIDEBAR_COOKIE_NAME);
-  if (cookieValue === "true") return true;
-  if (cookieValue === "false") return false;
-  return true; // Default to open
-}
 
 /**
  * Get FAB position from cookie
@@ -75,7 +64,6 @@ const serverApp = new Hono()
         snapshotJSON: undefined,
       },
       currentUserAtom: c.get("user"),
-      sidebarOpenAtom: getCookieSidebarState(c),
       fabPositionAtom: getCookieFabPosition(c),
       documentTitleAtom: undefined,
     };
@@ -133,7 +121,6 @@ const serverApp = new Hono()
       pageAtom: "EditorPage",
       editorStateAtom: editorState,
       currentUserAtom: c.get("user"),
-      sidebarOpenAtom: getCookieSidebarState(c),
       fabPositionAtom: getCookieFabPosition(c),
       documentTitleAtom: title ? `${title} | Unitools` : undefined,
     };
@@ -153,7 +140,6 @@ const serverApp = new Hono()
         snapshotJSON: undefined,
       },
       currentUserAtom: c.get("user"),
-      sidebarOpenAtom: getCookieSidebarState(c),
       fabPositionAtom: getCookieFabPosition(c),
       documentTitleAtom: "Sign In - Unitools",
     };

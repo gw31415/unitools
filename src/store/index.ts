@@ -18,8 +18,6 @@ export const editorStateAtom = atom<EditorState>({
 
 export const currentUserAtom = atom<User | undefined>();
 
-export const sidebarOpenAtom = atom<boolean>(true);
-
 export const fabPositionAtom = atom<FabPosition>({
   horizontal: "left",
   bottom: 16,
@@ -43,7 +41,6 @@ export const ssrAtomState = createSSRAtomState({
   pageAtom,
   editorStateAtom,
   currentUserAtom,
-  sidebarOpenAtom,
   fabPositionAtom,
   documentTitleAtom,
 });
