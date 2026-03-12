@@ -4,7 +4,6 @@ import { Clock } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   EditorSearchDock,
-  FAB_SIZE,
   type SearchDockItem,
 } from "@/components/EditorSearchDock";
 import Markdown from "@/components/Markdown";
@@ -25,9 +24,6 @@ import {
 
 const SIDEBAR_PAGE_SIZE = 20;
 const FOCUS_EDITOR_ON_LOAD_KEY = "focus-editor-on-load";
-// FABの位置に基づいて下部余白を計算 (FAB_SIZE + bottom-4 + 追加の安全マージン)
-const FAB_BOTTOM_MARGIN = 16; // bottom-4
-const FAB_CLEARANCE = FAB_SIZE + FAB_BOTTOM_MARGIN + 16; // 追加の安全マージン16px
 
 export default function DocumentPage() {
   const editorState = useAtomValue(editorStateAtom);
@@ -136,7 +132,6 @@ export default function DocumentPage() {
                 readonly={!user}
                 tabIndex={-1}
                 className="w-full py-2 flex-1"
-                style={{ paddingBottom: `${FAB_CLEARANCE}px` }}
                 aria-label="Main content editor/viewer of this page"
               />
             </div>
