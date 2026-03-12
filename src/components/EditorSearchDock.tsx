@@ -33,6 +33,7 @@ export const FAB_SIZE = SEARCH_BUTTON_SIZE + DOCK_SPACING * 2;
 const DOCK_MAX_WIDTH = 672;
 const CLOSE_ANIMATION_MS = 300;
 const FAB_MARGIN = 16;
+const FAB_BOTTOM_SNAP_THRESHOLD = FAB_MARGIN * 2;
 
 function getClientViewportSize(): { width: number; height: number } {
   if (typeof window === "undefined") {
@@ -277,13 +278,16 @@ export function EditorSearchDock({
     // Snap to nearest edge (left or right)
     const viewportCenter = viewport.width / 2;
     const currentLeft = currentVisualPosition.left;
+    const rawBottom = clampFabBottom(
+      viewport.height - FAB_SIZE - currentVisualPosition.top,
+      viewport.height,
+    );
+    const snappedBottom =
+      rawBottom <= FAB_BOTTOM_SNAP_THRESHOLD ? FAB_MARGIN : rawBottom;
     const snappedPosition: FabPosition = {
       horizontal:
         currentLeft + FAB_SIZE / 2 < viewportCenter ? "left" : "right",
-      bottom: clampFabBottom(
-        viewport.height - FAB_SIZE - currentVisualPosition.top,
-        viewport.height,
-      ),
+      bottom: snappedBottom,
     };
     setFabPosition(snappedPosition);
     setFabPositionCookie(snappedPosition);
