@@ -157,6 +157,21 @@ export function EditorSearchDock({
     ) {
       setFabPositionCookie(clamped);
     }
+
+    if (rightAnchorTimerRef.current !== null) {
+      window.clearTimeout(rightAnchorTimerRef.current);
+      rightAnchorTimerRef.current = null;
+    }
+    if (clamped.horizontal === "right") {
+      // Use right anchor only for first paint, then normalize to left-based positioning.
+      setAnchorMode("right");
+      rightAnchorTimerRef.current = window.setTimeout(() => {
+        setAnchorMode("left");
+        rightAnchorTimerRef.current = null;
+      }, 0);
+    } else {
+      setAnchorMode("left");
+    }
   }, [ssrFabPosition]);
   const normalizedQuery = value.trim().toLowerCase();
   const openSearch = useCallback((selectText = true) => {
@@ -292,9 +307,10 @@ export function EditorSearchDock({
     setFabPosition(snappedPosition);
     setFabPositionCookie(snappedPosition);
     if (snappedPosition.horizontal === "right") {
-      setAnchorMode("left");
+      // Keep right anchor briefly, then normalize to left-based positioning.
+      setAnchorMode("right");
       rightAnchorTimerRef.current = window.setTimeout(() => {
-        setAnchorMode("right");
+        setAnchorMode("left");
         rightAnchorTimerRef.current = null;
       }, CLOSE_ANIMATION_MS);
     } else {
