@@ -269,15 +269,18 @@ export function EditorSearchDock({
       const newX = clientX - dragOffsetRef.current.x;
       const newY = clientY - dragOffsetRef.current.y;
       const viewport = getClientViewportSize();
+      const currentFabLeft = getFabLeft(fabPosition.horizontal, viewport.width);
 
       // Constrain to viewport bounds with margin
       const maxX = viewport.width - FAB_SIZE - FAB_MARGIN;
       const maxY = viewport.height - FAB_SIZE - FAB_MARGIN;
-      const clampedX = Math.max(FAB_MARGIN, Math.min(maxX, newX));
+      const clampedX = open
+        ? currentFabLeft
+        : Math.max(FAB_MARGIN, Math.min(maxX, newX));
       const clampedY = Math.max(FAB_MARGIN, Math.min(maxY, newY));
       setDragVisualPosition({ left: clampedX, top: clampedY });
     },
-    [isDragging],
+    [isDragging, open, fabPosition.horizontal],
   );
 
   const handleDragEnd = useCallback(() => {
@@ -302,8 +305,11 @@ export function EditorSearchDock({
     const snappedBottom =
       rawBottom <= FAB_BOTTOM_SNAP_THRESHOLD ? FAB_MARGIN : rawBottom;
     const snappedPosition: FabPosition = {
-      horizontal:
-        currentLeft + FAB_SIZE / 2 < viewportCenter ? "left" : "right",
+      horizontal: open
+        ? fabPosition.horizontal
+        : currentLeft + FAB_SIZE / 2 < viewportCenter
+          ? "left"
+          : "right",
       bottom: snappedBottom,
     };
     setFabPosition(snappedPosition);
@@ -311,7 +317,13 @@ export function EditorSearchDock({
     // Keep drag-release snap animations on `left` so both directions interpolate.
     clearRightAnchorTimer();
     setAnchorMode("left");
-  }, [isDragging, dragVisualPosition, clearRightAnchorTimer]);
+  }, [
+    isDragging,
+    dragVisualPosition,
+    clearRightAnchorTimer,
+    open,
+    fabPosition.horizontal,
+  ]);
 
   // Global drag move and end handlers
   useEffect(() => {
@@ -429,13 +441,9 @@ export function EditorSearchDock({
     : dragVisualPosition
       ? dragVisualPosition.left
       : closedDockLeft;
-  const dockBottom =
-    dragVisualPosition && !open
-      ? Math.max(
-          FAB_MARGIN,
-          viewport.height - FAB_SIZE - dragVisualPosition.top,
-        )
-      : closedDockBottom;
+  const dockBottom = dragVisualPosition
+    ? Math.max(FAB_MARGIN, viewport.height - FAB_SIZE - dragVisualPosition.top)
+    : closedDockBottom;
 
   return (
     <div
