@@ -38,11 +38,11 @@ function focusEditorElement() {
     '[contenteditable="true"]',
   ) as HTMLElement | null;
   if (editable) {
-    editable.focus();
+    editable.focus({ preventScroll: true });
     return;
   }
   if (root instanceof HTMLElement) {
-    root.focus();
+    root.focus({ preventScroll: true });
   }
 }
 

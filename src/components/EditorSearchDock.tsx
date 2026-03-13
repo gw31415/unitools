@@ -131,6 +131,7 @@ export function EditorSearchDock({
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const hasActuallyMovedRef = useRef(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const searchButtonRef = useRef<HTMLButtonElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
   const navigationTimerRef = useRef<number | null>(null);
   const suppressOpenOnChangeRef = useRef(false);
@@ -196,19 +197,26 @@ export function EditorSearchDock({
             formatEditorLabel(item).toLowerCase().includes(normalizedQuery),
           )
           .slice(0, 6);
-  const closeSearch = () => {
+  const closeSearch = (options?: { restoreDockButtonFocus?: boolean }) => {
     setOpen(false);
+    if (options?.restoreDockButtonFocus === false) {
+      return;
+    }
+    if (searchButtonRef.current) {
+      searchButtonRef.current.focus({ preventScroll: true });
+      return;
+    }
     inputRef.current?.blur();
   };
   const selectItem = (item: SearchDockItem, focusEditor = true) => {
     if (item.id === currentEditorId) {
-      closeSearch();
+      closeSearch({ restoreDockButtonFocus: !focusEditor });
       if (focusEditor) {
         onRequestFocusEditor();
       }
       return;
     }
-    closeSearch();
+    closeSearch({ restoreDockButtonFocus: !focusEditor });
     if (navigationTimerRef.current !== null) {
       window.clearTimeout(navigationTimerRef.current);
     }
@@ -546,6 +554,7 @@ export function EditorSearchDock({
         }}
       >
         <Button
+          ref={searchButtonRef}
           type="button"
           size="icon"
           variant="ghost"
@@ -634,7 +643,7 @@ export function EditorSearchDock({
               if (e.key === "Escape" || isCtrlEscape) {
                 e.preventDefault();
                 suppressOpenOnChangeRef.current = true;
-                closeSearch();
+                closeSearch({ restoreDockButtonFocus: false });
                 onRequestFocusEditor();
               }
             }}
