@@ -332,40 +332,37 @@ function MarkdownEditor({
   const editorRef = useRef<Editor>(null);
 
   useEffect(() => {
+    const baseHandlePaste = editorOpts?.editorProps?.handlePaste;
     editorRef.current = createEditor({
+      ...editorOpts,
       element: { mount: editorContainerRef.current! },
       editable,
-      ...editorOpts,
+      editorProps: {
+        ...(editorOpts?.editorProps ?? {}),
+        handlePaste: (view, event, slice) => {
+          const items = event.clipboardData?.items;
+          if (items) {
+            for (const item of items) {
+              if (!item.type.startsWith("image/")) continue;
+              event.preventDefault();
+              const file = item.getAsFile();
+              const currentEditor = editorRef.current;
+              if (file && currentEditor) {
+                void uploadImageAndInsert(file, currentEditor, editorId);
+              }
+              return true;
+            }
+          }
+          return baseHandlePaste?.(view, event, slice) ?? false;
+        },
+      },
     });
 
     return () => {
       editorRef.current?.destroy();
       editorRef.current = null;
     };
-  }, [editable, editorOpts]);
-
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || !editable) return;
-
-    const handlePaste = (event: ClipboardEvent) => {
-      const items = event.clipboardData?.items;
-      if (!items) return;
-
-      for (const item of items) {
-        if (!item.type.startsWith("image/")) continue;
-        event.preventDefault();
-        const file = item.getAsFile();
-        if (file) void uploadImageAndInsert(file, editor, editorId);
-        return;
-      }
-    };
-
-    editor.view.dom.addEventListener("paste", handlePaste);
-    return () => {
-      editor.view.dom.removeEventListener("paste", handlePaste);
-    };
-  }, [editable, editorId]);
+  }, [editable, editorId, editorOpts]);
 
   useEffect(() => {
     const editor = editorRef.current;
