@@ -148,9 +148,8 @@ export default function DocumentPage() {
                     "Use the search dock below to open an article."
                   ) : (
                     <>
-                      <a href="/auth">Login</a>
-                      is required to edit articles. You can view articles from
-                      the search dock.
+                      <a href="/auth">Login</a> is required to edit articles.
+                      You can view articles from the search dock.
                     </>
                   )}
                 </EmptyDescription>
