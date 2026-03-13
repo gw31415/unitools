@@ -15,12 +15,15 @@ import { type FabPosition, fabPositionAtom } from "@/store";
 const FAB_POSITION_COOKIE = "fab_position";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
-function setFabPositionCookie(position: FabPosition): void {
+async function setFabPositionCookie(position: FabPosition) {
   if (typeof window === "undefined") return;
-  const cookieStore = globalThis.cookieStore;
-  if (!cookieStore) return;
+  const cookieStore = window.cookieStore ?? globalThis.cookieStore;
+  if (!cookieStore) {
+    console.warn("Cookie Store API not available, cannot persist FAB position");
+    return;
+  }
 
-  void cookieStore.set({
+  await cookieStore.set({
     name: FAB_POSITION_COOKIE,
     value: encodeURIComponent(JSON.stringify(position)),
     path: "/",
