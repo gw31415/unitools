@@ -137,3 +137,9 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .frosted-bg {
+    @apply bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80;
+  }
+}

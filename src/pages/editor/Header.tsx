@@ -110,7 +110,7 @@ export function Header() {
   const confirmLabel = isDeleteAction ? "Delete title" : "Save title";
 
   return (
-    <header className="sticky top-0 z-30 h-10 shrink-0 flex items-center gap-2 px-2 py-1 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
+    <header className="frosted-bg sticky top-0 z-30 h-10 shrink-0 items-center gap-2 border-b px-2 py-1 flex">
       <Dialog open={isTitleDialogOpen} onOpenChange={handleOpenChange}>
         <DialogTrigger asChild aria-controls={TITLE_DIALOG_ID}>
           <Button
