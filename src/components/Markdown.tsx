@@ -292,7 +292,7 @@ async function uploadImageAndInsert(
     // Replace placeholder with uploaded image
     updatePlaceholder(editor, uploadToken, (tr, pos) => {
       tr.setNodeMarkup(pos, undefined, {
-        src: dimensions ? createGrayPreviewSrc(dimensions) : result.url,
+        src: result.url,
         dataSrc: result.url,
         alt: file.name,
         uploading: false,
