@@ -340,18 +340,16 @@ function MarkdownEditor({
       editorProps: {
         ...(editorOpts?.editorProps ?? {}),
         handlePaste: (view, event, slice) => {
-          const items = event.clipboardData?.items;
-          if (items) {
-            for (const item of items) {
-              if (!item.type.startsWith("image/")) continue;
-              event.preventDefault();
-              const file = item.getAsFile();
-              const currentEditor = editorRef.current;
-              if (file && currentEditor) {
-                void uploadImageAndInsert(file, currentEditor, editorId);
-              }
-              return true;
+          const items = event.clipboardData?.items ?? [];
+          for (const item of items) {
+            if (!item.type.startsWith("image/")) continue;
+            event.preventDefault();
+            const file = item.getAsFile();
+            const currentEditor = editorRef.current;
+            if (file && currentEditor) {
+              void uploadImageAndInsert(file, currentEditor, editorId);
             }
+            return true;
           }
           return baseHandlePaste?.(view, event, slice) ?? false;
         },
