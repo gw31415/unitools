@@ -122,7 +122,7 @@ export default function DocumentPage() {
       >
         {editorState.editorId ? (
           <div className="container mx-auto w-full px-4 sm:px-6 lg:px-8 h-full flex flex-col">
-            <div className="mx-auto w-full max-w-4xl h-full flex flex-col overflow-y-auto">
+            <div className="mx-auto w-full max-w-4xl h-full flex flex-col">
               <Markdown
                 editorId={editorState.editorId}
                 bootstrap={bootstrap}

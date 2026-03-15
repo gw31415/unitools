@@ -231,7 +231,7 @@ function MarkdownView({
       dangerouslySetInnerHTML={{ __html: html }}
       {...props}
       className={cn(
-        "tiptap w-full min-w-0 max-w-full overflow-x-auto",
+        "tiptap w-full min-w-0 max-w-full overflow-visible",
         className,
       )}
     />
@@ -389,7 +389,7 @@ function MarkdownEditor({
       ref={editorContainerRef}
       {...props}
       className={cn(
-        "tiptap w-full min-w-0 max-w-full overflow-x-auto",
+        "tiptap w-full min-w-0 max-w-full overflow-visible",
         className,
       )}
     />
