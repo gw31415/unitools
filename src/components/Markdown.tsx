@@ -13,16 +13,14 @@ import { cn } from "@/lib/utils";
 type PartialEditorOptions = Partial<ConstructorParameters<typeof Editor>[0]>;
 const UPLOADING_ALT_PREFIX = "uploading:";
 
-type ImageDimensions = {
+interface ImageDimensions {
   width: number;
   height: number;
-};
+}
 
 // Create gray preview SVG for lazy loading
-function createGrayPreviewSrc({ width, height }: ImageDimensions): string {
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${width} ${height}'><defs><linearGradient id='g' x1='-1' x2='0'><stop stop-color='%239ca3af' stop-opacity='.28'/><stop offset='.5' stop-color='%239ca3af' stop-opacity='.44'/><stop offset='1' stop-color='%239ca3af' stop-opacity='.28'/><animate attributeName='x1' from='-1' to='1' dur='1.2s' repeatCount='indefinite'/><animate attributeName='x2' from='0' to='2' dur='1.2s' repeatCount='indefinite'/></linearGradient></defs><rect width='100%' height='100%' fill='url(%23g)'/></svg>`;
-  return `data:image/svg+xml,${svg}`;
-}
+const createGrayPreviewSrc = ({ width, height }: ImageDimensions) =>
+  `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${width} ${height}'><defs><linearGradient id='g' x1='-1' x2='0'><stop stop-color='%239ca3af' stop-opacity='.28'/><stop offset='.5' stop-color='%239ca3af' stop-opacity='.44'/><stop offset='1' stop-color='%239ca3af' stop-opacity='.28'/><animate attributeName='x1' from='-1' to='1' dur='1.2s' repeatCount='indefinite'/><animate attributeName='x2' from='0' to='2' dur='1.2s' repeatCount='indefinite'/></linearGradient></defs><rect width='100%' height='100%' fill='url(%23g)'/></svg>`;
 
 // Get image dimensions from file
 function getImageDimensions(file: File): Promise<ImageDimensions | null> {
