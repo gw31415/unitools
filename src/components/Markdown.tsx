@@ -165,13 +165,20 @@ function setupLazyLoading(container: HTMLElement): () => void {
   }
 
   for (const image of images) {
-    if (image.dataset.lazyPrepared === "true") continue;
-
     const alt = image.getAttribute("alt") ?? "";
     if (alt.startsWith(UPLOADING_ALT_PREFIX)) continue;
 
     const dataSrc = image.getAttribute("data-src");
     if (!dataSrc || dataSrc.startsWith("data:")) continue;
+
+    const alreadyPrepared = image.dataset.lazyPrepared === "true";
+    const alreadyLoaded = image.getAttribute("src") === dataSrc;
+    if (alreadyLoaded) {
+      image.dataset.lazyPrepared = "true";
+      image.classList.remove("lazy-image-pending");
+      continue;
+    }
+    if (alreadyPrepared && alreadyLoaded) continue;
 
     image.dataset.lazyPrepared = "true";
     image.classList.add("lazy-image-pending");
@@ -201,6 +208,52 @@ function setupLazyLoading(container: HTMLElement): () => void {
     for (const cleanup of cleanupFunctions) cleanup();
     observer?.disconnect();
   };
+}
+
+function normalizeEditorImagesForLazyLoading(
+  editor: Editor,
+  skipDataSrcs?: ReadonlySet<string>,
+): void {
+  let tr = editor.state.tr;
+  let changed = false;
+
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name !== "image") return;
+
+    const attrs = node.attrs as Record<string, unknown>;
+    const alt = typeof attrs.alt === "string" ? attrs.alt : "";
+    if (alt.startsWith(UPLOADING_ALT_PREFIX)) return;
+
+    const src = typeof attrs.src === "string" ? attrs.src : "";
+    const dataSrc =
+      typeof attrs.dataSrc === "string" && attrs.dataSrc.length > 0
+        ? attrs.dataSrc
+        : src;
+    if (!dataSrc || dataSrc.startsWith("data:")) return;
+    if (skipDataSrcs?.has(dataSrc)) return;
+
+    const width =
+      typeof attrs.width === "number" && attrs.width > 0 ? attrs.width : null;
+    const height =
+      typeof attrs.height === "number" && attrs.height > 0
+        ? attrs.height
+        : null;
+    if (!width || !height) return;
+
+    const placeholderSrc = createGrayPreviewSrc({ width, height });
+    if (src === placeholderSrc && attrs.dataSrc === dataSrc) return;
+
+    tr = tr.setNodeMarkup(pos, undefined, {
+      ...attrs,
+      src: placeholderSrc,
+      dataSrc,
+    });
+    changed = true;
+  });
+
+  if (changed) {
+    editor.view.dispatch(tr);
+  }
 }
 
 // Decorate content with lazy loading attributes
@@ -359,6 +412,7 @@ async function uploadImageAndInsert(
   file: File,
   editor: Editor,
   editorId: string,
+  onUploaded?: (url: string) => void,
 ) {
   const { from } = editor.state.selection;
   const dimensions = await getImageDimensions(file);
@@ -394,6 +448,7 @@ async function uploadImageAndInsert(
         height: dimensions?.height ?? null,
       });
     });
+    onUploaded?.(result.url);
   } catch (error) {
     // Remove placeholder on error
     updatePlaceholder(editor, uploadToken, (tr, pos) => {
@@ -415,6 +470,7 @@ async function uploadImageUrlAndInsert(
   imageUrl: string,
   editor: Editor,
   editorId: string,
+  onUploaded?: (url: string) => void,
 ) {
   try {
     const response = await fetch(imageUrl);
@@ -434,7 +490,7 @@ async function uploadImageUrlAndInsert(
       type: fileType,
     });
 
-    await uploadImageAndInsert(file, editor, editorId);
+    await uploadImageAndInsert(file, editor, editorId, onUploaded);
   } catch (error) {
     console.error("Failed to upload pasted image URL. Falling back to URL.", {
       imageUrl,
@@ -474,10 +530,11 @@ function MarkdownEditor({
 } & HTMLAttributes<HTMLDivElement>) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Editor>(null);
+  const noLazyDataSrcsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const baseHandlePaste = editorOpts?.editorProps?.handlePaste;
-    editorRef.current = createEditor({
+    const editor = createEditor({
       ...editorOpts,
       element: { mount: editorContainerRef.current! },
       editable,
@@ -491,7 +548,9 @@ function MarkdownEditor({
             const file = item.getAsFile();
             const currentEditor = editorRef.current;
             if (file && currentEditor) {
-              void uploadImageAndInsert(file, currentEditor, editorId);
+              void uploadImageAndInsert(file, currentEditor, editorId, (url) =>
+                noLazyDataSrcsRef.current.add(url),
+              );
             }
             return true;
           }
@@ -506,7 +565,12 @@ function MarkdownEditor({
             if (currentEditor) {
               void Promise.all(
                 imageUrls.map((imageUrl) =>
-                  uploadImageUrlAndInsert(imageUrl, currentEditor, editorId),
+                  uploadImageUrlAndInsert(
+                    imageUrl,
+                    currentEditor,
+                    editorId,
+                    (url) => noLazyDataSrcsRef.current.add(url),
+                  ),
                 ),
               );
             }
@@ -517,6 +581,8 @@ function MarkdownEditor({
         },
       },
     });
+    editorRef.current = editor;
+    normalizeEditorImagesForLazyLoading(editor, noLazyDataSrcsRef.current);
 
     return () => {
       editorRef.current?.destroy();
@@ -532,6 +598,7 @@ function MarkdownEditor({
     let cleanup = setupLazyLoading(container);
 
     const refresh = () => {
+      normalizeEditorImagesForLazyLoading(editor, noLazyDataSrcsRef.current);
       cleanup();
       cleanup = setupLazyLoading(container);
     };
