@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as imageService from "@/lib/imageService";
-import Markdown from "../Markdown";
+import Markdown, { extractImageUrlsFromPastePayload } from "../Markdown";
 
 // Mock dependencies
 vi.mock("@/lib/base64", () => ({
@@ -37,6 +37,50 @@ describe("Markdown Component", () => {
       document: global.document,
       location: { origin: "http://localhost" },
     } as unknown as Window & typeof globalThis;
+  });
+
+  describe("extractImageUrlsFromPastePayload", () => {
+    it("extracts image src values from pasted html", () => {
+      const result = extractImageUrlsFromPastePayload({
+        html: `
+          <div>
+            <img src="https://example.com/a.png" />
+            <img src="data:image/png;base64,abc" />
+            <img src="/relative/path.webp" />
+          </div>
+        `,
+      });
+
+      expect(result).toContain("https://example.com/a.png");
+      expect(result).toContain("http://localhost/relative/path.webp");
+      expect(result.some((url) => url.startsWith("data:image/"))).toBe(false);
+    });
+
+    it("extracts direct image url from plain text", () => {
+      const result = extractImageUrlsFromPastePayload({
+        text: "https://example.com/path/to/image.jpg?size=large",
+      });
+
+      expect(result).toEqual([
+        "https://example.com/path/to/image.jpg?size=large",
+      ]);
+    });
+
+    it("extracts markdown image urls from plain text", () => {
+      const result = extractImageUrlsFromPastePayload({
+        text: "![alt](https://example.com/img/markdown.png)",
+      });
+
+      expect(result).toContain("https://example.com/img/markdown.png");
+    });
+
+    it("ignores non-image plain text urls", () => {
+      const result = extractImageUrlsFromPastePayload({
+        text: "https://example.com/docs",
+      });
+
+      expect(result).toEqual([]);
+    });
   });
 
   it("should render MarkdownView in SSR mode", () => {

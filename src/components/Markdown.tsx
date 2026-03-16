@@ -18,6 +18,25 @@ interface ImageDimensions {
   height: number;
 }
 
+const IMAGE_URL_EXTENSIONS = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "avif",
+  "svg",
+]);
+
+const MIME_TYPE_TO_EXTENSION: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/avif": "avif",
+  "image/svg+xml": "svg",
+};
+
 // Create gray preview SVG for lazy loading
 const createGrayPreviewSrc = ({ width, height }: ImageDimensions) =>
   `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${width} ${height}'><defs><linearGradient id='g' x1='-1' x2='0'><stop stop-color='%239ca3af' stop-opacity='.28'/><stop offset='.5' stop-color='%239ca3af' stop-opacity='.44'/><stop offset='1' stop-color='%239ca3af' stop-opacity='.28'/><animate attributeName='x1' from='-1' to='1' dur='1.2s' repeatCount='indefinite'/><animate attributeName='x2' from='0' to='2' dur='1.2s' repeatCount='indefinite'/></linearGradient></defs><rect width='100%' height='100%' fill='url(%23g)'/></svg>`;
@@ -42,6 +61,83 @@ function getImageDimensions(file: File): Promise<ImageDimensions | null> {
 
     image.src = objectUrl;
   });
+}
+
+function tryNormalizeHttpUrl(value: string): string | null {
+  if (!value) return null;
+
+  try {
+    const normalized = new URL(value, window.location.origin);
+    if (normalized.protocol !== "http:" && normalized.protocol !== "https:") {
+      return null;
+    }
+    return normalized.toString();
+  } catch {
+    return null;
+  }
+}
+
+function hasLikelyImageExtension(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    const lastSegment = url.pathname.split("/").pop() ?? "";
+    const extension = lastSegment.split(".").pop()?.toLowerCase();
+    return !!extension && IMAGE_URL_EXTENSIONS.has(extension);
+  } catch {
+    return false;
+  }
+}
+
+export function extractImageUrlsFromPastePayload({
+  html,
+  text,
+}: {
+  html?: string;
+  text?: string;
+}): string[] {
+  const out = new Set<string>();
+
+  if (html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const imageNodes = doc.querySelectorAll("img[src]");
+    for (const image of imageNodes) {
+      const src = image.getAttribute("src");
+      if (!src) continue;
+      const normalized = tryNormalizeHttpUrl(src);
+      if (normalized) out.add(normalized);
+    }
+  }
+
+  if (text) {
+    const trimmedText = text.trim();
+    const directUrl = tryNormalizeHttpUrl(trimmedText);
+    if (directUrl && hasLikelyImageExtension(directUrl)) {
+      out.add(directUrl);
+    }
+
+    const markdownImagePattern = /!\[[^\]]*]\((https?:\/\/[^)\s]+)\)/g;
+    for (const match of trimmedText.matchAll(markdownImagePattern)) {
+      const candidate = match[1];
+      if (!candidate) continue;
+      const normalized = tryNormalizeHttpUrl(candidate);
+      if (normalized) out.add(normalized);
+    }
+  }
+
+  return Array.from(out);
+}
+
+function fileNameFromImageUrl(imageUrl: string, mimeType: string): string {
+  try {
+    const url = new URL(imageUrl);
+    const lastSegment = decodeURIComponent(url.pathname.split("/").pop() ?? "");
+    if (lastSegment) return lastSegment;
+  } catch {
+    // Ignore URL parsing failure; fallback below.
+  }
+
+  const extension = MIME_TYPE_TO_EXTENSION[mimeType] ?? "bin";
+  return `pasted-image.${extension}`;
 }
 
 // Setup lazy loading for images
@@ -315,6 +411,56 @@ async function uploadImageAndInsert(
   }
 }
 
+async function uploadImageUrlAndInsert(
+  imageUrl: string,
+  editor: Editor,
+  editorId: string,
+) {
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image URL: ${response.status}`);
+    }
+
+    const contentType =
+      (response.headers.get("content-type") ?? "").split(";")[0] ?? "";
+    if (!contentType.startsWith("image/")) {
+      throw new Error(`Fetched resource is not image content: ${contentType}`);
+    }
+
+    const blob = await response.blob();
+    const fileType = blob.type || contentType;
+    const file = new File([blob], fileNameFromImageUrl(imageUrl, fileType), {
+      type: fileType,
+    });
+
+    await uploadImageAndInsert(file, editor, editorId);
+  } catch (error) {
+    console.error("Failed to upload pasted image URL. Falling back to URL.", {
+      imageUrl,
+      editorId,
+      error,
+    });
+
+    const { from } = editor.state.selection;
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(from, {
+        type: "image",
+        attrs: {
+          src: imageUrl,
+          dataSrc: imageUrl,
+          alt: fileNameFromImageUrl(imageUrl, ""),
+          uploading: false,
+          width: null,
+          height: null,
+        },
+      })
+      .run();
+  }
+}
+
 function MarkdownEditor({
   editorOpts,
   editable,
@@ -349,6 +495,24 @@ function MarkdownEditor({
             }
             return true;
           }
+
+          const imageUrls = extractImageUrlsFromPastePayload({
+            html: event.clipboardData?.getData("text/html"),
+            text: event.clipboardData?.getData("text/plain"),
+          });
+          if (imageUrls.length > 0) {
+            event.preventDefault();
+            const currentEditor = editorRef.current;
+            if (currentEditor) {
+              void Promise.all(
+                imageUrls.map((imageUrl) =>
+                  uploadImageUrlAndInsert(imageUrl, currentEditor, editorId),
+                ),
+              );
+            }
+            return true;
+          }
+
           return baseHandlePaste?.(view, event, slice) ?? false;
         },
       },
