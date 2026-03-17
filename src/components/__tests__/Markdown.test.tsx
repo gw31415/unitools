@@ -180,6 +180,54 @@ describe("Markdown Component", () => {
     setSsrForTest(originalSSR);
   });
 
+  it("should add ProseMirror trailingBreak when paragraph starts with image in list item", () => {
+    const originalSSR = import.meta.env.SSR;
+    setSsrForTest(true);
+
+    const { container } = render(
+      <Markdown
+        editorId="test-editor"
+        bootstrap={{
+          snapshotJSON: {
+            type: "doc",
+            content: [
+              {
+                type: "bulletList",
+                content: [
+                  {
+                    type: "listItem",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [
+                          {
+                            type: "image",
+                            attrs: {
+                              src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><rect width='1' height='1'/></svg>",
+                              alt: "Test image",
+                            },
+                          },
+                          { type: "text", text: "caption" },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        }}
+      />,
+    );
+
+    const html = container.querySelector(".tiptap")?.innerHTML;
+    expect(html).toContain("<li><p><img");
+    expect(html).toContain("caption");
+    expect(html).toContain('<br class="ProseMirror-trailingBreak"></p>');
+
+    setSsrForTest(originalSSR);
+  });
+
   it("should handle image with dataSrc attribute", () => {
     const originalSSR = import.meta.env.SSR;
     setSsrForTest(true);

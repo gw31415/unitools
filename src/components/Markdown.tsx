@@ -331,7 +331,11 @@ function decorateImageOnlyParagraphTrailingBreak(
   if (next.type !== "paragraph") return next;
 
   const paragraphContent = next.content ?? [];
-  if (paragraphContent.length !== 1 || paragraphContent[0]?.type !== "image") {
+  const startsWithImage = paragraphContent[0]?.type === "image";
+  const hasTrailingBreak = paragraphContent.some(
+    (node) => node?.type === "trailingBreak",
+  );
+  if (!startsWithImage || hasTrailingBreak) {
     return next;
   }
 
