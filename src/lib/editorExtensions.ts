@@ -285,13 +285,13 @@ const CustomImage = Image.extend({
 
           const attrs = currentNode.attrs as Record<string, unknown>;
           const width =
-            positiveNumber(attrs.width) ||
             image.clientWidth ||
+            positiveNumber(attrs.width) ||
             image.naturalWidth ||
             MIN_IMAGE_SIZE;
           const height =
-            positiveNumber(attrs.height) ||
             image.clientHeight ||
+            positiveNumber(attrs.height) ||
             image.naturalHeight ||
             MIN_IMAGE_SIZE;
           const originalWidth = originalSize?.width || width;
