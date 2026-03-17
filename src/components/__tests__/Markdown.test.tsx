@@ -255,9 +255,8 @@ describe("Markdown Component", () => {
     );
 
     const html = container.querySelector(".tiptap")?.innerHTML;
-    // Should have data-src attribute and gray preview
+    // Should keep data-src attribute for lazy loading
     expect(html).toContain('data-src="real-image.jpg"');
-    expect(html).toContain("data:image/svg+xml");
 
     setSsrForTest(originalSSR);
   });

@@ -1,10 +1,14 @@
 import { Editor, type JSONContent, Node } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
-import { renderToHTMLString } from "@tiptap/static-renderer";
+import { renderToReactElement } from "@tiptap/static-renderer/pm/react";
 import type { HTMLAttributes } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
+import LazyImage, {
+  createGrayPreviewSrc,
+  setupLazyLoadingImages,
+} from "@/components/Image";
 import { b64ToUint8Array } from "@/lib/base64";
 import { baseExtensions } from "@/lib/editorExtensions";
 import { uploadImage as uploadImageService } from "@/lib/imageService";
@@ -37,15 +41,11 @@ const MIME_TYPE_TO_EXTENSION: Record<string, string> = {
   "image/svg+xml": "svg",
 };
 
-// Create gray preview SVG for lazy loading
-const createGrayPreviewSrc = ({ width, height }: ImageDimensions) =>
-  `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${width} ${height}'><defs><linearGradient id='g' x1='-1' x2='0'><stop stop-color='%239ca3af' stop-opacity='.28'/><stop offset='.5' stop-color='%239ca3af' stop-opacity='.44'/><stop offset='1' stop-color='%239ca3af' stop-opacity='.28'/><animate attributeName='x1' from='-1' to='1' dur='1.2s' repeatCount='indefinite'/><animate attributeName='x2' from='0' to='2' dur='1.2s' repeatCount='indefinite'/></linearGradient></defs><rect width='100%' height='100%' fill='url(%23g)'/></svg>`;
-
 // Get image dimensions from file
 function getImageDimensions(file: File): Promise<ImageDimensions | null> {
   return new Promise((resolve) => {
     const objectUrl = URL.createObjectURL(file);
-    const image = new Image();
+    const image = new window.Image();
     const finish = (result: ImageDimensions | null) => {
       URL.revokeObjectURL(objectUrl);
       resolve(result);
@@ -140,76 +140,6 @@ function fileNameFromImageUrl(imageUrl: string, mimeType: string): string {
   return `pasted-image.${extension}`;
 }
 
-// Setup lazy loading for images
-function setupLazyLoading(container: HTMLElement): () => void {
-  const images = Array.from(container.querySelectorAll("img"));
-  const cleanupFunctions: Array<() => void> = [];
-
-  let observer: IntersectionObserver | null = null;
-  if (typeof window !== "undefined" && "IntersectionObserver" in window) {
-    observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          const image = entry.target as HTMLImageElement;
-          const dataSrc = image.getAttribute("data-src");
-          if (dataSrc) {
-            image.setAttribute("src", dataSrc);
-            image.classList.remove("lazy-image-pending");
-          }
-          observer?.unobserve(image);
-        }
-      },
-      { rootMargin: "600px" },
-    );
-  }
-
-  for (const image of images) {
-    const alt = image.getAttribute("alt") ?? "";
-    if (alt.startsWith(UPLOADING_ALT_PREFIX)) continue;
-
-    const dataSrc = image.getAttribute("data-src");
-    if (!dataSrc || dataSrc.startsWith("data:")) continue;
-
-    const alreadyPrepared = image.dataset.lazyPrepared === "true";
-    const alreadyLoaded = image.getAttribute("src") === dataSrc;
-    if (alreadyLoaded) {
-      image.dataset.lazyPrepared = "true";
-      image.classList.remove("lazy-image-pending");
-      continue;
-    }
-    if (alreadyPrepared && alreadyLoaded) continue;
-
-    image.dataset.lazyPrepared = "true";
-    image.classList.add("lazy-image-pending");
-
-    const handleLoad = () => {
-      if (image.getAttribute("src") !== image.getAttribute("data-src")) {
-        return;
-      }
-      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
-        image.setAttribute("width", String(image.naturalWidth));
-        image.setAttribute("height", String(image.naturalHeight));
-      }
-    };
-
-    image.addEventListener("load", handleLoad);
-    cleanupFunctions.push(() => image.removeEventListener("load", handleLoad));
-
-    if (observer) {
-      observer.observe(image);
-      cleanupFunctions.push(() => observer.unobserve(image));
-    } else {
-      image.setAttribute("src", dataSrc);
-    }
-  }
-
-  return () => {
-    for (const cleanup of cleanupFunctions) cleanup();
-    observer?.disconnect();
-  };
-}
-
 function normalizeEditorImagesForLazyLoading(
   editor: Editor,
   skipDataSrcs?: ReadonlySet<string>,
@@ -254,49 +184,6 @@ function normalizeEditorImagesForLazyLoading(
   if (changed) {
     editor.view.dispatch(tr);
   }
-}
-
-// Decorate content with lazy loading attributes
-function decorateLazyImages(content: JSONContent): JSONContent {
-  if (content.type === "image") {
-    const attrs = (content.attrs ?? {}) as Record<string, unknown>;
-    const alt = typeof attrs.alt === "string" ? attrs.alt : "";
-
-    if (!alt.startsWith(UPLOADING_ALT_PREFIX)) {
-      const dataSrc =
-        typeof attrs.dataSrc === "string" && attrs.dataSrc.length > 0
-          ? attrs.dataSrc
-          : typeof attrs.src === "string"
-            ? attrs.src
-            : "";
-
-      if (
-        dataSrc &&
-        !dataSrc.startsWith("data:") &&
-        typeof attrs.width === "number" &&
-        typeof attrs.height === "number" &&
-        attrs.width > 0 &&
-        attrs.height > 0
-      ) {
-        return {
-          ...content,
-          attrs: {
-            ...attrs,
-            src: createGrayPreviewSrc({
-              width: attrs.width,
-              height: attrs.height,
-            }),
-            dataSrc,
-            loading: "lazy",
-            decoding: "async",
-          },
-        };
-      }
-    }
-  }
-
-  if (!content.content) return content;
-  return { ...content, content: content.content.map(decorateLazyImages) };
 }
 
 // SSR時に空キャプションが削除されることに対するワークアラウンド
@@ -361,31 +248,44 @@ function MarkdownView({
 }: {
   contentJSON?: JSONContent | null;
 } & HTMLAttributes<HTMLDivElement>) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const content = contentJSON ?? EMPTY_CONTENT_JSON;
-  const html = renderToHTMLString({
-    content: decorateImageOnlyParagraphTrailingBreak(
-      decorateLazyImages(content),
-    ),
+  const rendered = renderToReactElement({
+    content: decorateImageOnlyParagraphTrailingBreak(content),
     extensions: [...baseExtensions, TrailingBreakNode],
-  });
+    options: {
+      nodeMapping: {
+        image: ({ node }) => {
+          const {
+            class: classNameAttr,
+            dataSrc,
+            uploading: _,
+            ...attrs
+          } = node.attrs ?? {};
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    return setupLazyLoading(containerRef.current);
-  }, []);
+          return (
+            <LazyImage
+              {...attrs}
+              className={
+                typeof classNameAttr === "string" ? classNameAttr : undefined
+              }
+              dataSrc={typeof dataSrc === "string" ? dataSrc : undefined}
+            />
+          );
+        },
+      },
+    },
+  });
 
   return (
     <div
-      ref={containerRef}
-      // biome-ignore lint/security/noDangerouslySetInnerHtml: HTML is rendered from TipTap content.
-      dangerouslySetInnerHTML={{ __html: html }}
       {...props}
       className={cn(
         "tiptap w-full min-w-0 max-w-full overflow-visible",
         className,
       )}
-    />
+    >
+      {rendered}
+    </div>
   );
 }
 
@@ -599,12 +499,12 @@ function MarkdownEditor({
     if (!editor) return;
 
     const container = editor.view.dom as HTMLElement;
-    let cleanup = setupLazyLoading(container);
+    let cleanup = setupLazyLoadingImages(container);
 
     const refresh = () => {
       normalizeEditorImagesForLazyLoading(editor, noLazyDataSrcsRef.current);
       cleanup();
-      cleanup = setupLazyLoading(container);
+      cleanup = setupLazyLoadingImages(container);
     };
 
     editor.on("update", refresh);
