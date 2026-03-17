@@ -100,6 +100,7 @@ const CustomImage = Image.extend({
       let currentNode = props.node;
       let originalSize: { width: number; height: number } | null = null;
       let originalSizeFetchSource = "";
+      let isSelected = false;
       type DragState = {
         direction: ResizeDirection;
         pointerId: number;
@@ -136,7 +137,6 @@ const CustomImage = Image.extend({
             ? props.HTMLAttributes.class
             : "";
 
-        image.src = typeof attrs.src === "string" ? attrs.src : "";
         image.alt = typeof attrs.alt === "string" ? attrs.alt : "";
         if (typeof attrs.title === "string" && attrs.title.length > 0) {
           image.title = attrs.title;
@@ -190,7 +190,7 @@ const CustomImage = Image.extend({
           !!originalSize &&
           (width !== originalSize.width || height !== originalSize.height);
         resetButton.disabled = !hasManualSize;
-        resetButton.hidden = !hasManualSize;
+        resetButton.hidden = !isSelected && !hasManualSize;
 
         if (originalSizeFetchSource !== source) {
           originalSizeFetchSource = source;
@@ -337,11 +337,15 @@ const CustomImage = Image.extend({
           return true;
         },
         selectNode: () => {
+          isSelected = true;
           wrapper.classList.add("ProseMirror-selectednode");
+          applyNodeToElement();
         },
         deselectNode: () => {
+          isSelected = false;
           wrapper.classList.remove("ProseMirror-selectednode");
           stopDragging();
+          applyNodeToElement();
         },
         stopEvent: (event) => {
           const target = event.target;
