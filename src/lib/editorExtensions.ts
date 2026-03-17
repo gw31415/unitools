@@ -158,7 +158,7 @@ const CustomImage = Image.extend({
 
         if (width && height) {
           image.style.width = `${width}px`;
-          image.style.height = `${height}px`;
+          image.style.height = "auto";
         } else {
           image.style.removeProperty("width");
           image.style.removeProperty("height");
@@ -264,7 +264,7 @@ const CustomImage = Image.extend({
         );
 
         image.style.width = `${width}px`;
-        image.style.height = `${height}px`;
+        image.style.height = "auto";
         draftSize = { width, height };
         resetButton.disabled = false;
         resetButton.hidden = false;
