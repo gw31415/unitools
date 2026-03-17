@@ -1354,8 +1354,145 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   outline: 3px solid var(--focus-outlineColor);
 }
 
+.tiptap .image-node-view {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 1rem 0;
+}
+
+.tiptap .image-node-view img {
+  margin: 0;
+}
+
+.tiptap .image-node-view.ProseMirror-selectednode {
+  outline: 3px solid var(--focus-outlineColor);
+  border-radius: 6px;
+}
+
+.tiptap .image-resize-handle {
+  position: absolute;
+  z-index: 2;
+  border: 1px solid var(--focus-outlineColor);
+  border-radius: 999px;
+  background: var(--bgColor-default);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tiptap .image-node-view.ProseMirror-selectednode .image-resize-handle {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tiptap .image-resize-handle[data-direction="n"] {
+  top: -6px;
+  left: 50%;
+  width: 16px;
+  height: 8px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.tiptap .image-resize-handle[data-direction="s"] {
+  bottom: -6px;
+  left: 50%;
+  width: 16px;
+  height: 8px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.tiptap .image-resize-handle[data-direction="e"] {
+  top: 50%;
+  right: -6px;
+  width: 8px;
+  height: 16px;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.tiptap .image-resize-handle[data-direction="w"] {
+  top: 50%;
+  left: -6px;
+  width: 8px;
+  height: 16px;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.tiptap .image-resize-handle[data-direction="ne"] {
+  top: -6px;
+  right: -6px;
+  width: 10px;
+  height: 10px;
+  cursor: nesw-resize;
+}
+
+.tiptap .image-resize-handle[data-direction="nw"] {
+  top: -6px;
+  left: -6px;
+  width: 10px;
+  height: 10px;
+  cursor: nwse-resize;
+}
+
+.tiptap .image-resize-handle[data-direction="se"] {
+  right: -6px;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  cursor: nwse-resize;
+}
+
+.tiptap .image-resize-handle[data-direction="sw"] {
+  bottom: -6px;
+  left: -6px;
+  width: 10px;
+  height: 10px;
+  cursor: nesw-resize;
+}
+
+.tiptap .image-size-reset {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid color-mix(in oklab, var(--fgColor-default), transparent 62%);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--bgColor-default), transparent 4%);
+  color: var(--fgColor-default);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tiptap .image-size-reset-icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.tiptap .image-node-view.ProseMirror-selectednode .image-size-reset {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tiptap .image-size-reset:disabled {
+  opacity: 0.5;
+}
+
 /* Caption Style */
-.tiptap p:has(> img) {
+.tiptap p:has(> img),
+.tiptap p:has(> .image-node-view) {
   font-style: italic;
   color: var(--fgColor-muted);
 }
