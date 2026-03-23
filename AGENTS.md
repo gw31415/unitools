@@ -3,7 +3,7 @@
 ## IMPORTANT
 
 - Use `pnpm` as the package manager. DO NOT use `npm` or `yarn`.
-- Use `tsgo` as the TypeScript compiler. DO NOT use `tsc`.
+- Use `vite-plus` (`vp`) as the primary toolchain command.
 
 ## Technology Stack
 
@@ -23,7 +23,7 @@
 pnpm preview    # build then preview
 pnpm cf-typegen # generate CloudflareBindings types
 
-pnpm check      # RUN BEFORE FINISH to Check all: types, formatting, linting
+pnpm check      # RUN BEFORE FINISH to check format/lint/type via vite-plus
 
 pnpm deploy     # DO NOT RUN: build then deploy via wrangler
 ```
