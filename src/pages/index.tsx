@@ -19,9 +19,7 @@ export type ComponentName = keyof typeof pages;
 /**
  * Load a component from the registry
  */
-export async function loadComponent(
-  state: SSRStateType,
-): Promise<ComponentType> {
+export async function loadComponent(state: SSRStateType): Promise<ComponentType> {
   return state.pageAtom ? pages[state.pageAtom]() : Fragment;
 }
 

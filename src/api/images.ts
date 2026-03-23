@@ -8,12 +8,7 @@ import { type ULID, ulid } from "@/lib/ulid";
 import { ulidSchema } from "@/validators";
 import { requireUser } from "./auth";
 
-const ALLOWED_MIME_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-];
+const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
 function getFileExtension(mimeType: string): string {
   const extensions: Record<string, string> = {

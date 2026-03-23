@@ -11,9 +11,7 @@ import type { imageSelectSchema } from "@/validators/images";
 
 export type User = z.infer<typeof userGetSchema>;
 export type PasskeyCredential = z.infer<typeof passkeyCredentialSelectSchema>;
-export type PasskeyCredentialInsert = z.infer<
-  typeof passkeyCredentialInsertSchema
->;
+export type PasskeyCredentialInsert = z.infer<typeof passkeyCredentialInsertSchema>;
 export type WebAuthnChallenge = z.infer<typeof webAuthnChallengeSchema>;
 export type Editor = z.infer<typeof editorSelectSchema>;
 export type Image = z.infer<typeof imageSelectSchema>;

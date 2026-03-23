@@ -21,9 +21,7 @@ import { currentUserAtom, editorStateAtom } from "@/store";
 const MAX_TITLE_LENGTH = 20;
 const TITLE_DIALOG_ID = "title-dialog-8f3a2c7d";
 const getClient = () =>
-  typeof window === "undefined"
-    ? null
-    : hc<ServerAppType>(window.location.origin);
+  typeof window === "undefined" ? null : hc<ServerAppType>(window.location.origin);
 
 export function Header() {
   const user = useAtomValue(currentUserAtom);
@@ -110,7 +108,7 @@ export function Header() {
   const confirmLabel = isDeleteAction ? "Delete title" : "Save title";
 
   return (
-    <header className="frosted-bg sticky top-0 z-30 h-10 shrink-0 items-center gap-2 border-b px-2 py-1 flex">
+    <header className="frosted-bg sticky top-0 z-30 flex h-10 shrink-0 items-center gap-2 border-b px-2 py-1">
       <Dialog open={isTitleDialogOpen} onOpenChange={handleOpenChange}>
         <DialogTrigger asChild aria-controls={TITLE_DIALOG_ID}>
           <Button
@@ -146,9 +144,7 @@ export function Header() {
                 placeholder="Untitled"
                 autoFocus
               />
-              {titleError ? (
-                <p className="text-sm text-destructive">{titleError}</p>
-              ) : null}
+              {titleError ? <p className="text-sm text-destructive">{titleError}</p> : null}
             </div>
             <DialogFooter className="mt-4">
               <Button

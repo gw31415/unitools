@@ -28,31 +28,37 @@ Add these scripts to your `package.json`:
 ## Running Tests
 
 ### Run all tests in watch mode
+
 ```bash
 pnpm test
 ```
 
 ### Run tests once (CI mode)
+
 ```bash
 pnpm test:run
 ```
 
 ### Run tests with UI
+
 ```bash
 pnpm test:ui
 ```
 
 ### Run tests with coverage report
+
 ```bash
 pnpm test:coverage
 ```
 
 ### Run specific test file
+
 ```bash
 pnpm test src/lib/__tests__/ssr.test.tsx
 ```
 
 ### Run tests matching a pattern
+
 ```bash
 pnpm test -t "SSRProvider"
 ```
@@ -60,7 +66,9 @@ pnpm test -t "SSRProvider"
 ## Test Files
 
 ### `src/lib/__tests__/ssr.test.tsx`
+
 Unit tests for SSR utilities:
+
 - ✅ `createSSRConfig()` - Configuration creation and type safety
 - ✅ `serializeSSRState()` - JSON serialization and XSS protection
 - ✅ `SSRProvider` - Server-side rendering behavior
@@ -68,6 +76,7 @@ Unit tests for SSR utilities:
 - ✅ Complex data types (objects, arrays, nested structures)
 
 **Test Coverage:**
+
 - Creating SSR configuration from atom map
 - Converting undefined to null for JSON
 - Escaping XSS attempts
@@ -78,7 +87,9 @@ Unit tests for SSR utilities:
 - Complex data structures (objects, arrays, nested data)
 
 ### `src/lib/__tests__/ssr.integration.test.tsx`
+
 Integration tests for complete SSR→CSR flow:
+
 - ✅ Server to Client Hydration Match - Verifies identical rendering
 - ✅ Authentication State Persistence - Login state across hydration
 - ✅ Editor Content Hydration - TipTap content preservation
@@ -87,6 +98,7 @@ Integration tests for complete SSR→CSR flow:
 - ✅ First Content Paint - No flash of wrong content
 
 **Test Coverage:**
+
 - Complete server→client hydration pipeline
 - Authentication state persistence through hydration
 - Editor content preservation
@@ -115,6 +127,7 @@ describe("Feature", () => {
 ## Key Test Scenarios
 
 ### 1. Server-Side Rendering
+
 ```tsx
 // Mock server environment
 delete global.window;
@@ -126,7 +139,7 @@ const ssrState = config.getState({ user: { name: "Alice" } });
 const html = renderToString(
   <SSRProvider config={config.config} ssrState={ssrState}>
     <App />
-  </SSRProvider>
+  </SSRProvider>,
 );
 
 // Verify server HTML contains expected content
@@ -134,6 +147,7 @@ expect(html).toContain("Alice");
 ```
 
 ### 2. Client-Side Hydration
+
 ```tsx
 // Mock browser environment
 global.window = { document: global.document };
@@ -148,7 +162,7 @@ document.head.appendChild(script);
 const { getByTestId } = render(
   <SSRProvider config={config.config}>
     <App />
-  </SSRProvider>
+  </SSRProvider>,
 );
 
 // Verify hydrated content matches
@@ -156,6 +170,7 @@ expect(getByTestId("user")).toHaveTextContent("Alice");
 ```
 
 ### 3. Server→Client Integration
+
 ```tsx
 // 1. Server render with state
 const ssrState = config.getState({ user: { name: "Bob" } });
@@ -182,6 +197,7 @@ expect(getByTestId("user")).toHaveTextContent("Bob");
 ### Unit Tests (`ssr.test.tsx`)
 
 #### `createSSRConfig()`
+
 - ✅ Creates configuration from atom map
 - ✅ Generates correct config array
 - ✅ Creates type-safe getState function
@@ -189,12 +205,14 @@ expect(getByTestId("user")).toHaveTextContent("Bob");
 - ✅ Preserves null values
 
 #### `serializeSSRState()`
+
 - ✅ Serializes objects to JSON
 - ✅ Escapes `<` to prevent XSS
 - ✅ Handles nested objects
 - ✅ Handles empty objects
 
 #### `SSRProvider` (Server)
+
 - ✅ Creates store with provided ssrState
 - ✅ Renders with correct atom values
 - ✅ Handles undefined values
@@ -202,6 +220,7 @@ expect(getByTestId("user")).toHaveTextContent("Bob");
 - ✅ Handles multiple atoms
 
 #### `SSRProvider` (Client)
+
 - ✅ Reads from `__SSR_STATE__` script tag
 - ✅ Hydrates atoms correctly
 - ✅ Converts null → undefined
@@ -210,6 +229,7 @@ expect(getByTestId("user")).toHaveTextContent("Bob");
 - ✅ Only hydrates configured atoms
 
 #### Complex Data Types
+
 - ✅ Objects (user profiles)
 - ✅ Arrays (lists of items)
 - ✅ Nested objects (editor content)
@@ -217,17 +237,20 @@ expect(getByTestId("user")).toHaveTextContent("Bob");
 ### Integration Tests (`ssr.integration.test.tsx`)
 
 #### Server→Client Hydration
+
 - ✅ Identical content on server and client
 - ✅ Login state persistence
 - ✅ Editor content hydration
 - ✅ Multiple atoms together
 
 #### Edge Cases
+
 - ✅ Empty SSR state
 - ✅ XSS prevention
 - ✅ Partial state (some atoms undefined)
 
 #### First Content Paint
+
 - ✅ No flash between server render and hydration
 - ✅ Same content before and after hydration
 
@@ -236,12 +259,14 @@ expect(getByTestId("user")).toHaveTextContent("Bob");
 Target coverage: **90%+**
 
 ### Current Coverage Areas:
+
 - ✅ Function coverage: All exported functions
 - ✅ Branch coverage: Error paths, edge cases
 - ✅ Line coverage: All execution paths
 - ✅ Integration: Complete SSR→CSR pipeline
 
 ### To check coverage:
+
 ```bash
 pnpm test:coverage
 ```
@@ -251,16 +276,19 @@ Coverage report will be generated in `coverage/` directory.
 ## Debugging Tests
 
 ### Enable verbose output
+
 ```bash
 pnpm test --reporter=verbose
 ```
 
 ### Debug specific test
+
 ```bash
 pnpm test --reporter=verbose -t "should render identical content"
 ```
 
 ### Run tests in UI mode for interactive debugging
+
 ```bash
 pnpm test:ui
 ```
@@ -268,9 +296,11 @@ pnpm test:ui
 ## Common Issues
 
 ### Issue: "window is not defined"
+
 **Cause:** Test is running in wrong environment (server vs client)
 
 **Fix:**
+
 ```tsx
 beforeEach(() => {
   // For server tests
@@ -281,10 +311,12 @@ beforeEach(() => {
 });
 ```
 
-### Issue: "Cannot find __SSR_STATE__"
+### Issue: "Cannot find **SSR_STATE**"
+
 **Cause:** Script tag not injected into DOM
 
 **Fix:**
+
 ```tsx
 const script = document.createElement("script");
 script.id = "__SSR_STATE__";
@@ -293,9 +325,11 @@ document.head.appendChild(script);
 ```
 
 ### Issue: Tests pass but coverage is low
+
 **Cause:** Missing edge case tests
 
 **Fix:** Add tests for:
+
 - Error conditions
 - Missing data
 - Malformed input
@@ -304,6 +338,7 @@ document.head.appendChild(script);
 ## Continuous Integration
 
 ### GitHub Actions Example
+
 ```yaml
 name: Tests
 on: [push, pull_request]
@@ -316,7 +351,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: "pnpm"
       - run: pnpm install
       - run: pnpm test:run
       - run: pnpm test:coverage

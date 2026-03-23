@@ -32,9 +32,7 @@ describe("normalizeMarkdownExportContent", () => {
       ],
     });
 
-    expect(markdown).toContain(
-      "![test image](/api/v1/images/01HZX3T47PW5Z7F73Q0Z6E4TQ3)",
-    );
+    expect(markdown).toContain("![test image](/api/v1/images/01HZX3T47PW5Z7F73Q0Z6E4TQ3)");
     expect(markdown).not.toContain("data:image/svg+xml");
   });
 
@@ -57,9 +55,7 @@ describe("normalizeMarkdownExportContent", () => {
       ],
     });
 
-    expect(markdown).toContain(
-      "![fallback image](/api/v1/images/01HZX3T47PW5Z7F73Q0Z6E4TQ4)",
-    );
+    expect(markdown).toContain("![fallback image](/api/v1/images/01HZX3T47PW5Z7F73Q0Z6E4TQ4)");
   });
 
   it("removes uploading images from export", () => {

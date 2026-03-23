@@ -22,11 +22,7 @@ describe("SSR Hydration Integration", () => {
 
       function TestApp() {
         const [user] = useAtom(userAtom);
-        return (
-          <div data-testid="content">
-            {user ? `Hello, ${user.name}` : "Not logged in"}
-          </div>
-        );
+        return <div data-testid="content">{user ? `Hello, ${user.name}` : "Not logged in"}</div>;
       }
 
       // 1. Server-side rendering
@@ -380,9 +376,7 @@ describe("SSR Hydration Integration", () => {
       function TestComponent() {
         const [user] = useAtom(userAtom);
         return (
-          <div data-testid="greeting">
-            {user ? `Welcome, ${user.name}!` : "Please log in"}
-          </div>
+          <div data-testid="greeting">{user ? `Welcome, ${user.name}!` : "Please log in"}</div>
         );
       }
 

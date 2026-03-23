@@ -2,10 +2,7 @@ import { getSchema } from "@tiptap/core";
 import { renderToMarkdown } from "@tiptap/static-renderer";
 import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import {
-  YDurableObjects as BaseYDurableObjects,
-  WSSharedDoc,
-} from "y-durableobjects";
+import { YDurableObjects as BaseYDurableObjects, WSSharedDoc } from "y-durableobjects";
 import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import type { Doc } from "yjs";
 import * as schema from "@/db/schema";
@@ -35,8 +32,7 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     }
 
     this.sessions.clear();
-    (this as unknown as { awarenessClients: Set<number> }).awarenessClients =
-      new Set();
+    (this as unknown as { awarenessClients: Set<number> }).awarenessClients = new Set();
     await this.state.storage.deleteAll();
 
     this.doc = new WSSharedDoc();
@@ -54,8 +50,7 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
         removed: number[];
         updated: number[];
       }) => {
-        const clients = (this as unknown as { awarenessClients: Set<number> })
-          .awarenessClients;
+        const clients = (this as unknown as { awarenessClients: Set<number> }).awarenessClients;
         for (const client of [...added, ...updated]) {
           clients.add(client);
         }
@@ -123,17 +118,14 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     }
 
     const xmlFragment = this.doc.getXmlFragment("default");
-    const referencedImageIds =
-      collectReferencedImageIdsFromYXmlFragment(xmlFragment);
+    const referencedImageIds = collectReferencedImageIdsFromYXmlFragment(xmlFragment);
     const db = drizzle(this.env.DB, { schema });
 
     const images = await db
       .select({ id: schema.images.id, storageKey: schema.images.storageKey })
       .from(schema.images)
       .where(eq(schema.images.editorId, editorId));
-    const staleImages = images.filter(
-      (image) => !referencedImageIds.has(image.id),
-    );
+    const staleImages = images.filter((image) => !referencedImageIds.has(image.id));
     if (staleImages.length === 0) {
       return;
     }
@@ -145,9 +137,7 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     }
 
     const staleImageIds = staleImages.map((image) => image.id);
-    await db
-      .delete(schema.images)
-      .where(inArray(schema.images.id, staleImageIds));
+    await db.delete(schema.images).where(inArray(schema.images.id, staleImageIds));
   }
 
   private async resolveEditorId(): Promise<ULID | undefined> {
@@ -157,18 +147,14 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     }
 
     for (const ws of this.state.getWebSockets()) {
-      const attachment = ws.deserializeAttachment() as
-        | { roomId?: string }
-        | undefined;
+      const attachment = ws.deserializeAttachment() as { roomId?: string } | undefined;
       const roomId = attachment?.roomId as ULID | undefined;
       if (roomId) {
         return roomId;
       }
     }
 
-    const storedId = await this.state.storage.get<string>(
-      EDITOR_ID_STORAGE_KEY,
-    );
+    const storedId = await this.state.storage.get<string>(EDITOR_ID_STORAGE_KEY);
     return storedId as ULID | undefined;
   }
 

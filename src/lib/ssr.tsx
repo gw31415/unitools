@@ -35,9 +35,7 @@ export function SSRProvider<T extends SSRAtomType>({
   const isClient = typeof window !== "undefined";
 
   // Create store with initial values
-  const store = isClient
-    ? getHydratedStore(config)
-    : getServerStore(config, ssrState || {});
+  const store = isClient ? getHydratedStore(config) : getServerStore(config, ssrState || {});
 
   return <JotaiProvider store={store}>{children}</JotaiProvider>;
 }
@@ -74,10 +72,7 @@ function getHydratedStore<T extends SSRAtomType>(config: SSRAtomState<T>) {
 /**
  * Create a store with SSR values on the server
  */
-function getServerStore<T extends SSRAtomType>(
-  config: SSRAtomState<T>,
-  state: SSRState<T>,
-) {
+function getServerStore<T extends SSRAtomType>(config: SSRAtomState<T>, state: SSRState<T>) {
   const store = createStore();
 
   // Set each atom value in the store

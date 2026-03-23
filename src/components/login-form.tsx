@@ -111,9 +111,7 @@ export function LoginForm({
             </div>
           </a>
           <h1 className="text-xl font-bold">Welcome to Unitools</h1>
-          <FieldDescription>
-            Login / Sign up with WebAuthn to continue
-          </FieldDescription>
+          <FieldDescription>Login / Sign up with WebAuthn to continue</FieldDescription>
         </div>
         {user ? (
           <>
@@ -131,26 +129,20 @@ export function LoginForm({
             <SignUpFormItems onSignup={onSignup} disabled={authBusy} />
             <FieldSeparator>Or</FieldSeparator>
             <Field className="flex gap-4">
-              <Button
-                variant="outline"
-                type="button"
-                onClick={onLogin}
-                disabled={authBusy}
-              >
+              <Button variant="outline" type="button" onClick={onLogin} disabled={authBusy}>
                 Login
               </Button>
             </Field>
           </>
         )}
         {authError ? (
-          <FieldDescription className="text-destructive text-sm text-center">
+          <FieldDescription className="text-center text-sm text-destructive">
             {authError}
           </FieldDescription>
         ) : null}
       </FieldGroup>
       <FieldDescription className="px-6 text-center">
-        By clicking continue, you agree to our{" "}
-        <a href="/terms">Terms of Service</a> and{" "}
+        By clicking continue, you agree to our <a href="/terms">Terms of Service</a> and{" "}
         <a href="/privacy">Privacy Policy</a>.
       </FieldDescription>
     </div>

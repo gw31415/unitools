@@ -19,9 +19,7 @@ function resolveExportImageSrc(attrs: Record<string, unknown>): string | null {
   return null;
 }
 
-export function normalizeMarkdownExportContent(
-  content: JSONContent,
-): JSONContent {
+export function normalizeMarkdownExportContent(content: JSONContent): JSONContent {
   const visit = (node: JSONContent): JSONContent | null => {
     const rawContent = Array.isArray(node.content) ? node.content : undefined;
     const nextChildren = rawContent
@@ -30,9 +28,7 @@ export function normalizeMarkdownExportContent(
 
     if (node.type === "image") {
       const attrs =
-        node.attrs && typeof node.attrs === "object"
-          ? (node.attrs as Record<string, unknown>)
-          : {};
+        node.attrs && typeof node.attrs === "object" ? (node.attrs as Record<string, unknown>) : {};
       if (attrs.uploading === true) {
         return null;
       }

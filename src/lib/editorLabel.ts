@@ -4,11 +4,7 @@ const sidebarDateFormatter = new Intl.DateTimeFormat("ja-JP", {
   day: "2-digit",
 });
 
-export function formatEditorLabel(item: {
-  id: string;
-  createdAt: number;
-  title?: string;
-}) {
+export function formatEditorLabel(item: { id: string; createdAt: number; title?: string }) {
   const normalizedTitle = item.title?.trim();
   if (normalizedTitle) {
     return normalizedTitle;

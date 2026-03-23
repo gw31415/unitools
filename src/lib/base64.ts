@@ -19,15 +19,9 @@ export const b64ToUint8Array = (base64: string) => {
 };
 
 export const structToBase64Url = <T>(data: T): string =>
-  btoa(JSON.stringify(data))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
+  btoa(JSON.stringify(data)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 
-export const b64urlToStruct = <T extends z.ZodObject>(
-  data: string,
-  zod: T,
-): z.infer<T> => {
+export const b64urlToStruct = <T extends z.ZodObject>(data: string, zod: T): z.infer<T> => {
   const base64 = data
     .replaceAll("-", "+")
     .replaceAll("_", "/")

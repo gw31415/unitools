@@ -73,9 +73,7 @@ export function collectReferencedImageIds(content: unknown): Set<string> {
   return imageIds;
 }
 
-function collectImageIdsFromYNode(
-  node: Y.XmlFragment | Y.XmlElement,
-): Set<string> {
+function collectImageIdsFromYNode(node: Y.XmlFragment | Y.XmlElement): Set<string> {
   const imageIds = new Set<string>();
 
   const visit = (current: Y.XmlFragment | Y.XmlElement) => {
@@ -107,8 +105,6 @@ function collectImageIdsFromYNode(
   return imageIds;
 }
 
-export function collectReferencedImageIdsFromYXmlFragment(
-  xmlFragment: Y.XmlFragment,
-): Set<string> {
+export function collectReferencedImageIdsFromYXmlFragment(xmlFragment: Y.XmlFragment): Set<string> {
   return collectImageIdsFromYNode(xmlFragment);
 }

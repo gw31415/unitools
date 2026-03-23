@@ -13,10 +13,7 @@ export interface UploadResult {
  * @returns The upload result containing the URL and ID
  * @throws Error if upload fails or client is not available
  */
-export async function uploadImage(
-  file: File,
-  editorId: string,
-): Promise<UploadResult> {
+export async function uploadImage(file: File, editorId: string): Promise<UploadResult> {
   if (typeof window === "undefined") {
     throw new Error("Upload client is not available");
   }

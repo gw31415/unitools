@@ -19,8 +19,7 @@ class MockIntersectionObserver {
   disconnect = vi.fn();
 }
 
-global.IntersectionObserver =
-  MockIntersectionObserver as unknown as typeof IntersectionObserver;
+global.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver;
 
 type MutableImportMetaEnv = ImportMetaEnv & { SSR: boolean };
 
@@ -61,9 +60,7 @@ describe("Markdown Component", () => {
         text: "https://example.com/path/to/image.jpg?size=large",
       });
 
-      expect(result).toEqual([
-        "https://example.com/path/to/image.jpg?size=large",
-      ]);
+      expect(result).toEqual(["https://example.com/path/to/image.jpg?size=large"]);
     });
 
     it("extracts markdown image urls from plain text", () => {
@@ -344,9 +341,7 @@ describe("Markdown Component", () => {
       const mockError = new Error("Network error");
       vi.mocked(imageService.uploadImage).mockRejectedValue(mockError);
 
-      const consoleErrorSpy = vi
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       // Create a mock file
       const mockFile = new File(["test"], "test.jpg", { type: "image/jpeg" });
@@ -358,10 +353,7 @@ describe("Markdown Component", () => {
       }
 
       // Verify the service was called
-      expect(imageService.uploadImage).toHaveBeenCalledWith(
-        mockFile,
-        "test-editor",
-      );
+      expect(imageService.uploadImage).toHaveBeenCalledWith(mockFile, "test-editor");
 
       consoleErrorSpy.mockRestore();
     });

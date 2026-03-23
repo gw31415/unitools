@@ -2,10 +2,7 @@ import { hc } from "hono/client";
 import { useAtomValue } from "jotai";
 import { Clock } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import {
-  EditorSearchDock,
-  type SearchDockItem,
-} from "@/components/EditorSearchDock";
+import { EditorSearchDock, type SearchDockItem } from "@/components/EditorSearchDock";
 import Markdown from "@/components/Markdown";
 import {
   Empty,
@@ -16,27 +13,17 @@ import {
 } from "@/components/ui/empty";
 import { Header } from "@/pages/editor/Header";
 import type { ServerAppType } from "@/server";
-import {
-  currentUserAtom,
-  editorStateAtom,
-  markdownBootstrapAtom,
-} from "@/store";
+import { currentUserAtom, editorStateAtom, markdownBootstrapAtom } from "@/store";
 
 const SIDEBAR_PAGE_SIZE = 20;
 const FOCUS_EDITOR_ON_LOAD_KEY = "focus-editor-on-load";
 const getClient = () =>
-  typeof window === "undefined"
-    ? null
-    : hc<ServerAppType>(window.location.origin);
+  typeof window === "undefined" ? null : hc<ServerAppType>(window.location.origin);
 
 function focusEditorElement() {
-  const root = document.querySelector(
-    '[aria-label="Main content editor/viewer of this page"]',
-  );
+  const root = document.querySelector('[aria-label="Main content editor/viewer of this page"]');
   if (!root) return;
-  const editable = root.querySelector(
-    '[contenteditable="true"]',
-  ) as HTMLElement | null;
+  const editable = root.querySelector('[contenteditable="true"]') as HTMLElement | null;
   if (editable) {
     editable.focus({ preventScroll: true });
     return;
@@ -85,10 +72,7 @@ export default function DocumentPage() {
     }
   }, []);
 
-  const handleNavigateToEditor = (
-    editorId: string,
-    options?: { focusEditor?: boolean },
-  ) => {
+  const handleNavigateToEditor = (editorId: string, options?: { focusEditor?: boolean }) => {
     const shouldFocusEditor = options?.focusEditor ?? true;
     if (shouldFocusEditor) {
       sessionStorage.setItem(FOCUS_EDITOR_ON_LOAD_KEY, "1");
@@ -113,28 +97,24 @@ export default function DocumentPage() {
   }, [editorState.editorId]);
 
   return (
-    <div className="min-h-dvh flex flex-col">
+    <div className="flex min-h-dvh flex-col">
       <Header />
-      <main
-        className={`flex-1 min-h-0 ${
-          editorState.editorId ? "bg-(--markdown-surface)" : ""
-        }`}
-      >
+      <main className={`min-h-0 flex-1 ${editorState.editorId ? "bg-(--markdown-surface)" : ""}`}>
         {editorState.editorId ? (
-          <div className="container mx-auto w-full px-4 sm:px-6 lg:px-8 h-full flex flex-col">
-            <div className="mx-auto w-full max-w-4xl h-full flex flex-col">
+          <div className="container mx-auto flex h-full w-full flex-col px-4 sm:px-6 lg:px-8">
+            <div className="mx-auto flex h-full w-full max-w-4xl flex-col">
               <Markdown
                 editorId={editorState.editorId}
                 bootstrap={bootstrap}
                 readonly={!user}
                 tabIndex={-1}
-                className="w-full py-2 flex-1"
+                className="w-full flex-1 py-2"
                 aria-label="Main content editor/viewer of this page"
               />
             </div>
           </div>
         ) : (
-          <div className="container mx-auto w-full px-4 sm:px-6 lg:px-8 h-full">
+          <div className="container mx-auto h-full w-full px-4 sm:px-6 lg:px-8">
             <Empty className="h-full">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -148,8 +128,8 @@ export default function DocumentPage() {
                     "Use the search dock below to open an article."
                   ) : (
                     <>
-                      <a href="/auth">Login</a> is required to edit articles.
-                      You can view articles from the search dock.
+                      <a href="/auth">Login</a> is required to edit articles. You can view articles
+                      from the search dock.
                     </>
                   )}
                 </EmptyDescription>

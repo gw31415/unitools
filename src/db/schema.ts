@@ -33,9 +33,7 @@ export const passkeyCredentials = sqliteTable("passkey_credentials", {
 
   publicKey: text("public_key").notNull(),
   counter: integer("counter").notNull(),
-  transports: text("transports", { mode: "json" }).$type<
-    AuthenticatorTransportFuture[]
-  >(),
+  transports: text("transports", { mode: "json" }).$type<AuthenticatorTransportFuture[]>(),
 });
 
 export const editors = sqliteTable("editors", {

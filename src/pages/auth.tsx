@@ -1,7 +1,4 @@
-import {
-  startAuthentication,
-  startRegistration,
-} from "@simplewebauthn/browser";
+import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { hc } from "hono/client";
 import { useAtomValue } from "jotai";
 import { useState } from "react";
@@ -11,9 +8,7 @@ import { currentUserAtom } from "@/store";
 
 const normalizeUserName = (value: string) => value.trim();
 const getClient = () =>
-  typeof window === "undefined"
-    ? null
-    : hc<ServerAppType>(window.location.origin);
+  typeof window === "undefined" ? null : hc<ServerAppType>(window.location.origin);
 
 export default function AuthPage({ redirect }: { redirect?: string }) {
   const user = useAtomValue(currentUserAtom);
@@ -123,7 +118,7 @@ export default function AuthPage({ redirect }: { redirect?: string }) {
   };
 
   return (
-    <div className="bg-background flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
+    <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">
       <div className="w-full max-w-sm">
         <LoginForm
           user={user}

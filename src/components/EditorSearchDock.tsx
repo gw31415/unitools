@@ -1,12 +1,6 @@
 import { useAtomValue } from "jotai";
 import { Search } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatEditorLabel } from "@/lib/editorLabel";
@@ -65,31 +59,21 @@ function getClientViewportSize(): { width: number; height: number } {
 }
 
 function clampFabBottom(bottom: number, viewportHeight: number): number {
-  const maxBottom = Math.max(
-    FAB_MARGIN,
-    viewportHeight - FAB_SIZE - FAB_MARGIN,
-  );
+  const maxBottom = Math.max(FAB_MARGIN, viewportHeight - FAB_SIZE - FAB_MARGIN);
   return Math.max(FAB_MARGIN, Math.min(maxBottom, bottom));
 }
 
-function clampFabPosition(
-  position: FabPosition,
-  viewportHeight: number,
-): FabPosition {
+function clampFabPosition(position: FabPosition, viewportHeight: number): FabPosition {
   return {
     horizontal: position.horizontal,
     bottom: clampFabBottom(position.bottom, viewportHeight),
   };
 }
 
-function getFabLeft(
-  horizontal: FabPosition["horizontal"],
-  viewportWidth: number,
-): number {
+function getFabLeft(horizontal: FabPosition["horizontal"], viewportWidth: number): number {
   const minLeft = 0;
   const maxLeft = Math.max(0, viewportWidth - FAB_SIZE);
-  const targetLeft =
-    horizontal === "left" ? FAB_MARGIN : viewportWidth - FAB_SIZE - FAB_MARGIN;
+  const targetLeft = horizontal === "left" ? FAB_MARGIN : viewportWidth - FAB_SIZE - FAB_MARGIN;
   return Math.max(minLeft, Math.min(maxLeft, targetLeft));
 }
 
@@ -114,10 +98,7 @@ export function EditorSearchDock({
   onRetry: () => void;
   currentEditorId: string;
   onRequestFocusEditor: () => void;
-  onNavigateToEditor: (
-    editorId: string,
-    options?: { focusEditor?: boolean },
-  ) => void;
+  onNavigateToEditor: (editorId: string, options?: { focusEditor?: boolean }) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -193,9 +174,7 @@ export function EditorSearchDock({
     normalizedQuery.length === 0
       ? items.slice(0, 6)
       : items
-          .filter((item) =>
-            formatEditorLabel(item).toLowerCase().includes(normalizedQuery),
-          )
+          .filter((item) => formatEditorLabel(item).toLowerCase().includes(normalizedQuery))
           .slice(0, 6);
   const closeSearch = (options?: { restoreDockButtonFocus?: boolean }) => {
     setOpen(false);
@@ -282,9 +261,7 @@ export function EditorSearchDock({
       // Constrain to viewport bounds with margin
       const maxX = viewport.width - FAB_SIZE - FAB_MARGIN;
       const maxY = viewport.height - FAB_SIZE - FAB_MARGIN;
-      const clampedX = open
-        ? currentFabLeft
-        : Math.max(FAB_MARGIN, Math.min(maxX, newX));
+      const clampedX = open ? currentFabLeft : Math.max(FAB_MARGIN, Math.min(maxX, newX));
       const clampedY = Math.max(FAB_MARGIN, Math.min(maxY, newY));
       setDragVisualPosition({ left: clampedX, top: clampedY });
     },
@@ -310,8 +287,7 @@ export function EditorSearchDock({
       viewport.height - FAB_SIZE - currentVisualPosition.top,
       viewport.height,
     );
-    const snappedBottom =
-      rawBottom <= FAB_BOTTOM_SNAP_THRESHOLD ? FAB_MARGIN : rawBottom;
+    const snappedBottom = rawBottom <= FAB_BOTTOM_SNAP_THRESHOLD ? FAB_MARGIN : rawBottom;
     const snappedPosition: FabPosition = {
       horizontal: open
         ? fabPosition.horizontal
@@ -325,33 +301,21 @@ export function EditorSearchDock({
     // Keep drag-release snap animations on `left` so both directions interpolate.
     clearRightAnchorTimer();
     setAnchorMode("left");
-  }, [
-    isDragging,
-    dragVisualPosition,
-    clearRightAnchorTimer,
-    open,
-    fabPosition.horizontal,
-  ]);
+  }, [isDragging, dragVisualPosition, clearRightAnchorTimer, open, fabPosition.horizontal]);
 
   // Global drag move and end handlers
   useEffect(() => {
     if (!isDragging) return;
 
     const handlePointerMove = (e: PointerEvent) => {
-      if (
-        activePointerIdRef.current !== null &&
-        e.pointerId !== activePointerIdRef.current
-      ) {
+      if (activePointerIdRef.current !== null && e.pointerId !== activePointerIdRef.current) {
         return;
       }
       handleDragMove(e.clientX, e.clientY);
     };
 
     const handlePointerUp = (e: PointerEvent) => {
-      if (
-        activePointerIdRef.current !== null &&
-        e.pointerId !== activePointerIdRef.current
-      ) {
+      if (activePointerIdRef.current !== null && e.pointerId !== activePointerIdRef.current) {
         return;
       }
       activePointerIdRef.current = null;
@@ -415,10 +379,7 @@ export function EditorSearchDock({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const clamped = clampFabPosition(fabPosition, viewport.height);
-    if (
-      clamped.horizontal === fabPosition.horizontal &&
-      clamped.bottom === fabPosition.bottom
-    ) {
+    if (clamped.horizontal === fabPosition.horizontal && clamped.bottom === fabPosition.bottom) {
       return;
     }
     setFabPosition(clamped);
@@ -431,10 +392,7 @@ export function EditorSearchDock({
   );
   const dockWidth = open ? openDockWidth : FAB_SIZE;
   const clampedFabPosition = clampFabPosition(fabPosition, viewport.height);
-  const closedDockLeft = getFabLeft(
-    clampedFabPosition.horizontal,
-    viewport.width,
-  );
+  const closedDockLeft = getFabLeft(clampedFabPosition.horizontal, viewport.width);
   const closedDockBottom = clampedFabPosition.bottom;
   const useRightAnchor =
     anchorMode === "right" &&
@@ -477,18 +435,14 @@ export function EditorSearchDock({
     >
       {open ? (
         <div className="frosted-bg absolute right-0 bottom-[calc(100%+8px)] left-0 overflow-hidden rounded-2xl border border-black/10 p-2 shadow-xl shadow-black/10 dark:border-white/10">
-          <div className="text-muted-foreground px-2 py-1 text-xs">
-            {normalizedQuery.length === 0
-              ? "Recent articles"
-              : "Search results"}
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {normalizedQuery.length === 0 ? "Recent articles" : "Search results"}
           </div>
           <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
             {isLoading ? (
-              <div className="text-muted-foreground px-2 py-3 text-sm">
-                Loading...
-              </div>
+              <div className="px-2 py-3 text-sm text-muted-foreground">Loading...</div>
             ) : error ? (
-              <div className="text-muted-foreground px-2 py-3 text-sm">
+              <div className="px-2 py-3 text-sm text-muted-foreground">
                 <span>{error}</span>
                 <Button
                   type="button"
@@ -501,9 +455,7 @@ export function EditorSearchDock({
                 </Button>
               </div>
             ) : isAuthRequired ? (
-              <div className="text-muted-foreground px-2 py-3 text-sm">
-                Login is required.
-              </div>
+              <div className="px-2 py-3 text-sm text-muted-foreground">Login is required.</div>
             ) : panelItems.length > 0 ? (
               panelItems.map((item, index) => (
                 <Button
@@ -526,24 +478,18 @@ export function EditorSearchDock({
                     setActiveIndex(index);
                   }}
                 >
-                  <span
-                    className={item.id === currentEditorId ? "font-medium" : ""}
-                  >
+                  <span className={item.id === currentEditorId ? "font-medium" : ""}>
                     {formatEditorLabel(item)}
                   </span>
                 </Button>
               ))
             ) : (
-              <div className="text-muted-foreground px-2 py-3 text-sm">
-                {normalizedQuery.length > 0
-                  ? "No matching articles."
-                  : "No articles yet."}
+              <div className="px-2 py-3 text-sm text-muted-foreground">
+                {normalizedQuery.length > 0 ? "No matching articles." : "No articles yet."}
               </div>
             )}
           </div>
-          <div className="text-muted-foreground px-2 pt-2 text-xs">
-            Full search is coming soon.
-          </div>
+          <div className="px-2 pt-2 text-xs text-muted-foreground">Full search is coming soon.</div>
         </div>
       ) : null}
       <div
@@ -600,13 +546,9 @@ export function EditorSearchDock({
             }}
             onFocus={() => openSearch(false)}
             onKeyDown={(e) => {
-              const isCtrlEscape =
-                e.ctrlKey && !e.metaKey && !e.altKey && e.key === "[";
+              const isCtrlEscape = e.ctrlKey && !e.metaKey && !e.altKey && e.key === "[";
               const isCtrlEnter =
-                e.ctrlKey &&
-                !e.metaKey &&
-                !e.altKey &&
-                e.key.toLowerCase() === "m";
+                e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "m";
               const isCtrlMove =
                 e.ctrlKey &&
                 !e.metaKey &&
@@ -618,8 +560,7 @@ export function EditorSearchDock({
                 e.preventDefault();
                 if (!open) setOpen(true);
                 if (panelItems.length === 0) return;
-                const isNext =
-                  e.key === "ArrowDown" || e.key.toLowerCase() === "n";
+                const isNext = e.key === "ArrowDown" || e.key.toLowerCase() === "n";
                 setActiveIndex((prev) =>
                   isNext
                     ? (prev + 1) % panelItems.length
@@ -628,11 +569,7 @@ export function EditorSearchDock({
                 return;
               }
 
-              if (
-                (e.key === "Enter" || isCtrlEnter) &&
-                open &&
-                panelItems.length > 0
-              ) {
+              if ((e.key === "Enter" || isCtrlEnter) && open && panelItems.length > 0) {
                 e.preventDefault();
                 const selected = panelItems[activeIndex] ?? panelItems[0];
                 if (!selected) return;

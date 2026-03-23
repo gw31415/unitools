@@ -20,11 +20,7 @@ import { passkeyCredentials, users } from "@/db/schema";
 import { bytesToBase64 } from "@/lib/base64";
 import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
-import type {
-  PasskeyCredentialInsert,
-  User,
-  WebAuthnChallenge,
-} from "@/models";
+import type { PasskeyCredentialInsert, User, WebAuthnChallenge } from "@/models";
 import {
   authenticationChallengeValidator,
   registrationChallengeValidator,
@@ -75,8 +71,7 @@ async function loadSessionFromRequest<EnvExtended extends Env>(
   user: User;
   sessionId: string;
 } | null> {
-  const clearSessionCookie = () =>
-    deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
+  const clearSessionCookie = () => deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
   const sessionToken = getCookie(c, PASSKEY_SESSION_COOKIE);
 
   if (!sessionToken) {
@@ -102,10 +97,7 @@ async function loadSessionFromRequest<EnvExtended extends Env>(
   return { user: record.user, sessionId };
 }
 
-const deleteUserSessionsFromKv = async (
-  kv: CloudflareBindings["AUTH_KV"],
-  userId: string,
-) => {
+const deleteUserSessionsFromKv = async (kv: CloudflareBindings["AUTH_KV"], userId: string) => {
   const prefix = userSessionPrefix(userId);
   let cursor: string | undefined;
   for (;;) {
@@ -160,12 +152,7 @@ function removeChallengeId<T extends { challengeId: string }>(payload: T) {
   return response;
 }
 
-async function createSession(
-  c: Context<Env>,
-  user: User,
-  sessionId: ULID,
-  sessionSecret: string,
-) {
+async function createSession(c: Context<Env>, user: User, sessionId: ULID, sessionSecret: string) {
   await c.env.AUTH_KV.put(
     sessionKey(user.id, sessionId),
     JSON.stringify({ user, secret: sessionSecret }),
@@ -190,10 +177,7 @@ async function createSession(
  * 3. 使用されたコードはリストから削除され、再利用を防止
  * 4. 環境変数が変更されるとハッシュが変わり、古いKVエントリーを削除してリセット
  */
-async function isValidInvitation(
-  c: Context<Env>,
-  code: string | undefined,
-): Promise<boolean> {
+async function isValidInvitation(c: Context<Env>, code: string | undefined): Promise<boolean> {
   if (!code) return false;
   const { INVITATION_CODES } = env<{ INVITATION_CODES?: string }>(c);
   if (!INVITATION_CODES) return false;
@@ -201,9 +185,7 @@ async function isValidInvitation(
 
   // Create hash from INVITATION_CODES to detect changes
   const data = new TextEncoder().encode(INVITATION_CODES);
-  const hash = bytesToBase64(
-    new Uint8Array(await crypto.subtle.digest("SHA-256", data)),
-  );
+  const hash = bytesToBase64(new Uint8Array(await crypto.subtle.digest("SHA-256", data)));
 
   // Clean up old KV entries from previous INVITATION_CODES versions
   const prefix = "invitationCodes:env:";
@@ -222,8 +204,7 @@ async function isValidInvitation(
   }
 
   const unused = new Set(
-    (await c.env.AUTH_KV.get<string[]>(prefixWithHash, "json")) ??
-      invitationCodes,
+    (await c.env.AUTH_KV.get<string[]>(prefixWithHash, "json")) ?? invitationCodes,
   );
 
   const ok = unused.delete(code);
@@ -383,8 +364,7 @@ export const usersApi = createApp()
 export const sessionsApi = createApp()
   // ログイン（チャレンジ生成）
   .post("/-", sessionInitValidator, async (c) => {
-    const { id: requestedSessionId, userId: requestedUserId } =
-      c.req.valid("json");
+    const { id: requestedSessionId, userId: requestedUserId } = c.req.valid("json");
     const { rpID } = getRpConfig(c);
     const challengeId = crypto.randomUUID();
     const sessionId = requestedSessionId ?? ulid();
@@ -456,9 +436,7 @@ export const sessionsApi = createApp()
   })
   // ログイン検証
   .post("/-/challenge", authenticationChallengeValidator, async (c) => {
-    const payload = c.req.valid(
-      "json",
-    ) as unknown as AuthenticationWebAuthnJSON;
+    const payload = c.req.valid("json") as unknown as AuthenticationWebAuthnJSON;
     const rawChallengeRecord = await c.env.AUTH_KV.get<WebAuthnChallenge>(
       `webauthn:challenge:${payload.challengeId}`,
       "json",
@@ -492,9 +470,7 @@ export const sessionsApi = createApp()
         expectedRPID: rpID,
         credential: {
           id: storedCredential.id,
-          publicKey: new Uint8Array(
-            isoBase64URL.toBuffer(storedCredential.publicKey),
-          ),
+          publicKey: new Uint8Array(isoBase64URL.toBuffer(storedCredential.publicKey)),
           counter: storedCredential.counter,
           transports: storedCredential.transports ?? undefined,
         },
@@ -522,12 +498,7 @@ export const sessionsApi = createApp()
 
     await c.env.AUTH_KV.delete(`webauthn:challenge:${payload.challengeId}`);
 
-    await createSession(
-      c,
-      user,
-      challengeRecord.sessionId,
-      challengeRecord.sessionSecret,
-    );
+    await createSession(c, user, challengeRecord.sessionId, challengeRecord.sessionSecret);
 
     return c.body(null, 204);
   })

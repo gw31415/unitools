@@ -15,18 +15,12 @@ describe("editorImageCleanup", () => {
 
     it("extracts image id from absolute URL with query", () => {
       const id = "01HZX3T47PW5Z7F73Q0Z6E4TQ3";
-      expect(
-        extractImageIdFromSource(
-          `https://example.com/api/v1/images/${id}?cache=1`,
-        ),
-      ).toBe(id);
+      expect(extractImageIdFromSource(`https://example.com/api/v1/images/${id}?cache=1`)).toBe(id);
     });
 
     it("returns null for non-image API paths and data URLs", () => {
       expect(extractImageIdFromSource("data:image/png;base64,xxx")).toBeNull();
-      expect(
-        extractImageIdFromSource("/images/01HZX3T47PW5Z7F73Q0Z6E4TQ3"),
-      ).toBe(null);
+      expect(extractImageIdFromSource("/images/01HZX3T47PW5Z7F73Q0Z6E4TQ3")).toBe(null);
     });
   });
 
@@ -97,16 +91,13 @@ describe("editorImageCleanup", () => {
       const image2 = new Y.XmlElement("image");
 
       image1.setAttribute("src", `/api/v1/images/${firstId}`);
-      image2.setAttribute(
-        "dataSrc",
-        `https://example.com/api/v1/images/${secondId}`,
-      );
+      image2.setAttribute("dataSrc", `https://example.com/api/v1/images/${secondId}`);
       paragraph.push([image1, image2]);
       root.push([paragraph]);
 
-      expect(
-        Array.from(collectReferencedImageIdsFromYXmlFragment(root)).sort(),
-      ).toEqual([firstId, secondId].sort());
+      expect(Array.from(collectReferencedImageIdsFromYXmlFragment(root)).sort()).toEqual(
+        [firstId, secondId].sort(),
+      );
     });
   });
 });

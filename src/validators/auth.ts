@@ -17,22 +17,16 @@ export const userGetSchema = createSelectSchema(users, {
   username: usernameSchema,
 });
 
-export const passkeyCredentialInsertSchema = createInsertSchema(
-  passkeyCredentials,
-  {
-    userId: ulidSchema,
-  },
-).omit({
+export const passkeyCredentialInsertSchema = createInsertSchema(passkeyCredentials, {
+  userId: ulidSchema,
+}).omit({
   createdAt: true,
 });
 
-export const passkeyCredentialSelectSchema = createSelectSchema(
-  passkeyCredentials,
-  {
-    id: ulidSchema,
-    userId: ulidSchema,
-  },
-);
+export const passkeyCredentialSelectSchema = createSelectSchema(passkeyCredentials, {
+  id: ulidSchema,
+  userId: ulidSchema,
+});
 
 export const sessionInitSchema = z
   .object({

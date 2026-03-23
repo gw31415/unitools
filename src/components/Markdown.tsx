@@ -5,10 +5,7 @@ import type { HTMLAttributes } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
-import LazyImage, {
-  createGrayPreviewSrc,
-  setupLazyLoadingImages,
-} from "@/components/Image";
+import LazyImage, { createGrayPreviewSrc, setupLazyLoadingImages } from "@/components/Image";
 import { b64ToUint8Array } from "@/lib/base64";
 import { baseExtensions } from "@/lib/editorExtensions";
 import { uploadImage as uploadImageService } from "@/lib/imageService";
@@ -22,15 +19,7 @@ interface ImageDimensions {
   height: number;
 }
 
-const IMAGE_URL_EXTENSIONS = new Set([
-  "png",
-  "jpg",
-  "jpeg",
-  "gif",
-  "webp",
-  "avif",
-  "svg",
-]);
+const IMAGE_URL_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "svg"]);
 
 const MIME_TYPE_TO_EXTENSION: Record<string, string> = {
   "image/png": "png",
@@ -156,18 +145,12 @@ function normalizeEditorImagesForLazyLoading(
 
     const src = typeof attrs.src === "string" ? attrs.src : "";
     const dataSrc =
-      typeof attrs.dataSrc === "string" && attrs.dataSrc.length > 0
-        ? attrs.dataSrc
-        : src;
+      typeof attrs.dataSrc === "string" && attrs.dataSrc.length > 0 ? attrs.dataSrc : src;
     if (!dataSrc || dataSrc.startsWith("data:")) return;
     if (skipDataSrcs?.has(dataSrc)) return;
 
-    const width =
-      typeof attrs.width === "number" && attrs.width > 0 ? attrs.width : null;
-    const height =
-      typeof attrs.height === "number" && attrs.height > 0
-        ? attrs.height
-        : null;
+    const width = typeof attrs.width === "number" && attrs.width > 0 ? attrs.width : null;
+    const height = typeof attrs.height === "number" && attrs.height > 0 ? attrs.height : null;
     if (!width || !height) return;
 
     const placeholderSrc = createGrayPreviewSrc({ width, height });
@@ -205,9 +188,7 @@ const EMPTY_CONTENT_JSON = new Editor({
   content: "",
 }).getJSON();
 
-function decorateImageOnlyParagraphTrailingBreak(
-  content: JSONContent,
-): JSONContent {
+function decorateImageOnlyParagraphTrailingBreak(content: JSONContent): JSONContent {
   const next = content.content
     ? {
         ...content,
@@ -219,9 +200,7 @@ function decorateImageOnlyParagraphTrailingBreak(
 
   const paragraphContent = next.content ?? [];
   const startsWithImage = paragraphContent[0]?.type === "image";
-  const hasTrailingBreak = paragraphContent.some(
-    (node) => node?.type === "trailingBreak",
-  );
+  const hasTrailingBreak = paragraphContent.some((node) => node?.type === "trailingBreak");
   if (!startsWithImage || hasTrailingBreak) {
     return next;
   }
@@ -255,19 +234,12 @@ function MarkdownView({
     options: {
       nodeMapping: {
         image: ({ node }) => {
-          const {
-            class: classNameAttr,
-            dataSrc,
-            uploading: _,
-            ...attrs
-          } = node.attrs ?? {};
+          const { class: classNameAttr, dataSrc, uploading: _, ...attrs } = node.attrs ?? {};
 
           return (
             <LazyImage
               {...attrs}
-              className={
-                typeof classNameAttr === "string" ? classNameAttr : undefined
-              }
+              className={typeof classNameAttr === "string" ? classNameAttr : undefined}
               dataSrc={typeof dataSrc === "string" ? dataSrc : undefined}
             />
           );
@@ -277,13 +249,7 @@ function MarkdownView({
   });
 
   return (
-    <div
-      {...props}
-      className={cn(
-        "tiptap w-full min-w-0 max-w-full overflow-visible",
-        className,
-      )}
-    >
+    <div {...props} className={cn("tiptap w-full max-w-full min-w-0 overflow-visible", className)}>
       {rendered}
     </div>
   );
@@ -297,10 +263,7 @@ function updatePlaceholder(
   // Find placeholder node by upload token
   let pos: number | null = null;
   editor.state.doc.descendants((node, nodePos) => {
-    if (
-      node.type.name === "image" &&
-      node.attrs.alt === `${UPLOADING_ALT_PREFIX}${uploadToken}`
-    ) {
+    if (node.type.name === "image" && node.attrs.alt === `${UPLOADING_ALT_PREFIX}${uploadToken}`) {
       pos = nodePos;
       return false;
     }
@@ -382,8 +345,7 @@ async function uploadImageUrlAndInsert(
       throw new Error(`Failed to fetch image URL: ${response.status}`);
     }
 
-    const contentType =
-      (response.headers.get("content-type") ?? "").split(";")[0] ?? "";
+    const contentType = (response.headers.get("content-type") ?? "").split(";")[0] ?? "";
     if (!contentType.startsWith("image/")) {
       throw new Error(`Fetched resource is not image content: ${contentType}`);
     }
@@ -443,7 +405,7 @@ function MarkdownEditor({
       element: { mount: editorContainerRef.current! },
       editable,
       editorProps: {
-        ...(editorOpts?.editorProps ?? {}),
+        ...editorOpts?.editorProps,
         handlePaste: (view, event, slice) => {
           const items = event.clipboardData?.items ?? [];
           for (const item of items) {
@@ -469,11 +431,8 @@ function MarkdownEditor({
             if (currentEditor) {
               void Promise.all(
                 imageUrls.map((imageUrl) =>
-                  uploadImageUrlAndInsert(
-                    imageUrl,
-                    currentEditor,
-                    editorId,
-                    (url) => noLazyDataSrcsRef.current.add(url),
+                  uploadImageUrlAndInsert(imageUrl, currentEditor, editorId, (url) =>
+                    noLazyDataSrcsRef.current.add(url),
                   ),
                 ),
               );
@@ -519,10 +478,7 @@ function MarkdownEditor({
     <div
       ref={editorContainerRef}
       {...props}
-      className={cn(
-        "tiptap w-full min-w-0 max-w-full overflow-visible",
-        className,
-      )}
+      className={cn("tiptap w-full max-w-full min-w-0 overflow-visible", className)}
     />
   );
 }
@@ -588,11 +544,6 @@ export default function Markdown({
   return import.meta.env.SSR || !collabDoc ? (
     <MarkdownView contentJSON={snapshotJSON} {...props} />
   ) : (
-    <MarkdownEditor
-      editorOpts={editorOpts}
-      editable={!readonly}
-      editorId={editorId}
-      {...props}
-    />
+    <MarkdownEditor editorOpts={editorOpts} editable={!readonly} editorId={editorId} {...props} />
   );
 }

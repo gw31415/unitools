@@ -22,8 +22,7 @@ const cursorPayloadSchema = z.object({
   createdAt: z.number().int().nonnegative(),
 });
 
-const toTimestamp = (value: unknown) =>
-  value instanceof Date ? value.getTime() : Number(value);
+const toTimestamp = (value: unknown) => (value instanceof Date ? value.getTime() : Number(value));
 
 const requireDocExists: MiddlewareHandler<Env> = async (c, next) => {
   const id = c.req.param("id");
@@ -45,9 +44,7 @@ const wsRoute = createApp()
   .use("/:id", requireDocExists)
   .route(
     "/",
-    yRoute<Env>(
-      (env) => env.UNITOOLS_EDITORS as unknown as DurableObjectNamespace,
-    ),
+    yRoute<Env>((env) => env.UNITOOLS_EDITORS as unknown as DurableObjectNamespace),
   );
 
 function getDurableObjectOfDoc<T extends Env>(c: Context<T>, id: string) {
@@ -95,10 +92,7 @@ const editor = createApp()
       }
 
       const query = c.req.valid("query");
-      const limit = Math.min(
-        Math.max(1, query.limit ?? DEFAULT_PAGE_SIZE),
-        MAX_PAGE_SIZE,
-      );
+      const limit = Math.min(Math.max(1, query.limit ?? DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
       const take = limit + 1;
 
       const db = drizzle(c.env.DB, { schema });
@@ -127,9 +121,7 @@ const editor = createApp()
 
       const last = items.at(-1);
       const nextCursor =
-        hasMore && last
-          ? structToBase64Url({ id: last.id, createdAt: last.createdAt })
-          : null;
+        hasMore && last ? structToBase64Url({ id: last.id, createdAt: last.createdAt }) : null;
 
       return c.json({
         items,
@@ -183,19 +175,14 @@ const editor = createApp()
       .where(eq(schema.images.editorId, id));
 
     // エディタを削除（カスケードでDBの画像も削除）
-    const res = await db
-      .delete(schema.editors)
-      .where(eq(schema.editors.id, id))
-      .returning();
+    const res = await db.delete(schema.editors).where(eq(schema.editors.id, id)).returning();
 
     if (res.length > 0) {
       // R2から画像を一括削除（1000個ずつチャンク）
       if (imagesToDelete.length > 0) {
         const keys = imagesToDelete.map((img) => img.storageKey);
         for (let i = 0; i < keys.length; i += R2_BULK_DELETE_LIMIT) {
-          await c.env.UNITOOLS_R2.delete(
-            keys.slice(i, i + R2_BULK_DELETE_LIMIT),
-          );
+          await c.env.UNITOOLS_R2.delete(keys.slice(i, i + R2_BULK_DELETE_LIMIT));
         }
       }
       await getDurableObjectOfDoc(c, id).reset();

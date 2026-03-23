@@ -7,10 +7,7 @@ const MIN_IMAGE_SIZE = 48;
 const RESIZE_DIRECTIONS = ["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const;
 type ResizeDirection = (typeof RESIZE_DIRECTIONS)[number];
 
-function parsePositiveIntAttr(
-  element: HTMLElement,
-  name: string,
-): number | null {
+function parsePositiveIntAttr(element: HTMLElement, name: string): number | null {
   const value = element.getAttribute(name);
   if (!value) return null;
   const parsed = Number.parseInt(value, 10);
@@ -66,18 +63,12 @@ const CustomImage = Image.extend({
       resetButton.className = "image-size-reset";
       resetButton.setAttribute("aria-label", "Reset image size");
 
-      const resetIcon = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "svg",
-      );
+      const resetIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       resetIcon.setAttribute("viewBox", "0 0 24 24");
       resetIcon.setAttribute("aria-hidden", "true");
       resetIcon.classList.add("image-size-reset-icon");
 
-      const resetPath = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "path",
-      );
+      const resetPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
       resetPath.setAttribute("d", "M3 12a9 9 0 1 0 3-6.708M3 4v5h5");
       resetPath.setAttribute("fill", "none");
       resetPath.setAttribute("stroke", "currentColor");
@@ -133,9 +124,7 @@ const CustomImage = Image.extend({
       const applyNodeToElement = () => {
         const attrs = currentNode.attrs as Record<string, unknown>;
         image.className =
-          typeof props.HTMLAttributes.class === "string"
-            ? props.HTMLAttributes.class
-            : "";
+          typeof props.HTMLAttributes.class === "string" ? props.HTMLAttributes.class : "";
 
         image.alt = typeof attrs.alt === "string" ? attrs.alt : "";
         if (typeof attrs.title === "string" && attrs.title.length > 0) {
@@ -152,9 +141,7 @@ const CustomImage = Image.extend({
           "";
         const placeholderSrc = typeof attrs.src === "string" ? attrs.src : "";
         const dataSrc =
-          typeof attrs.dataSrc === "string" && attrs.dataSrc.length > 0
-            ? attrs.dataSrc
-            : null;
+          typeof attrs.dataSrc === "string" && attrs.dataSrc.length > 0 ? attrs.dataSrc : null;
 
         if (width && height) {
           image.style.width = `${width}px`;
@@ -166,9 +153,7 @@ const CustomImage = Image.extend({
 
         // Keep real image src if lazy-loading already swapped to data-src.
         const currentSrc = image.getAttribute("src");
-        if (
-          !(dataSrc && currentSrc === dataSrc && placeholderSrc !== dataSrc)
-        ) {
+        if (!(dataSrc && currentSrc === dataSrc && placeholderSrc !== dataSrc)) {
           image.src = placeholderSrc;
         }
 
@@ -245,23 +230,13 @@ const CustomImage = Image.extend({
           MIN_IMAGE_SIZE / drag.startHeight,
         );
         const containerWidth =
-          props.view.dom instanceof HTMLElement
-            ? props.view.dom.clientWidth
-            : 0;
+          props.view.dom instanceof HTMLElement ? props.view.dom.clientWidth : 0;
         const maxScale =
-          containerWidth > 0
-            ? containerWidth / drag.startWidth
-            : Number.POSITIVE_INFINITY;
+          containerWidth > 0 ? containerWidth / drag.startWidth : Number.POSITIVE_INFINITY;
         const clampedScale = Math.min(Math.max(scale, minScale), maxScale);
 
-        const width = Math.max(
-          MIN_IMAGE_SIZE,
-          Math.round(drag.startWidth * clampedScale),
-        );
-        const height = Math.max(
-          MIN_IMAGE_SIZE,
-          Math.round(width / drag.aspectRatio),
-        );
+        const width = Math.max(MIN_IMAGE_SIZE, Math.round(drag.startWidth * clampedScale));
+        const height = Math.max(MIN_IMAGE_SIZE, Math.round(width / drag.aspectRatio));
 
         image.style.width = `${width}px`;
         image.style.height = "auto";
@@ -275,9 +250,7 @@ const CustomImage = Image.extend({
         stopDragging();
       };
 
-      for (const handle of wrapper.querySelectorAll<HTMLElement>(
-        ".image-resize-handle",
-      )) {
+      for (const handle of wrapper.querySelectorAll<HTMLElement>(".image-resize-handle")) {
         handle.addEventListener("pointerdown", (event: PointerEvent) => {
           if (!props.editor.isEditable || currentNode.attrs.uploading) return;
           event.preventDefault();
@@ -296,9 +269,7 @@ const CustomImage = Image.extend({
             MIN_IMAGE_SIZE;
           const originalWidth = originalSize?.width || width;
           const originalHeight = originalSize?.height || height;
-          const direction = handle.getAttribute(
-            "data-direction",
-          ) as ResizeDirection;
+          const direction = handle.getAttribute("data-direction") as ResizeDirection;
 
           drag = {
             direction,
@@ -369,8 +340,4 @@ const CustomImage = Image.extend({
   },
 });
 
-export const baseExtensions = [
-  StarterKit.configure({ undoRedo: false }),
-  MarkdownExt,
-  CustomImage,
-];
+export const baseExtensions = [StarterKit.configure({ undoRedo: false }), MarkdownExt, CustomImage];

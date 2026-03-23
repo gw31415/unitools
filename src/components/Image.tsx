@@ -168,9 +168,7 @@ export default function Image({
   }, [resolvedDataSrc, resolvedHeight, resolvedWidth, shouldLazyLoad, src]);
 
   const [currentSrc, setCurrentSrc] = useState(initialSrc);
-  const [isPending, setIsPending] = useState(
-    shouldLazyLoad && currentSrc !== resolvedDataSrc,
-  );
+  const [isPending, setIsPending] = useState(shouldLazyLoad && currentSrc !== resolvedDataSrc);
 
   useEffect(() => {
     setCurrentSrc(initialSrc);
