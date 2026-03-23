@@ -64,6 +64,7 @@
     "vitest": "npm:@voidzero-dev/vite-plus-test@0.1.13",
     "wrangler": "^4.73.0"
   },
+  "packageManager": "pnpm@10.32.1",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@0.1.13",
