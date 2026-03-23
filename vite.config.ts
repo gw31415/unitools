@@ -7,7 +7,7 @@ const ignorePatterns = ["src/components/ui/**", "worker-configuration.d.ts"];
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },
-  plugins: [cloudflare(), tailwindcss(), ssrPlugin()],
+  plugins: [...(process.env.VITEST === "true" ? [] : [cloudflare()]), tailwindcss(), ssrPlugin()],
   test: {
     environment: "jsdom",
     globals: true,
