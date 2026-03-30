@@ -82,9 +82,12 @@ export function EditorSearchDock({
   onValueChange,
   items,
   isLoading,
+  isLoadingMore,
+  hasMore,
   isAuthRequired,
   error,
   onRetry,
+  onLoadMore,
   currentEditorId,
   onRequestFocusEditor,
   onNavigateToEditor,
@@ -93,9 +96,12 @@ export function EditorSearchDock({
   onValueChange: (value: string) => void;
   items: SearchDockItem[];
   isLoading: boolean;
+  isLoadingMore: boolean;
+  hasMore: boolean;
   isAuthRequired: boolean;
   error: string | null;
   onRetry: () => void;
+  onLoadMore: () => void;
   currentEditorId: string;
   onRequestFocusEditor: () => void;
   onNavigateToEditor: (editorId: string, options?: { focusEditor?: boolean }) => void;
@@ -114,6 +120,7 @@ export function EditorSearchDock({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const searchButtonRef = useRef<HTMLButtonElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
   const navigationTimerRef = useRef<number | null>(null);
   const suppressOpenOnChangeRef = useRef(false);
   const touchSelectionRef = useRef(false);
@@ -172,10 +179,8 @@ export function EditorSearchDock({
   }, []);
   const panelItems =
     normalizedQuery.length === 0
-      ? items.slice(0, 6)
-      : items
-          .filter((item) => formatEditorLabel(item).toLowerCase().includes(normalizedQuery))
-          .slice(0, 6);
+      ? items
+      : items.filter((item) => formatEditorLabel(item).toLowerCase().includes(normalizedQuery));
   const closeSearch = (options?: { restoreDockButtonFocus?: boolean }) => {
     setOpen(false);
     if (options?.restoreDockButtonFocus === false) {
@@ -211,6 +216,20 @@ export function EditorSearchDock({
     }
     setActiveIndex((prev) => Math.min(prev, panelItems.length - 1));
   }, [open, panelItems.length]);
+
+  const maybeLoadMore = useCallback(() => {
+    const resultsElement = resultsRef.current;
+    if (!resultsElement || !open || isLoading || isLoadingMore || !hasMore) return;
+    const remaining =
+      resultsElement.scrollHeight - resultsElement.scrollTop - resultsElement.clientHeight;
+    if (remaining <= 96) {
+      onLoadMore();
+    }
+  }, [open, isLoading, isLoadingMore, hasMore, onLoadMore]);
+
+  useEffect(() => {
+    maybeLoadMore();
+  }, [maybeLoadMore, panelItems.length]);
 
   useEffect(() => {
     return () => {
@@ -438,7 +457,11 @@ export function EditorSearchDock({
           <div className="px-2 py-1 text-xs text-muted-foreground">
             {normalizedQuery.length === 0 ? "Recent articles" : "Search results"}
           </div>
-          <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+          <div
+            ref={resultsRef}
+            className="flex max-h-72 flex-col gap-1 overflow-y-auto"
+            onScroll={maybeLoadMore}
+          >
             {isLoading ? (
               <div className="px-2 py-3 text-sm text-muted-foreground">Loading...</div>
             ) : error ? (
@@ -488,8 +511,13 @@ export function EditorSearchDock({
                 {normalizedQuery.length > 0 ? "No matching articles." : "No articles yet."}
               </div>
             )}
+            {!isLoading && !error && !isAuthRequired && isLoadingMore ? (
+              <div className="px-2 py-2 text-xs text-muted-foreground">Loading more...</div>
+            ) : null}
           </div>
-          <div className="px-2 pt-2 text-xs text-muted-foreground">Full search is coming soon.</div>
+          <div className="px-2 pt-2 text-xs text-muted-foreground">
+            {hasMore ? "Scroll for more articles." : "Full search is coming soon."}
+          </div>
         </div>
       ) : null}
       <div

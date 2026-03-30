@@ -40,37 +40,81 @@ export default function DocumentPage() {
   const [searchValue, setSearchValue] = useState("");
   const [searchItems, setSearchItems] = useState<SearchDockItem[]>([]);
   const [isSearchLoading, setIsSearchLoading] = useState(true);
+  const [isSearchLoadingMore, setIsSearchLoadingMore] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearchAuthRequired, setIsSearchAuthRequired] = useState(false);
+  const [searchHasMore, setSearchHasMore] = useState(false);
+  const [searchNextCursor, setSearchNextCursor] = useState<string | null>(null);
 
-  const fetchSearchItems = useCallback(async () => {
-    const client = getClient();
-    if (!client) return;
-    setIsSearchLoading(true);
-    setSearchError(null);
-    try {
-      const res = await client.api.v1.editor.$get({
-        query: { limit: String(SIDEBAR_PAGE_SIZE) },
-      });
-      if (res.status === 401) {
-        setIsSearchAuthRequired(true);
-        setSearchItems([]);
-        return;
+  const fetchSearchItems = useCallback(
+    async ({ cursor, append = false }: { cursor?: string | null; append?: boolean } = {}) => {
+      const client = getClient();
+      if (!client) return;
+      if (append) {
+        setIsSearchLoadingMore(true);
+      } else {
+        setIsSearchLoading(true);
       }
-      if (!res.ok) {
+      setSearchError(null);
+      try {
+        const res = await client.api.v1.editor.$get({
+          query: {
+            limit: String(SIDEBAR_PAGE_SIZE),
+            ...(cursor ? { cursor } : {}),
+          },
+        });
+        if (res.status === 401) {
+          setIsSearchAuthRequired(true);
+          setSearchItems([]);
+          setSearchHasMore(false);
+          setSearchNextCursor(null);
+          return;
+        }
+        if (!res.ok) {
+          setSearchError("Failed to load articles.");
+          return;
+        }
+        const { items, pageInfo } = await res.json();
+        setSearchItems((prev) => {
+          if (!append) return items;
+          const nextItems = [...prev];
+          for (const item of items) {
+            if (nextItems.some((existing) => existing.id === item.id)) continue;
+            nextItems.push(item);
+          }
+          return nextItems;
+        });
+        setSearchHasMore(pageInfo.hasMore);
+        setSearchNextCursor(pageInfo.nextCursor);
+        setIsSearchAuthRequired(false);
+      } catch (error) {
+        console.error(error);
         setSearchError("Failed to load articles.");
-        return;
+      } finally {
+        if (append) {
+          setIsSearchLoadingMore(false);
+        } else {
+          setIsSearchLoading(false);
+        }
       }
-      const { items } = await res.json();
-      setSearchItems(items);
-      setIsSearchAuthRequired(false);
-    } catch (error) {
-      console.error(error);
-      setSearchError("Failed to load articles.");
-    } finally {
-      setIsSearchLoading(false);
+    },
+    [],
+  );
+
+  const loadMoreSearchItems = useCallback(async () => {
+    if (isSearchLoading || isSearchLoadingMore || !searchHasMore || !searchNextCursor) {
+      return;
     }
-  }, []);
+    await fetchSearchItems({ cursor: searchNextCursor, append: true });
+  }, [fetchSearchItems, isSearchLoading, isSearchLoadingMore, searchHasMore, searchNextCursor]);
+
+  const refreshSearchItems = useCallback(async () => {
+    await fetchSearchItems();
+  }, [fetchSearchItems]);
+
+  useEffect(() => {
+    void refreshSearchItems();
+  }, [refreshSearchItems]);
 
   const handleNavigateToEditor = (editorId: string, options?: { focusEditor?: boolean }) => {
     const shouldFocusEditor = options?.focusEditor ?? true;
@@ -81,11 +125,6 @@ export default function DocumentPage() {
     }
     window.location.assign(`/editor/${editorId}`);
   };
-
-  useEffect(() => {
-    void fetchSearchItems();
-  }, [fetchSearchItems]);
-
   useEffect(() => {
     if (!editorState.editorId) return;
     if (sessionStorage.getItem(FOCUS_EDITOR_ON_LOAD_KEY) !== "1") return;
@@ -143,9 +182,12 @@ export default function DocumentPage() {
         onValueChange={setSearchValue}
         items={searchItems}
         isLoading={isSearchLoading}
+        isLoadingMore={isSearchLoadingMore}
+        hasMore={searchHasMore}
         isAuthRequired={isSearchAuthRequired}
         error={searchError}
-        onRetry={fetchSearchItems}
+        onRetry={refreshSearchItems}
+        onLoadMore={loadMoreSearchItems}
         currentEditorId={editorState.editorId}
         onRequestFocusEditor={focusEditorElement}
         onNavigateToEditor={handleNavigateToEditor}
