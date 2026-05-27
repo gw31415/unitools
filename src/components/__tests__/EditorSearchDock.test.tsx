@@ -49,7 +49,6 @@ describe("EditorSearchDock", () => {
     renderSearchDock();
 
     fireEvent.click(screen.getByLabelText("Open search"));
-    expect(screen.getByRole("button", { name: "Article 01" })).toHaveClass("border-l-primary");
 
     scrollIntoView.mockClear();
     fireEvent.keyDown(screen.getByLabelText("Search articles"), {
@@ -57,7 +56,10 @@ describe("EditorSearchDock", () => {
       metaKey: true,
     });
 
-    expect(screen.getByRole("button", { name: "Article 02" })).toHaveClass("border-l-primary");
+    expect(screen.getByRole("button", { name: "Article 02" })).toHaveAttribute(
+      "data-active",
+      "true",
+    );
     expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
   });
 });

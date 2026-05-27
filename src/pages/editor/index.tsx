@@ -151,7 +151,10 @@ export default function DocumentPage() {
                 aria-label="Main content editor/viewer of this page"
               />
             </div>
-            <div className="h-[env(safe-area-inset-bottom,0px)] w-full shrink-0 bg-background" aria-hidden="true" />
+            <div
+              className="h-[env(safe-area-inset-bottom,0px)] w-full shrink-0 bg-background"
+              aria-hidden="true"
+            />
           </>
         ) : (
           <div className="container mx-auto size-full px-4 sm:px-6 lg:px-8">
