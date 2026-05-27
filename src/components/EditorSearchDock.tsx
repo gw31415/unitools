@@ -113,6 +113,7 @@ export function EditorSearchDock({
   const searchButtonRef = useRef<HTMLButtonElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
+  const activeItemRef = useRef<HTMLButtonElement | null>(null);
   const navigationTimerRef = useRef<number | null>(null);
   const suppressOpenOnChangeRef = useRef(false);
   const touchSelectionRef = useRef(false);
@@ -218,6 +219,11 @@ export function EditorSearchDock({
       onLoadMore();
     }
   }, [open, isLoading, isLoadingMore, hasMore, onLoadMore]);
+
+  useLayoutEffect(() => {
+    if (!open || panelItems.length === 0) return;
+    activeItemRef.current?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, open, panelItems.length]);
 
   useEffect(() => {
     maybeLoadMore();
@@ -473,6 +479,7 @@ export function EditorSearchDock({
               panelItems.map((item, index) => (
                 <Button
                   key={item.id}
+                  ref={index === activeIndex ? activeItemRef : undefined}
                   type="button"
                   variant="ghost"
                   className={`h-auto w-full justify-start rounded-xl px-2 py-2 text-left ${
@@ -572,14 +579,15 @@ export function EditorSearchDock({
               const isCtrlEscape = e.ctrlKey && !e.metaKey && !e.altKey && e.key === "[";
               const isCtrlEnter =
                 e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "m";
-              const isCtrlMove =
-                e.ctrlKey &&
-                !e.metaKey &&
+              const isModifierMove =
+                (e.ctrlKey || e.metaKey) &&
+                !(e.ctrlKey && e.metaKey) &&
                 !e.altKey &&
+                !e.shiftKey &&
                 (e.key.toLowerCase() === "n" || e.key.toLowerCase() === "p");
               const isArrowMove = e.key === "ArrowDown" || e.key === "ArrowUp";
 
-              if (isArrowMove || isCtrlMove) {
+              if (isArrowMove || isModifierMove) {
                 e.preventDefault();
                 if (!open) setOpen(true);
                 if (panelItems.length === 0) return;
