@@ -1,7 +1,10 @@
 import { hydrateRoot } from "react-dom/client";
+import { registerSW } from "virtual:pwa-register";
 import { SSRProvider } from "@/lib/ssr";
 import { loadComponent } from "@/pages";
 import { type SSRStateType, ssrAtomState } from "@/store";
+
+registerSW({ immediate: true });
 
 function reserveHydrationHeight(): () => void {
   const body = document.body;

@@ -6,7 +6,7 @@
     "strict": true,
     "skipLibCheck": true,
     "lib": ["ESNext", "DOM", "dom.iterable"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "vite-plugin-pwa/client"],
     "jsx": "react-jsx",
     "jsxImportSource": "react",
     "paths": {

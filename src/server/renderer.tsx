@@ -13,6 +13,7 @@ export const renderer = reactRenderer(({ children, ssrState }) => {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <meta name="description" content={description} />
+        <meta name="theme-color" content="#ffffff" />
 
         {/* OGPタグ */}
         <meta property="og:title" content={title} />
@@ -31,6 +32,7 @@ export const renderer = reactRenderer(({ children, ssrState }) => {
         <link rel="icon" href="/favicon.ico" sizes="32x32" />
         <link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="manifest" href="/manifest.webmanifest" />
 
         <Link href="/src/style.css" rel="stylesheet" />
         <script id="__SSR_STATE__" type="application/json">
