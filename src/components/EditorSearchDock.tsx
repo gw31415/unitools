@@ -44,17 +44,9 @@ function getClientViewportSize(): { width: number; height: number } {
   if (typeof window === "undefined") {
     return { width: 1024, height: 768 };
   }
-  const visualViewportWidth = window.visualViewport?.width;
-  const visualViewportHeight = window.visualViewport?.height;
   return {
-    width:
-      typeof visualViewportWidth === "number" && visualViewportWidth > 0
-        ? Math.floor(visualViewportWidth)
-        : window.innerWidth,
-    height:
-      typeof visualViewportHeight === "number" && visualViewportHeight > 0
-        ? Math.floor(visualViewportHeight)
-        : window.innerHeight,
+    width: window.innerWidth,
+    height: window.innerHeight,
   };
 }
 
@@ -382,7 +374,6 @@ export function EditorSearchDock({
     window.addEventListener("orientationchange", syncViewport);
     window.addEventListener("pageshow", syncViewport);
     window.addEventListener("load", syncViewport);
-    window.visualViewport?.addEventListener("resize", syncViewport);
 
     return () => {
       window.cancelAnimationFrame(rafId);
@@ -391,7 +382,6 @@ export function EditorSearchDock({
       window.removeEventListener("orientationchange", syncViewport);
       window.removeEventListener("pageshow", syncViewport);
       window.removeEventListener("load", syncViewport);
-      window.visualViewport?.removeEventListener("resize", syncViewport);
     };
   }, []);
 
