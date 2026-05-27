@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatEditorLabel } from "@/lib/editorLabel";
+import { cn } from "@/lib/utils";
 import { type FabPosition, fabPositionAtom } from "@/store";
 
 const FAB_POSITION_COOKIE = "fab_position";
@@ -476,33 +477,38 @@ export function EditorSearchDock({
             ) : isAuthRequired ? (
               <div className="px-2 py-3 text-sm text-muted-foreground">Login is required.</div>
             ) : panelItems.length > 0 ? (
-              panelItems.map((item, index) => (
-                <Button
-                  key={item.id}
-                  ref={index === activeIndex ? activeItemRef : undefined}
-                  type="button"
-                  variant="ghost"
-                  className={`h-auto w-full justify-start rounded-xl px-2 py-2 text-left ${
-                    panelItems[activeIndex]?.id === item.id ? "bg-muted" : ""
-                  }`}
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    touchSelectionRef.current = event.pointerType === "touch";
-                  }}
-                  onClick={() => {
-                    const focusEditor = !touchSelectionRef.current;
-                    touchSelectionRef.current = false;
-                    selectItem(item, focusEditor);
-                  }}
-                  onMouseEnter={() => {
-                    setActiveIndex(index);
-                  }}
-                >
-                  <span className={item.id === currentEditorId ? "font-medium" : ""}>
-                    {formatEditorLabel(item)}
-                  </span>
-                </Button>
-              ))
+              panelItems.map((item, index) => {
+                const isActive = panelItems[activeIndex]?.id === item.id;
+
+                return (
+                  <Button
+                    key={item.id}
+                    ref={index === activeIndex ? activeItemRef : undefined}
+                    type="button"
+                    variant="ghost"
+                    data-active={isActive ? "true" : undefined}
+                    className={cn(
+                      "h-auto w-full justify-start rounded-xl border-2 border-transparent px-2 py-2 text-left",
+                      "hover:bg-accent/60 hover:text-accent-foreground dark:hover:bg-accent/40",
+                      isActive &&
+                        "border-border/80 bg-background/75 shadow-xs hover:bg-background/75 dark:border-white/15 dark:bg-background/35 dark:hover:bg-background/35",
+                    )}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      touchSelectionRef.current = event.pointerType === "touch";
+                    }}
+                    onClick={() => {
+                      const focusEditor = !touchSelectionRef.current;
+                      touchSelectionRef.current = false;
+                      selectItem(item, focusEditor);
+                    }}
+                  >
+                    <span className={item.id === currentEditorId ? "font-medium" : ""}>
+                      {formatEditorLabel(item)}
+                    </span>
+                  </Button>
+                );
+              })
             ) : (
               <div className="px-2 py-3 text-sm text-muted-foreground">
                 {normalizedQuery.length > 0 ? "No matching articles." : "No articles yet."}
