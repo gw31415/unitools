@@ -138,10 +138,10 @@ export default function DocumentPage() {
   return (
     <div className="flex min-h-dvh flex-col">
       <Header />
-      <main className={`min-h-0 flex-1 ${editorState.editorId ? "bg-(--markdown-surface)" : ""}`}>
+      <main className="min-h-0 flex-1 bg-(--markdown-surface)">
         {editorState.editorId ? (
-          <div className="container mx-auto flex h-full w-full flex-col px-4 sm:px-6 lg:px-8">
-            <div className="mx-auto flex h-full w-full max-w-4xl flex-col">
+          <>
+            <div className="container mx-auto flex size-full max-w-4xl flex-col px-4 sm:px-6 lg:px-8">
               <Markdown
                 editorId={editorState.editorId}
                 bootstrap={bootstrap}
@@ -150,11 +150,11 @@ export default function DocumentPage() {
                 className="w-full flex-1 py-2"
                 aria-label="Main content editor/viewer of this page"
               />
-              <div className="h-[env(safe-area-inset-bottom,0px)] shrink-0" aria-hidden="true" />
             </div>
-          </div>
+            <div className="h-[env(safe-area-inset-bottom,0px)] w-full shrink-0 bg-background" aria-hidden="true" />
+          </>
         ) : (
-          <div className="container mx-auto h-full w-full px-4 sm:px-6 lg:px-8">
+          <div className="container mx-auto size-full px-4 sm:px-6 lg:px-8">
             <Empty className="h-full">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
