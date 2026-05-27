@@ -455,7 +455,7 @@ export function EditorSearchDock({
           </div>
           <div
             ref={resultsRef}
-            className="flex max-h-72 flex-col gap-1 overflow-y-auto"
+            className="flex max-h-72 flex-col gap-1 overflow-y-auto overscroll-none"
             onScroll={maybeLoadMore}
           >
             {isLoading ? (
