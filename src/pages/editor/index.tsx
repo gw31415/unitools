@@ -150,6 +150,7 @@ export default function DocumentPage() {
                 className="w-full flex-1 py-2"
                 aria-label="Main content editor/viewer of this page"
               />
+              <div className="h-[env(safe-area-inset-bottom,0px)] shrink-0" aria-hidden="true" />
             </div>
           </div>
         ) : (
