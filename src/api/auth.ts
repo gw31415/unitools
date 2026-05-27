@@ -94,6 +94,12 @@ async function loadSessionFromRequest<EnvExtended extends Env>(
     return null;
   }
 
+  // Update session expiration
+  await c.env.AUTH_KV.put(sessionKey(userId, sessionId), JSON.stringify(record), {
+    expirationTtl: SESSION_TTL_SECONDS,
+  });
+  setCookie(c, PASSKEY_SESSION_COOKIE, sessionToken, getRpConfig(c).toCookieOptions());
+
   return { user: record.user, sessionId };
 }
 
