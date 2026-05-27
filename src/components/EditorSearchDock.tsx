@@ -525,7 +525,11 @@ export function EditorSearchDock({
           className="size-10 shrink-0 rounded-full transition-all duration-300 ease-out"
           onClick={() => {
             if (!hasActuallyMovedRef.current) {
-              openSearch();
+              if (open) {
+                closeSearch();
+              } else {
+                openSearch();
+              }
             }
           }}
           onPointerDown={(e) => {
@@ -535,7 +539,8 @@ export function EditorSearchDock({
             e.currentTarget.setPointerCapture(e.pointerId);
             handleDragStart(e.clientX, e.clientY);
           }}
-          aria-label="Open search"
+          aria-label={open ? "Close search" : "Open search"}
+          aria-expanded={open}
           tabIndex={open ? 0 : -1}
           style={{
             cursor: isDragging ? "grabbing" : "grab",
