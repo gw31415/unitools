@@ -17,20 +17,68 @@ import { currentUserAtom, editorStateAtom, markdownBootstrapAtom } from "@/store
 
 const SIDEBAR_PAGE_SIZE = 20;
 const FOCUS_EDITOR_ON_LOAD_KEY = "focus-editor-on-load";
+const SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY = "scroll-to-search-text-on-load";
 const getClient = () =>
   typeof window === "undefined" ? null : hc<ServerAppType>(window.location.origin);
 
-function focusEditorElement() {
+function getEditorRoot() {
   const root = document.querySelector('[aria-label="Main content editor/viewer of this page"]');
+  return root instanceof HTMLElement ? root : null;
+}
+
+function focusEditorElement() {
+  const root = getEditorRoot();
   if (!root) return;
   const editable = root.querySelector('[contenteditable="true"]') as HTMLElement | null;
   if (editable) {
     editable.focus({ preventScroll: true });
     return;
   }
-  if (root instanceof HTMLElement) {
-    root.focus({ preventScroll: true });
+  root.focus({ preventScroll: true });
+}
+
+function findTextMatch(root: HTMLElement, searchText: string) {
+  const needle = searchText.toLocaleLowerCase();
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+
+  while (node) {
+    const text = node.textContent ?? "";
+    const index = text.toLocaleLowerCase().indexOf(needle);
+    if (index >= 0) {
+      return { node, index };
+    }
+    node = walker.nextNode();
   }
+
+  return null;
+}
+
+function scrollToEditorText(searchText: string, attempt = 0) {
+  const normalizedSearchText = searchText.trim();
+  if (!normalizedSearchText) return false;
+
+  const root = getEditorRoot();
+  const match = root ? findTextMatch(root, normalizedSearchText) : null;
+  if (!root || !match) {
+    if (attempt < 20) {
+      window.setTimeout(() => scrollToEditorText(normalizedSearchText, attempt + 1), 100);
+    }
+    return false;
+  }
+
+  const range = document.createRange();
+  range.setStart(match.node, match.index);
+  range.setEnd(match.node, match.index + normalizedSearchText.length);
+
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  const container =
+    match.node.parentElement ??
+    (match.node.parentNode instanceof HTMLElement ? match.node.parentNode : root);
+  container.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  return true;
 }
 
 export default function DocumentPage() {
@@ -124,18 +172,44 @@ export default function DocumentPage() {
     return () => window.clearTimeout(timer);
   }, [refreshSearchItems]);
 
-  const handleNavigateToEditor = (editorId: string, options?: { focusEditor?: boolean }) => {
+  const handleRequestFocusEditor = (options?: { searchText?: string }) => {
+    if (options?.searchText && scrollToEditorText(options.searchText)) {
+      return;
+    }
+    focusEditorElement();
+  };
+
+  const handleNavigateToEditor = (
+    editorId: string,
+    options?: { focusEditor?: boolean; searchText?: string },
+  ) => {
     const shouldFocusEditor = options?.focusEditor ?? true;
     if (shouldFocusEditor) {
       sessionStorage.setItem(FOCUS_EDITOR_ON_LOAD_KEY, "1");
     } else {
       sessionStorage.removeItem(FOCUS_EDITOR_ON_LOAD_KEY);
     }
+    if (options?.searchText) {
+      sessionStorage.setItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY, options.searchText);
+    } else {
+      sessionStorage.removeItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
+    }
     window.location.assign(`/editor/${editorId}`);
   };
   useEffect(() => {
     if (!editorState.editorId) return;
-    if (sessionStorage.getItem(FOCUS_EDITOR_ON_LOAD_KEY) !== "1") return;
+    const searchText = sessionStorage.getItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
+    if (searchText) {
+      sessionStorage.removeItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
+      const timer = window.setTimeout(() => {
+        scrollToEditorText(searchText);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+
+    if (sessionStorage.getItem(FOCUS_EDITOR_ON_LOAD_KEY) !== "1") {
+      return;
+    }
     sessionStorage.removeItem(FOCUS_EDITOR_ON_LOAD_KEY);
     const timer = window.setTimeout(() => {
       focusEditorElement();
@@ -201,7 +275,7 @@ export default function DocumentPage() {
         onRetry={refreshSearchItems}
         onLoadMore={loadMoreSearchItems}
         currentEditorId={editorState.editorId}
-        onRequestFocusEditor={focusEditorElement}
+        onRequestFocusEditor={handleRequestFocusEditor}
         onNavigateToEditor={handleNavigateToEditor}
       />
     </div>

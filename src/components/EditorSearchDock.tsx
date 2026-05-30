@@ -100,8 +100,11 @@ export function EditorSearchDock({
   onRetry: () => void;
   onLoadMore: () => void;
   currentEditorId: string;
-  onRequestFocusEditor: () => void;
-  onNavigateToEditor: (editorId: string, options?: { focusEditor?: boolean }) => void;
+  onRequestFocusEditor: (options?: { searchText?: string }) => void;
+  onNavigateToEditor: (
+    editorId: string,
+    options?: { focusEditor?: boolean; searchText?: string },
+  ) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -188,11 +191,14 @@ export function EditorSearchDock({
     inputRef.current?.blur();
   };
   const selectItem = (item: SearchDockItem, focusEditor = true) => {
+    const searchText = normalizedQuery.length > 0 ? value.trim() : undefined;
     if (item.id === currentEditorId) {
       closeSearch({ restoreDockButtonFocus: !focusEditor });
-      if (focusEditor) {
-        onRequestFocusEditor();
+      if (searchText) {
+        onRequestFocusEditor({ searchText });
+        return;
       }
+      if (focusEditor) onRequestFocusEditor();
       return;
     }
     closeSearch({ restoreDockButtonFocus: !focusEditor });
@@ -200,7 +206,7 @@ export function EditorSearchDock({
       window.clearTimeout(navigationTimerRef.current);
     }
     navigationTimerRef.current = window.setTimeout(() => {
-      onNavigateToEditor(item.id, { focusEditor });
+      onNavigateToEditor(item.id, { focusEditor, searchText });
     }, CLOSE_ANIMATION_MS);
   };
 
