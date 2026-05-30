@@ -1,5 +1,5 @@
 name = "unitools"
-compatibility_date = "2025-08-03"
+compatibility_date = "2026-03-17"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 main = "./src/index.tsx"
 
@@ -21,6 +21,9 @@ preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
 [[r2_buckets]]
 binding = "UNITOOLS_R2"
 bucket_name = "unitools"
+
+[ai]
+binding = "AI"
 
 [[migrations]]
 tag = "v1"
