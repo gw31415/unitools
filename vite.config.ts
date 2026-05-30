@@ -86,7 +86,13 @@ export default defineConfig({
       exclude: ["node_modules/", "src/__tests__/", "*.config.ts", "dist/"],
     },
   },
-  lint: { ignorePatterns },
+  lint: {
+    ignorePatterns,
+    options: {
+      typeAware: true,
+      typeCheck: true,
+    },
+  },
   fmt: {
     sortImports: {
       newlinesBetween: false,

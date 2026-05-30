@@ -29,7 +29,7 @@ const ssrStateElement = document.getElementById("__SSR_STATE__");
 if (!ssrStateElement?.textContent) {
   console.error("[Client] No SSR state found");
 } else {
-  (async () => {
+  void (async () => {
     try {
       const state: SSRStateType = JSON.parse(ssrStateElement.textContent);
 

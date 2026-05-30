@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react";
 import { atom, useAtom } from "jotai";
 import { renderToString } from "react-dom/server";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { createSSRAtomState, SSRProvider } from "../ssr";
 
 describe("SSR Hydration Integration", () => {

@@ -145,7 +145,7 @@ export function EditorSearchDock({
       clamped.horizontal !== ssrFabPosition.horizontal ||
       clamped.bottom !== ssrFabPosition.bottom
     ) {
-      setFabPositionCookie(clamped);
+      void setFabPositionCookie(clamped);
     }
 
     if (clamped.horizontal === "right") {
@@ -315,7 +315,7 @@ export function EditorSearchDock({
       bottom: snappedBottom,
     };
     setFabPosition(snappedPosition);
-    setFabPositionCookie(snappedPosition);
+    void setFabPositionCookie(snappedPosition);
     // Keep drag-release snap animations on `left` so both directions interpolate.
     clearRightAnchorTimer();
     setAnchorMode("left");
@@ -399,7 +399,7 @@ export function EditorSearchDock({
       return;
     }
     setFabPosition(clamped);
-    setFabPositionCookie(clamped);
+    void setFabPositionCookie(clamped);
   }, [fabPosition, viewport.height]);
 
   const openDockWidth = Math.max(

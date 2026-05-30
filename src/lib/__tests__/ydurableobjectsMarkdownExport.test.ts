@@ -1,6 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 import { renderToMarkdown } from "@tiptap/static-renderer";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { baseExtensions } from "../editorExtensions";
 import { normalizeMarkdownExportContent } from "../markdownExport";
 
