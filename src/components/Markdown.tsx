@@ -181,12 +181,10 @@ const TrailingBreakNode = Node.create({
   },
 });
 
-const EMPTY_CONTENT_JSON = new Editor({
-  element: null,
-  extensions: baseExtensions,
-  contentType: "markdown",
-  content: "",
-}).getJSON();
+const EMPTY_CONTENT_JSON: JSONContent = {
+  type: "doc",
+  content: [{ type: "paragraph" }],
+};
 
 function decorateImageOnlyParagraphTrailingBreak(content: JSONContent): JSONContent {
   const next = content.content
