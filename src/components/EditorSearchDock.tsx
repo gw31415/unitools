@@ -30,6 +30,9 @@ export type SearchDockItem = {
   id: string;
   createdAt: number;
   title?: string;
+  match?: {
+    text?: string | null;
+  };
 };
 
 export const DOCK_SPACING = 8;
@@ -500,8 +503,20 @@ export function EditorSearchDock({
                       selectItem(item, focusEditor);
                     }}
                   >
-                    <span className={item.id === currentEditorId ? "font-medium" : ""}>
-                      {formatEditorLabel(item)}
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span
+                        className={cn(
+                          "min-w-0 truncate",
+                          item.id === currentEditorId && "font-medium",
+                        )}
+                      >
+                        {formatEditorLabel(item)}
+                      </span>
+                      {item.match?.text ? (
+                        <span className="[display:-webkit-box] min-w-0 overflow-hidden text-xs leading-snug text-muted-foreground [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                          {item.match.text}
+                        </span>
+                      ) : null}
                     </span>
                   </Button>
                 );

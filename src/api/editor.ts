@@ -16,6 +16,7 @@ import { requireUser, useUser } from "./auth";
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
 const AI_SEARCH_MAX_RESULTS = 50;
+const SEARCH_MATCH_SNIPPET_LENGTH = 180;
 const R2_BULK_DELETE_LIMIT = 1000;
 const EDITOR_ID_PATTERN = /[0-9A-HJKMNP-TV-Z]{26}/;
 
@@ -43,18 +44,40 @@ function getEditorIdFromSearchResult(result: AutoRagSearchResponse["data"][numbe
   return null;
 }
 
-function uniqueEditorIdsFromSearchResults(results: AutoRagSearchResponse["data"]) {
-  const ids: ULID[] = [];
-  const seen = new Set<string>();
+function compactText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function getSearchMatchSnippet(result: AutoRagSearchResponse["data"][number], keyword: string) {
+  const text = compactText(result.content.map((content) => content.text).join(" "));
+  if (!text) return null;
+
+  const normalizedText = text.toLocaleLowerCase();
+  const normalizedKeyword = keyword.toLocaleLowerCase();
+  const matchIndex = normalizedText.indexOf(normalizedKeyword);
+  if (matchIndex < 0) {
+    return text.slice(0, SEARCH_MATCH_SNIPPET_LENGTH);
+  }
+
+  const contextLength = Math.max(0, Math.floor((SEARCH_MATCH_SNIPPET_LENGTH - keyword.length) / 2));
+  const start = Math.max(0, matchIndex - contextLength);
+  const end = Math.min(text.length, start + SEARCH_MATCH_SNIPPET_LENGTH);
+  const prefix = start > 0 ? "..." : "";
+  const suffix = end < text.length ? "..." : "";
+
+  return `${prefix}${text.slice(start, end)}${suffix}`;
+}
+
+function getSearchMatchesByEditorId(results: AutoRagSearchResponse["data"], keyword: string) {
+  const matches = new Map<ULID, string | null>();
 
   for (const result of results) {
     const id = getEditorIdFromSearchResult(result);
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    ids.push(id);
+    if (!id || matches.has(id)) continue;
+    matches.set(id, getSearchMatchSnippet(result, keyword));
   }
 
-  return ids;
+  return matches;
 }
 
 const requireDocExists: MiddlewareHandler<Env> = async (c, next) => {
@@ -140,7 +163,8 @@ const editor = createApp()
           query: query.keyword,
           max_num_results: Math.min(limit, AI_SEARCH_MAX_RESULTS),
         });
-        const ids = uniqueEditorIdsFromSearchResults(searchResults.data);
+        const matchesById = getSearchMatchesByEditorId(searchResults.data, query.keyword);
+        const ids = [...matchesById.keys()];
         if (ids.length === 0) {
           return c.json({
             items: [],
@@ -158,11 +182,15 @@ const editor = createApp()
         const items = ids
           .map((id) => rowsById.get(id))
           .filter((editor): editor is Editor => Boolean(editor))
-          .map((editor) => ({
-            id: editor.id,
-            createdAt: toTimestamp(editor.createdAt),
-            title: editor.title,
-          }));
+          .map((editor) => {
+            const matchText = matchesById.get(editor.id);
+            return {
+              id: editor.id,
+              createdAt: toTimestamp(editor.createdAt),
+              title: editor.title,
+              match: matchText ? { text: matchText } : undefined,
+            };
+          });
 
         return c.json({
           items,
