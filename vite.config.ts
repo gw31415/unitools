@@ -5,7 +5,11 @@ import { VitePWA } from "vite-plugin-pwa";
 import { defineConfig } from "vite-plus";
 import ssrPlugin from "vite-ssr-components/plugin";
 
-const ignorePatterns = ["src/components/ui/**", "worker-configuration.d.ts"];
+const ignorePatterns = [
+  "src/components/ui/**",
+  "worker-configuration.d.ts",
+  "src/db/migrations/**",
+];
 
 function clientOnlyPWA(): Plugin[] {
   return VitePWA({
