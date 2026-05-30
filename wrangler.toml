@@ -24,6 +24,7 @@ bucket_name = "unitools"
 
 [ai]
 binding = "AI"
+remote = true
 
 [[migrations]]
 tag = "v1"
