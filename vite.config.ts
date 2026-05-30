@@ -1,8 +1,7 @@
 import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
-import type { Plugin } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
-import { defineConfig } from "vite-plus";
+import { defineConfig, type Plugin } from "vite-plus";
 import ssrPlugin from "vite-ssr-components/plugin";
 
 const ignorePatterns = [
@@ -11,7 +10,7 @@ const ignorePatterns = [
   "src/db/migrations/**",
 ];
 
-function clientOnlyPWA(): Plugin[] {
+function clientOnlyPWA() {
   return VitePWA({
     injectRegister: false,
     registerType: "autoUpdate",
@@ -47,7 +46,7 @@ function clientOnlyPWA(): Plugin[] {
     },
   }).map((plugin) => ({
     ...plugin,
-    applyToEnvironment(environment) {
+    applyToEnvironment(environment: { name: string }) {
       return environment.name === "client";
     },
   }));
@@ -62,8 +61,8 @@ function ssrEntryForRolldown(): Plugin {
       config.environments.ssr ??= {};
       config.environments.ssr.build ??= {};
       config.environments.ssr.build.emptyOutDir = false;
-      config.environments.ssr.build.rollupOptions ??= {};
-      config.environments.ssr.build.rollupOptions.input = "src/index.tsx";
+      config.environments.ssr.build.rolldownOptions ??= {};
+      config.environments.ssr.build.rolldownOptions.input = "src/index.tsx";
     },
   };
 }
