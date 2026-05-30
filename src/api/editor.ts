@@ -1,5 +1,5 @@
 import { sValidator } from "@hono/standard-validator";
-import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { Context, MiddlewareHandler } from "hono";
 import { yRoute } from "y-durableobjects";
@@ -25,7 +25,16 @@ const cursorPayloadSchema = z.object({
   createdAt: z.number().int().nonnegative(),
 });
 
+type EditorSearchMatch = {
+  source: "title" | "content";
+  text: string;
+};
+
 const toTimestamp = (value: unknown) => (value instanceof Date ? value.getTime() : Number(value));
+
+function escapeSqlLikePattern(value: string) {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
 
 function getEditorIdFromSearchResult(result: AutoRagSearchResponse["data"][number]) {
   const metadataEditorId =
@@ -69,12 +78,14 @@ function getSearchMatchSnippet(result: AutoRagSearchResponse["data"][number], ke
 }
 
 function getSearchMatchesByEditorId(results: AutoRagSearchResponse["data"], keyword: string) {
-  const matches = new Map<ULID, string | null>();
+  const matches = new Map<ULID, EditorSearchMatch>();
 
   for (const result of results) {
     const id = getEditorIdFromSearchResult(result);
     if (!id || matches.has(id)) continue;
-    matches.set(id, getSearchMatchSnippet(result, keyword));
+    const text = getSearchMatchSnippet(result, keyword);
+    if (!text) continue;
+    matches.set(id, { source: "content", text });
   }
 
   return matches;
@@ -159,12 +170,27 @@ const editor = createApp()
 
       const db = drizzle(c.env.DB, { schema });
       if (query.keyword) {
+        const keyword = query.keyword;
+        const titleRows: Editor[] = await db.query.editors.findMany({
+          where: (editors) =>
+            sql`${editors.title} LIKE ${`%${escapeSqlLikePattern(keyword)}%`} ESCAPE '\\'`,
+          orderBy: (editors) => [desc(editors.createdAt), desc(editors.id)],
+          limit,
+        });
         const searchResults = await c.env.AI.autorag("unitools-editors").search({
-          query: query.keyword,
+          query: keyword,
           max_num_results: Math.min(limit, AI_SEARCH_MAX_RESULTS),
         });
-        const matchesById = getSearchMatchesByEditorId(searchResults.data, query.keyword);
-        const ids = [...matchesById.keys()];
+        const matchesById = getSearchMatchesByEditorId(searchResults.data, keyword);
+        const titleIds = titleRows.map((editor) => editor.id);
+        for (const editor of titleRows) {
+          matchesById.set(editor.id, { source: "title", text: editor.title });
+        }
+
+        const ids = [
+          ...titleIds,
+          ...[...matchesById.keys()].filter((id) => !titleIds.includes(id)),
+        ].slice(0, limit);
         if (ids.length === 0) {
           return c.json({
             items: [],
@@ -188,7 +214,7 @@ const editor = createApp()
               id: editor.id,
               createdAt: toTimestamp(editor.createdAt),
               title: editor.title,
-              match: matchText ? { text: matchText } : undefined,
+              match: matchText,
             };
           });
 

@@ -31,6 +31,7 @@ export type SearchDockItem = {
   createdAt: number;
   title?: string;
   match?: {
+    source?: "title" | "content";
     text?: string | null;
   };
 };
@@ -514,6 +515,7 @@ export function EditorSearchDock({
                       </span>
                       {item.match?.text ? (
                         <span className="[display:-webkit-box] min-w-0 overflow-hidden text-xs leading-snug text-muted-foreground [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                          {item.match.source === "title" ? "Title: " : "Content: "}
                           {item.match.text}
                         </span>
                       ) : null}
