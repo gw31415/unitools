@@ -1493,7 +1493,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 /* Caption Style */
 .tiptap p:has(> img),
 .tiptap p:has(> .image-node-view) {
+  border-left: 2px solid var(--color-foreground);
+  border-radius: 4px;
   font-style: italic;
+  padding-left: 0.5rem;
   color: var(--fgColor-muted);
 }
 
