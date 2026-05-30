@@ -138,10 +138,10 @@ export default function DocumentPage() {
   return (
     <div className="flex min-h-dvh flex-col">
       <Header />
-      <main className="min-h-0 flex-1 bg-(--markdown-surface) flex flex-col">
+      <main className="flex min-h-0 flex-1 flex-col bg-(--markdown-surface)">
         {editorState.editorId ? (
           <>
-            <div className="container mx-auto flex flex-1 size-full max-w-4xl flex-col px-4 sm:px-6 lg:px-8">
+            <div className="container mx-auto flex size-full max-w-4xl flex-1 flex-col px-4 sm:px-6 lg:px-8">
               <Markdown
                 editorId={editorState.editorId}
                 bootstrap={bootstrap}
