@@ -47,7 +47,11 @@ export default function DocumentPage() {
   const [searchNextCursor, setSearchNextCursor] = useState<string | null>(null);
 
   const fetchSearchItems = useCallback(
-    async ({ cursor, append = false }: { cursor?: string | null; append?: boolean } = {}) => {
+    async ({
+      cursor,
+      keyword,
+      append = false,
+    }: { cursor?: string | null; keyword?: string; append?: boolean } = {}) => {
       const client = getClient();
       if (!client) return;
       if (append) {
@@ -61,6 +65,7 @@ export default function DocumentPage() {
           query: {
             limit: String(SIDEBAR_PAGE_SIZE),
             ...(cursor ? { cursor } : {}),
+            ...(keyword ? { keyword } : {}),
           },
         });
         if (res.status === 401) {
@@ -109,11 +114,14 @@ export default function DocumentPage() {
   }, [fetchSearchItems, isSearchLoading, isSearchLoadingMore, searchHasMore, searchNextCursor]);
 
   const refreshSearchItems = useCallback(async () => {
-    await fetchSearchItems();
-  }, [fetchSearchItems]);
+    await fetchSearchItems({ keyword: searchValue.trim() || undefined });
+  }, [fetchSearchItems, searchValue]);
 
   useEffect(() => {
-    void refreshSearchItems();
+    const timer = window.setTimeout(() => {
+      void refreshSearchItems();
+    }, 200);
+    return () => window.clearTimeout(timer);
   }, [refreshSearchItems]);
 
   const handleNavigateToEditor = (editorId: string, options?: { focusEditor?: boolean }) => {

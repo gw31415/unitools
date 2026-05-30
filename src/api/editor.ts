@@ -1,5 +1,5 @@
 import { sValidator } from "@hono/standard-validator";
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { Context, MiddlewareHandler } from "hono";
 import { yRoute } from "y-durableobjects";
@@ -15,7 +15,9 @@ import { requireUser, useUser } from "./auth";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
+const AI_SEARCH_MAX_RESULTS = 50;
 const R2_BULK_DELETE_LIMIT = 1000;
+const EDITOR_ID_PATTERN = /[0-9A-HJKMNP-TV-Z]{26}/;
 
 const cursorPayloadSchema = z.object({
   id: ulidSchema,
@@ -23,6 +25,37 @@ const cursorPayloadSchema = z.object({
 });
 
 const toTimestamp = (value: unknown) => (value instanceof Date ? value.getTime() : Number(value));
+
+function getEditorIdFromSearchResult(result: AutoRagSearchResponse["data"][number]) {
+  const metadataEditorId =
+    result.attributes.editorId ?? result.attributes.editor_id ?? result.attributes.id;
+  if (typeof metadataEditorId === "string" && ulidSchema.safeParse(metadataEditorId).success) {
+    return metadataEditorId as ULID;
+  }
+
+  for (const value of [result.filename, result.file_id]) {
+    const idMatch = value.match(EDITOR_ID_PATTERN);
+    if (idMatch && ulidSchema.safeParse(idMatch[0]).success) {
+      return idMatch[0] as ULID;
+    }
+  }
+
+  return null;
+}
+
+function uniqueEditorIdsFromSearchResults(results: AutoRagSearchResponse["data"]) {
+  const ids: ULID[] = [];
+  const seen = new Set<string>();
+
+  for (const result of results) {
+    const id = getEditorIdFromSearchResult(result);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+
+  return ids;
+}
 
 const requireDocExists: MiddlewareHandler<Env> = async (c, next) => {
   const id = c.req.param("id");
@@ -60,6 +93,12 @@ const editor = createApp()
       "query",
       z.object({
         limit: z.coerce.number().int().nonnegative().optional(),
+        keyword: z
+          .string()
+          .trim()
+          .max(200)
+          .optional()
+          .transform((value) => (value ? value : undefined)),
         cursor: z
           .base64url()
           .optional()
@@ -96,6 +135,44 @@ const editor = createApp()
       const take = limit + 1;
 
       const db = drizzle(c.env.DB, { schema });
+      if (query.keyword) {
+        const searchResults = await c.env.AI.autorag("unitools-editors").search({
+          query: query.keyword,
+          max_num_results: Math.min(limit, AI_SEARCH_MAX_RESULTS),
+        });
+        const ids = uniqueEditorIdsFromSearchResults(searchResults.data);
+        if (ids.length === 0) {
+          return c.json({
+            items: [],
+            pageInfo: {
+              hasMore: false,
+              nextCursor: null,
+            },
+          });
+        }
+
+        const rows: Editor[] = await db.query.editors.findMany({
+          where: (editors) => inArray(editors.id, ids),
+        });
+        const rowsById = new Map(rows.map((editor) => [editor.id, editor]));
+        const items = ids
+          .map((id) => rowsById.get(id))
+          .filter((editor): editor is Editor => Boolean(editor))
+          .map((editor) => ({
+            id: editor.id,
+            createdAt: toTimestamp(editor.createdAt),
+            title: editor.title,
+          }));
+
+        return c.json({
+          items,
+          pageInfo: {
+            hasMore: false,
+            nextCursor: null,
+          },
+        });
+      }
+
       const rows: Editor[] = await db.query.editors.findMany({
         where: (editors) =>
           query.cursor

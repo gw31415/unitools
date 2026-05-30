@@ -171,10 +171,7 @@ export function EditorSearchDock({
       }
     }, 0);
   }, []);
-  const panelItems =
-    normalizedQuery.length === 0
-      ? items
-      : items.filter((item) => formatEditorLabel(item).toLowerCase().includes(normalizedQuery));
+  const panelItems = items;
   const closeSearch = (options?: { restoreDockButtonFocus?: boolean }) => {
     setOpen(false);
     if (options?.restoreDockButtonFocus === false) {
@@ -519,7 +516,7 @@ export function EditorSearchDock({
             ) : null}
           </div>
           <div className="px-2 pt-2 text-xs text-muted-foreground">
-            {hasMore ? "Scroll for more articles." : "Full search is coming soon."}
+            {hasMore ? "Scroll for more articles." : "Keyword search is enabled."}
           </div>
         </div>
       ) : null}
