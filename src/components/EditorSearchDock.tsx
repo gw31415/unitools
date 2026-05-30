@@ -430,7 +430,7 @@ export function EditorSearchDock({
   return (
     <div
       ref={dockRef}
-      className="pointer-events-auto fixed z-50"
+      className="pointer-events-auto fixed z-50 print:hidden"
       style={{
         width: `${dockWidth}px`,
         left: useRightAnchor ? undefined : `${dockLeft}px`,
