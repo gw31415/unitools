@@ -5,9 +5,8 @@ type SearchResponse = {
     id: string;
     title: string;
     match?: {
-      source: "title" | "content" | "image";
+      source: "title" | "content";
       text?: string;
-      imageId?: string;
     };
   }>;
   pageInfo: {
@@ -21,7 +20,6 @@ const sessionId = "01H00000000000000000000001";
 const sessionSecret = "secret";
 const alphaId = "01H00000000000000000000002";
 const betaId = "01H00000000000000000000003";
-const imageId = "01H00000000000000000000004";
 
 const mocks = vi.hoisted(() => ({
   db: {
@@ -48,24 +46,13 @@ vi.mock("y-durableobjects", async () => {
 const { default: editor } = await import("../editor");
 
 function createEnv() {
-  const autorag = vi.fn(() => ({
-    search: vi.fn().mockResolvedValue({
-      data: [
-        {
-          filename: `${betaId}.md`,
-          file_id: `${betaId}.md`,
-          attributes: {},
-          content: [{ text: "Beta content includes Alpha keyword." }],
-        },
-        {
-          filename: `${betaId}-duplicate.md`,
-          file_id: `${betaId}-duplicate.md`,
-          attributes: { editorId: betaId },
-          content: [{ text: "Duplicate content match." }],
-        },
-      ],
-    }),
-  }));
+  const ftsAll = vi.fn().mockResolvedValue({
+    results: [{ editor_id: betaId, content: "Beta content includes Alpha keyword" }],
+  });
+  const ftsRun = vi.fn().mockResolvedValue({});
+  const ftsBind = vi.fn(() => ({ all: ftsAll, run: ftsRun }));
+  const ftsPrepare = vi.fn(() => ({ bind: ftsBind }));
+
   return {
     env: {
       AUTH_KV: {
@@ -75,11 +62,13 @@ function createEnv() {
         }),
         put: vi.fn().mockResolvedValue(undefined),
       },
-      AI: {
-        autorag,
+      DB: {
+        prepare: ftsPrepare,
       },
     } as unknown as CloudflareBindings,
-    autorag,
+    ftsAll,
+    ftsBind,
+    ftsPrepare,
   };
 }
 
@@ -101,8 +90,8 @@ describe("editor search API", () => {
     mocks.db.query.editors.findMany.mockReset();
   });
 
-  it("returns title matches without calling AutoRAG in title search mode", async () => {
-    const { env, autorag } = createEnv();
+  it("returns title matches without querying FTS in title search mode", async () => {
+    const { env, ftsPrepare } = createEnv();
     mocks.db.query.editors.findMany.mockResolvedValue([
       { id: alphaId, createdAt: new Date("2026-01-01T00:00:00Z"), title: "Alpha title" },
     ]);
@@ -120,7 +109,7 @@ describe("editor search API", () => {
       ],
       pageInfo: { hasMore: false, nextCursor: null },
     });
-    expect(autorag).not.toHaveBeenCalled();
+    expect(ftsPrepare).not.toHaveBeenCalled();
   });
 
   it("returns unique content matches in content search mode", async () => {
@@ -137,48 +126,7 @@ describe("editor search API", () => {
     expect(body.items[0]).toMatchObject({
       id: betaId,
       title: "Beta title",
-      match: { source: "content" },
-    });
-  });
-
-  it("routes image AutoRAG matches to their parent editor with image jump metadata", async () => {
-    const autorag = vi.fn(() => ({
-      search: vi.fn().mockResolvedValue({
-        data: [
-          {
-            filename: `images/${betaId}/${imageId}.png`,
-            file_id: `images/${betaId}/${imageId}.png`,
-            attributes: { id: imageId },
-            content: [{ text: "Diagram text includes Alpha keyword." }],
-          },
-        ],
-      }),
-    }));
-    const env = {
-      AUTH_KV: {
-        get: vi.fn().mockResolvedValue({
-          user: { id: userId, username: "ama", createdAt: Date.now() },
-          secret: sessionSecret,
-        }),
-        put: vi.fn().mockResolvedValue(undefined),
-      },
-      AI: {
-        autorag,
-      },
-    } as unknown as CloudflareBindings;
-    mocks.db.query.editors.findMany.mockResolvedValue([
-      { id: betaId, createdAt: new Date("2026-01-02T00:00:00Z"), title: "Beta title" },
-    ]);
-
-    const res = await requestSearch("http://localhost/?keyword=Alpha&searchMode=content", env);
-    const body = (await res.json()) as SearchResponse;
-
-    expect(res.status).toBe(200);
-    expect(body.items).toHaveLength(1);
-    expect(body.items[0]).toMatchObject({
-      id: betaId,
-      title: "Beta title",
-      match: { source: "image", imageId },
+      match: { source: "content", text: "Beta content includes Alpha keyword" },
     });
   });
 

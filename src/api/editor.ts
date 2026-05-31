@@ -6,6 +6,7 @@ import { yRoute } from "y-durableobjects";
 import z from "zod";
 import * as schema from "@/db/schema";
 import { b64urlToStruct, structToBase64Url } from "@/lib/base64";
+import { deleteEditorFtsIndex, searchEditorFtsIndex } from "@/lib/editorFts";
 import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
 import type { Editor } from "@/models";
@@ -15,15 +16,7 @@ import { requireUser, useUser } from "./auth";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
-const AI_SEARCH_MAX_RESULTS = 50;
-const SEARCH_MATCH_SNIPPET_LENGTH = 180;
 const R2_BULK_DELETE_LIMIT = 1000;
-const ULID_PATTERN_SOURCE = "[0-9A-HJKMNP-TV-Z]{26}";
-const EDITOR_ID_PATTERN = new RegExp(ULID_PATTERN_SOURCE);
-const IMAGE_STORAGE_KEY_PATTERN = new RegExp(
-  `(?:^|/)images/(${ULID_PATTERN_SOURCE})/(${ULID_PATTERN_SOURCE})\\.[^/]+$`,
-);
-const MARKDOWN_STORAGE_KEY_PATTERN = new RegExp(`(?:^|/)editor/(${ULID_PATTERN_SOURCE})\\.md$`);
 
 const cursorPayloadSchema = z.object({
   id: ulidSchema,
@@ -31,111 +24,14 @@ const cursorPayloadSchema = z.object({
 });
 
 type EditorSearchMatch = {
-  source: "title" | "content" | "image";
+  source: "title" | "content";
   text: string;
-  imageId?: ULID;
 };
 
 const toTimestamp = (value: unknown) => (value instanceof Date ? value.getTime() : Number(value));
 
 function escapeSqlLikePattern(value: string) {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
-}
-
-function getStringSearchResultValues(result: AutoRagSearchResponse["data"][number]) {
-  return [
-    result.filename,
-    result.file_id,
-    ...Object.values(result.attributes).filter(
-      (value): value is string => typeof value === "string",
-    ),
-  ];
-}
-
-function getImageMatchFromSearchResult(result: AutoRagSearchResponse["data"][number]) {
-  for (const value of getStringSearchResultValues(result)) {
-    const match = value.match(IMAGE_STORAGE_KEY_PATTERN);
-    if (!match) continue;
-
-    const [, editorId, imageId] = match;
-    if (ulidSchema.safeParse(editorId).success && ulidSchema.safeParse(imageId).success) {
-      return {
-        editorId: editorId as ULID,
-        imageId: imageId as ULID,
-      };
-    }
-  }
-
-  return null;
-}
-
-function getEditorIdFromSearchResult(result: AutoRagSearchResponse["data"][number]) {
-  const imageMatch = getImageMatchFromSearchResult(result);
-  if (imageMatch) return imageMatch.editorId;
-
-  const metadataEditorId =
-    result.attributes.editorId ?? result.attributes.editor_id ?? result.attributes.id;
-  if (typeof metadataEditorId === "string" && ulidSchema.safeParse(metadataEditorId).success) {
-    return metadataEditorId as ULID;
-  }
-
-  for (const value of getStringSearchResultValues(result)) {
-    const markdownMatch = value.match(MARKDOWN_STORAGE_KEY_PATTERN);
-    if (markdownMatch && ulidSchema.safeParse(markdownMatch[1]).success) {
-      return markdownMatch[1] as ULID;
-    }
-
-    const idMatch = value.match(EDITOR_ID_PATTERN);
-    if (idMatch && ulidSchema.safeParse(idMatch[0]).success) {
-      return idMatch[0] as ULID;
-    }
-  }
-
-  return null;
-}
-
-function compactText(value: string) {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function getSearchMatchSnippet(result: AutoRagSearchResponse["data"][number], keyword: string) {
-  const text = compactText(result.content.map((content) => content.text).join(" "));
-  if (!text) return null;
-
-  const normalizedText = text.toLocaleLowerCase();
-  const normalizedKeyword = keyword.toLocaleLowerCase();
-  const matchIndex = normalizedText.indexOf(normalizedKeyword);
-  if (matchIndex < 0) {
-    return text.slice(0, SEARCH_MATCH_SNIPPET_LENGTH);
-  }
-
-  const contextLength = Math.max(0, Math.floor((SEARCH_MATCH_SNIPPET_LENGTH - keyword.length) / 2));
-  const start = Math.max(0, matchIndex - contextLength);
-  const end = Math.min(text.length, start + SEARCH_MATCH_SNIPPET_LENGTH);
-  const prefix = start > 0 ? "..." : "";
-  const suffix = end < text.length ? "..." : "";
-
-  return `${prefix}${text.slice(start, end)}${suffix}`;
-}
-
-function getSearchMatchesByEditorId(results: AutoRagSearchResponse["data"], keyword: string) {
-  const matches = new Map<ULID, EditorSearchMatch>();
-
-  for (const result of results) {
-    const id = getEditorIdFromSearchResult(result);
-    if (!id || matches.has(id)) continue;
-    const text = getSearchMatchSnippet(result, keyword);
-    if (!text) continue;
-    const imageMatch = getImageMatchFromSearchResult(result);
-    matches.set(
-      id,
-      imageMatch
-        ? { source: "image", text, imageId: imageMatch.imageId }
-        : { source: "content", text },
-    );
-  }
-
-  return matches;
 }
 
 const requireDocExists: MiddlewareHandler<Env> = async (c, next) => {
@@ -229,11 +125,10 @@ const editor = createApp()
           }) as Promise<Editor[]>;
 
         const fetchContentMatches = async () => {
-          const searchResults = await c.env.AI.autorag("unitools-editors").search({
-            query: keyword,
-            max_num_results: Math.min(limit, AI_SEARCH_MAX_RESULTS),
-          });
-          return getSearchMatchesByEditorId(searchResults.data, keyword);
+          const ftsMatches = await searchEditorFtsIndex(c.env.DB, keyword, limit);
+          return new Map<ULID, EditorSearchMatch>(
+            ftsMatches.map((match) => [match.editorId, { source: "content", text: match.text }]),
+          );
         };
 
         const titleRows = query.searchMode === "content" ? [] : await fetchTitleRows();
@@ -374,6 +269,8 @@ const editor = createApp()
     const res = await db.delete(schema.editors).where(eq(schema.editors.id, id)).returning();
 
     if (res.length > 0) {
+      await deleteEditorFtsIndex(c.env.DB, id);
+
       // R2から画像を一括削除（1000個ずつチャンク）
       if (imagesToDelete.length > 0) {
         const keys = imagesToDelete.map((img) => img.storageKey);

@@ -9,6 +9,7 @@ import * as schema from "@/db/schema";
 import type { Env } from "@/lib/hono";
 import type { ULID } from "@/lib/ulid";
 import { baseExtensions } from "./editorExtensions";
+import { upsertEditorFtsIndex } from "./editorFts";
 import { collectReferencedImageIdsFromYXmlFragment } from "./editorImageCleanup";
 import { normalizeMarkdownExportContent } from "./markdownExport";
 
@@ -109,6 +110,7 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     }
     const markdown = this.convertToMarkdown(this.doc);
     await this.env.UNITOOLS_R2.put(`editor/${id}.md`, markdown);
+    await upsertEditorFtsIndex(this.env.DB, id, markdown);
   }
 
   private async cleanupUnreferencedImages(): Promise<void> {
