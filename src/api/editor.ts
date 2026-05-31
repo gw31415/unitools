@@ -6,7 +6,12 @@ import { yRoute } from "y-durableobjects";
 import z from "zod";
 import * as schema from "@/db/schema";
 import { b64urlToStruct, structToBase64Url } from "@/lib/base64";
-import { deleteEditorFtsIndex, searchEditorFtsIndex } from "@/lib/editorFts";
+import {
+  deleteEditorFtsIndex,
+  searchEditorFtsIndex,
+  segmentText,
+  suggestEditorFtsTerms,
+} from "@/lib/editorFts";
 import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
 import type { Editor } from "@/models";
@@ -16,6 +21,9 @@ import { requireUser, useUser } from "./auth";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
+const DEFAULT_SUGGESTION_LIMIT = 20;
+const MAX_SUGGESTION_LIMIT = 100;
+const DEFAULT_SUGGESTION_MIN_SCORE = 0.35;
 const R2_BULK_DELETE_LIMIT = 1000;
 
 const cursorPayloadSchema = z.object({
@@ -221,6 +229,54 @@ const editor = createApp()
           nextCursor,
         },
       });
+    },
+  )
+  .get(
+    "/keywords/suggest",
+    useUser,
+    sValidator(
+      "query",
+      z.object({
+        query: z.string().trim().max(200),
+        limit: z.coerce.number().int().nonnegative().optional(),
+        minScore: z.coerce.number().min(0).max(1).optional(),
+      }),
+    ),
+    async (c) => {
+      const user = c.get("user");
+      if (!user) {
+        return c.json({ items: [] });
+      }
+
+      const query = c.req.valid("query");
+      const limit = Math.min(
+        Math.max(1, query.limit ?? DEFAULT_SUGGESTION_LIMIT),
+        MAX_SUGGESTION_LIMIT,
+      );
+      const items = await suggestEditorFtsTerms(c.env.DB, query.query, {
+        limit,
+        minScore: query.minScore ?? DEFAULT_SUGGESTION_MIN_SCORE,
+      });
+
+      return c.json({ items });
+    },
+  )
+  .get(
+    "/segments",
+    useUser,
+    sValidator(
+      "query",
+      z.object({
+        text: z.string().trim().max(2000),
+      }),
+    ),
+    (c) => {
+      const user = c.get("user");
+      if (!user) {
+        return c.json({ segments: [] });
+      }
+
+      return c.json({ segments: segmentText(c.req.valid("query").text) });
     },
   )
   .post("/", requireUser, sValidator("json", editorInsertSchema), async (c) => {

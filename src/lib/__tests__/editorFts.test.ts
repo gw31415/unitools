@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { searchEditorFtsIndex, tokenize, upsertEditorFtsIndex } from "@/lib/editorFts";
+import {
+  listEditorFtsTerms,
+  searchEditorFtsIndex,
+  segmentText,
+  suggestEditorFtsTerms,
+  tokenize,
+  upsertEditorFtsIndex,
+} from "@/lib/editorFts";
 import type { ULID } from "@/lib/ulid";
 
 const editorId = "01H00000000000000000000002" as ULID;
@@ -9,6 +16,21 @@ function createD1Mock(rows: Array<{ editor_id: ULID; content: string }> = []) {
   const all = vi.fn().mockResolvedValue({ results: rows });
   const bind = vi.fn(() => ({ run, all }));
   const prepare = vi.fn(() => ({ bind }));
+
+  return {
+    db: { prepare } as unknown as D1Database,
+    prepare,
+    bind,
+    run,
+    all,
+  };
+}
+
+function createTermD1Mock(rows: Array<{ term: string; doc: number; cnt: number }>) {
+  const run = vi.fn().mockResolvedValue({});
+  const all = vi.fn().mockResolvedValue({ results: rows });
+  const bind = vi.fn(() => ({ run, all }));
+  const prepare = vi.fn(() => ({ bind, run, all }));
 
   return {
     db: { prepare } as unknown as D1Database,
@@ -30,6 +52,10 @@ describe("tokenize", () => {
 
   it("filters punctuation and symbols", () => {
     expect(tokenize("検索、テスト! 123")).toBe("検索 テスト 123");
+  });
+
+  it("returns raw segments for segment API use", () => {
+    expect(segmentText("東京都で検索します")).toEqual(["東京", "都", "で", "検索", "し", "ます"]);
   });
 });
 
@@ -79,5 +105,57 @@ describe("editor FTS helpers", () => {
       { editorId, text: "東京 都 で 検索" },
     ]);
     expect(mock.bind).toHaveBeenCalledWith("東京 都 で 検索", 20);
+  });
+
+  it("lists indexed terms from fts5vocab", async () => {
+    const mock = createTermD1Mock([
+      { term: "検索", doc: 2, cnt: 4 },
+      { term: "東京", doc: 1, cnt: 1 },
+    ]);
+
+    await expect(listEditorFtsTerms(mock.db)).resolves.toEqual([
+      { term: "検索", docCount: 2, occurrenceCount: 4 },
+      { term: "東京", docCount: 1, occurrenceCount: 1 },
+    ]);
+    expect(mock.prepare).toHaveBeenNthCalledWith(
+      2,
+      "SELECT term, doc, cnt FROM temp.editors_fts_vocab ORDER BY cnt DESC, term ASC",
+    );
+  });
+
+  it("falls back to indexed content when fts5vocab is unavailable", async () => {
+    const run = vi.fn().mockRejectedValue(new Error("unsupported"));
+    const all = vi.fn().mockResolvedValue({
+      results: [{ content: "検索 東京 検索" }, { content: "検索 京都" }],
+    });
+    const prepare = vi.fn().mockReturnValueOnce({ run }).mockReturnValueOnce({ all });
+    const db = { prepare } as unknown as D1Database;
+
+    await expect(listEditorFtsTerms(db)).resolves.toEqual([
+      { term: "検索", docCount: 2, occurrenceCount: 3 },
+      { term: "京都", docCount: 1, occurrenceCount: 1 },
+      { term: "東京", docCount: 1, occurrenceCount: 1 },
+    ]);
+  });
+
+  it("suggests normalized and partial term matches by score", async () => {
+    const mock = createTermD1Mock([
+      { term: "コンピューター", doc: 2, cnt: 5 },
+      { term: "検索", doc: 3, cnt: 7 },
+      { term: "コンピューターサイエンス", doc: 1, cnt: 1 },
+      { term: "京都", doc: 1, cnt: 1 },
+    ]);
+
+    const suggestions = await suggestEditorFtsTerms(mock.db, "コンピュータ", {
+      limit: 3,
+      minScore: 0.2,
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.term)).toEqual([
+      "コンピューター",
+      "コンピューターサイエンス",
+    ]);
+    expect(suggestions[0]?.score).toBeGreaterThan(suggestions[1]?.score ?? 0);
+    expect(suggestions[0]?.normalizedTerm).toBe("コンピュタ");
   });
 });

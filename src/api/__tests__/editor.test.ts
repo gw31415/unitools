@@ -45,17 +45,21 @@ vi.mock("y-durableobjects", async () => {
 
 const { default: editor } = await import("../editor");
 
-function createEnv() {
+function createEnv(
+  ftsResults: Array<Record<string, unknown>> = [
+    { editor_id: betaId, content: "Beta content includes Alpha keyword" },
+  ],
+) {
   const sessionRecord = {
     user: { id: userId, username: "ama", createdAt: Date.now() },
     secret: sessionSecret,
   };
   const ftsAll = vi.fn().mockResolvedValue({
-    results: [{ editor_id: betaId, content: "Beta content includes Alpha keyword" }],
+    results: ftsResults,
   });
   const ftsRun = vi.fn().mockResolvedValue({});
   const ftsBind = vi.fn(() => ({ all: ftsAll, run: ftsRun }));
-  const ftsPrepare = vi.fn(() => ({ bind: ftsBind }));
+  const ftsPrepare = vi.fn(() => ({ bind: ftsBind, all: ftsAll, run: ftsRun }));
   const authKvGet = vi.fn().mockResolvedValue(sessionRecord);
   const authKvPut = vi.fn().mockResolvedValue(undefined);
 
@@ -84,6 +88,20 @@ function requestSearch(url: string, env: CloudflareBindings) {
       headers: {
         Cookie: `sid=${userId}:${sessionId}:${sessionSecret}`,
       },
+    },
+    env,
+  );
+}
+
+function requestEditorApi(url: string, env: CloudflareBindings, cookie = true) {
+  return editor.request(
+    url,
+    {
+      headers: cookie
+        ? {
+            Cookie: `sid=${userId}:${sessionId}:${sessionSecret}`,
+          }
+        : undefined,
     },
     env,
   );
@@ -188,5 +206,53 @@ describe("editor search API", () => {
 
     expect(res.status).toBe(200);
     expect(authKvPut).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns keyword suggestions from indexed FTS terms", async () => {
+    const { env } = createEnv([
+      { term: "コンピューター", doc: 2, cnt: 5 },
+      { term: "コンピューターサイエンス", doc: 1, cnt: 1 },
+      { term: "検索", doc: 3, cnt: 7 },
+    ]);
+
+    const res = await requestEditorApi(
+      "http://localhost/keywords/suggest?query=コンピュータ&limit=2",
+      env,
+    );
+    const body = (await res.json()) as {
+      items: Array<{ term: string; docCount: number; occurrenceCount: number; score: number }>;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.items.map((item) => item.term)).toEqual([
+      "コンピューター",
+      "コンピューターサイエンス",
+    ]);
+    expect(body.items[0]).toMatchObject({ docCount: 2, occurrenceCount: 5 });
+    expect(body.items[0]?.score).toBeGreaterThan(body.items[1]?.score ?? 0);
+  });
+
+  it("segments text with the same tokenizer used by the FTS index", async () => {
+    const { env } = createEnv([]);
+
+    const res = await requestEditorApi(
+      "http://localhost/segments?text=%E6%9D%B1%E4%BA%AC%E9%83%BD%E3%81%A7%E6%A4%9C%E7%B4%A2",
+      env,
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      segments: ["東京", "都", "で", "検索"],
+    });
+  });
+
+  it("returns empty keyword suggestions when signed out", async () => {
+    const { env, ftsPrepare } = createEnv([{ term: "Alpha", doc: 1, cnt: 1 }]);
+
+    const res = await requestEditorApi("http://localhost/keywords/suggest?query=Alpha", env, false);
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ items: [] });
+    expect(ftsPrepare).not.toHaveBeenCalled();
   });
 });
