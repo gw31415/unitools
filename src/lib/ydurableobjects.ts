@@ -74,7 +74,7 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
   protected async cleanup(): Promise<void> {
     await super.cleanup();
     if (this.sessions.size === 0) {
-      // 最終切断時は保留中のエクスポートを無効化して即時処理
+      // 最終切断時は保留中のインデックス更新を無効化して即時処理
       await this.state.storage.deleteAlarm();
       await this.alarm();
     }
@@ -82,9 +82,9 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
 
   async alarm(): Promise<void> {
     try {
-      await this.exportToR2();
+      await this.updateFtsIndex();
     } catch (error) {
-      console.error("Failed to export markdown on alarm", {
+      console.error("Failed to update editor FTS index on alarm", {
         editorId: this.state.id.name,
         error,
       });
@@ -103,13 +103,12 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     await this.state.storage.setAlarm(Date.now() + EXPORT_DEBOUNCE_MS);
   }
 
-  private async exportToR2(): Promise<void> {
+  private async updateFtsIndex(): Promise<void> {
     const id = await this.resolveEditorId();
     if (!id) {
       return;
     }
     const markdown = this.convertToMarkdown(this.doc);
-    await this.env.UNITOOLS_R2.put(`editor/${id}.md`, markdown);
     await upsertEditorFtsIndex(this.env.DB, id, markdown);
   }
 
