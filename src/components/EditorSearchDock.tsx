@@ -37,9 +37,9 @@ export type SearchDockItem = {
   };
 };
 
-export const DOCK_SPACING = 8;
-export const SEARCH_BUTTON_SIZE = 40;
-export const FAB_SIZE = SEARCH_BUTTON_SIZE + DOCK_SPACING * 2;
+const DOCK_SPACING = 8;
+const SEARCH_BUTTON_SIZE = 40;
+const FAB_SIZE = SEARCH_BUTTON_SIZE + DOCK_SPACING * 2;
 const DOCK_MAX_WIDTH = 672;
 const CLOSE_ANIMATION_MS = 300;
 const FAB_MARGIN = 16;

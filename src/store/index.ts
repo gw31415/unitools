@@ -23,18 +23,16 @@ export const fabPositionAtom = atom<FabPosition>({
   bottom: 16,
 });
 
-export const documentIdAtom = atom((get) => get(editorStateAtom).editorId);
-
 export const markdownBootstrapAtom = atom((get) => ({
   snapshotJSON: get(editorStateAtom).snapshotJSON,
   yjsUpdate: get(editorStateAtom).yjsUpdate,
 }));
 
 // Store the component name for client-side hydration
-export const pageAtom = atom<ComponentName | undefined>();
+const pageAtom = atom<ComponentName | undefined>();
 
 // Document title for SEO and page display
-export const documentTitleAtom = atom<string | undefined>();
+const documentTitleAtom = atom<string | undefined>();
 
 // SSR configuration - defines which atoms to serialize/hydrate
 export const ssrAtomState = createSSRAtomState({

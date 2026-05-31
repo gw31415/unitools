@@ -23,12 +23,7 @@ export const passkeyCredentialInsertSchema = createInsertSchema(passkeyCredentia
   createdAt: true,
 });
 
-export const passkeyCredentialSelectSchema = createSelectSchema(passkeyCredentials, {
-  id: ulidSchema,
-  userId: ulidSchema,
-});
-
-export const sessionInitSchema = z
+const sessionInitSchema = z
   .object({
     id: ulidSchema.optional(),
     userId: ulidSchema.optional(),
