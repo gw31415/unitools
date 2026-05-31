@@ -18,7 +18,12 @@ const MAX_PAGE_SIZE = 100;
 const AI_SEARCH_MAX_RESULTS = 50;
 const SEARCH_MATCH_SNIPPET_LENGTH = 180;
 const R2_BULK_DELETE_LIMIT = 1000;
-const EDITOR_ID_PATTERN = /[0-9A-HJKMNP-TV-Z]{26}/;
+const ULID_PATTERN_SOURCE = "[0-9A-HJKMNP-TV-Z]{26}";
+const EDITOR_ID_PATTERN = new RegExp(ULID_PATTERN_SOURCE);
+const IMAGE_STORAGE_KEY_PATTERN = new RegExp(
+  `(?:^|/)images/(${ULID_PATTERN_SOURCE})/(${ULID_PATTERN_SOURCE})\\.[^/]+$`,
+);
+const MARKDOWN_STORAGE_KEY_PATTERN = new RegExp(`(?:^|/)editor/(${ULID_PATTERN_SOURCE})\\.md$`);
 
 const cursorPayloadSchema = z.object({
   id: ulidSchema,
@@ -26,8 +31,9 @@ const cursorPayloadSchema = z.object({
 });
 
 type EditorSearchMatch = {
-  source: "title" | "content";
+  source: "title" | "content" | "image";
   text: string;
+  imageId?: ULID;
 };
 
 const toTimestamp = (value: unknown) => (value instanceof Date ? value.getTime() : Number(value));
@@ -36,14 +42,49 @@ function escapeSqlLikePattern(value: string) {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
+function getStringSearchResultValues(result: AutoRagSearchResponse["data"][number]) {
+  return [
+    result.filename,
+    result.file_id,
+    ...Object.values(result.attributes).filter(
+      (value): value is string => typeof value === "string",
+    ),
+  ];
+}
+
+function getImageMatchFromSearchResult(result: AutoRagSearchResponse["data"][number]) {
+  for (const value of getStringSearchResultValues(result)) {
+    const match = value.match(IMAGE_STORAGE_KEY_PATTERN);
+    if (!match) continue;
+
+    const [, editorId, imageId] = match;
+    if (ulidSchema.safeParse(editorId).success && ulidSchema.safeParse(imageId).success) {
+      return {
+        editorId: editorId as ULID,
+        imageId: imageId as ULID,
+      };
+    }
+  }
+
+  return null;
+}
+
 function getEditorIdFromSearchResult(result: AutoRagSearchResponse["data"][number]) {
+  const imageMatch = getImageMatchFromSearchResult(result);
+  if (imageMatch) return imageMatch.editorId;
+
   const metadataEditorId =
     result.attributes.editorId ?? result.attributes.editor_id ?? result.attributes.id;
   if (typeof metadataEditorId === "string" && ulidSchema.safeParse(metadataEditorId).success) {
     return metadataEditorId as ULID;
   }
 
-  for (const value of [result.filename, result.file_id]) {
+  for (const value of getStringSearchResultValues(result)) {
+    const markdownMatch = value.match(MARKDOWN_STORAGE_KEY_PATTERN);
+    if (markdownMatch && ulidSchema.safeParse(markdownMatch[1]).success) {
+      return markdownMatch[1] as ULID;
+    }
+
     const idMatch = value.match(EDITOR_ID_PATTERN);
     if (idMatch && ulidSchema.safeParse(idMatch[0]).success) {
       return idMatch[0] as ULID;
@@ -85,7 +126,13 @@ function getSearchMatchesByEditorId(results: AutoRagSearchResponse["data"], keyw
     if (!id || matches.has(id)) continue;
     const text = getSearchMatchSnippet(result, keyword);
     if (!text) continue;
-    matches.set(id, { source: "content", text });
+    const imageMatch = getImageMatchFromSearchResult(result);
+    matches.set(
+      id,
+      imageMatch
+        ? { source: "image", text, imageId: imageMatch.imageId }
+        : { source: "content", text },
+    );
   }
 
   return matches;

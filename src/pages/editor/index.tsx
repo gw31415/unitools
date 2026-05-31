@@ -18,6 +18,8 @@ import { currentUserAtom, editorStateAtom, markdownBootstrapAtom } from "@/store
 const SIDEBAR_PAGE_SIZE = 20;
 const FOCUS_EDITOR_ON_LOAD_KEY = "focus-editor-on-load";
 const SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY = "scroll-to-search-text-on-load";
+const SCROLL_TO_IMAGE_ON_LOAD_KEY = "scroll-to-image-on-load";
+const IMAGE_API_PATH_PREFIX = "/api/v1/images/";
 const getClient = () =>
   typeof window === "undefined" ? null : hc<ServerAppType>(window.location.origin);
 
@@ -78,6 +80,53 @@ function scrollToEditorText(searchText: string, attempt = 0) {
     match.node.parentElement ??
     (match.node.parentNode instanceof HTMLElement ? match.node.parentNode : root);
   container.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  return true;
+}
+
+function getImageIdFromElement(image: HTMLImageElement) {
+  const sources = [image.getAttribute("data-src"), image.getAttribute("src")];
+
+  for (const source of sources) {
+    if (!source) continue;
+
+    try {
+      const pathname = new URL(source, window.location.origin).pathname;
+      if (!pathname.startsWith(IMAGE_API_PATH_PREFIX)) continue;
+      const imageId = pathname.slice(IMAGE_API_PATH_PREFIX.length).replace(/\/+$/, "");
+      if (imageId) return imageId;
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+function scrollToEditorImage(imageId: string, attempt = 0) {
+  const normalizedImageId = imageId.trim();
+  if (!normalizedImageId) return false;
+
+  const root = getEditorRoot();
+  const image = root
+    ? Array.from(root.querySelectorAll("img")).find(
+        (image) => getImageIdFromElement(image) === normalizedImageId,
+      )
+    : null;
+
+  if (!root || !image) {
+    if (attempt < 20) {
+      window.setTimeout(() => scrollToEditorImage(normalizedImageId, attempt + 1), 100);
+    }
+    return false;
+  }
+
+  const target = image.closest(".image-node-view") ?? image;
+  if (target instanceof HTMLElement) {
+    target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    target.focus?.({ preventScroll: true });
+  } else {
+    image.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  }
   return true;
 }
 
@@ -281,7 +330,10 @@ export default function DocumentPage() {
     return () => window.clearTimeout(timer);
   }, [refreshSearchItems]);
 
-  const handleRequestFocusEditor = (options?: { searchText?: string }) => {
+  const handleRequestFocusEditor = (options?: { searchText?: string; imageId?: string }) => {
+    if (options?.imageId && scrollToEditorImage(options.imageId)) {
+      return;
+    }
     if (options?.searchText && scrollToEditorText(options.searchText)) {
       return;
     }
@@ -290,7 +342,7 @@ export default function DocumentPage() {
 
   const handleNavigateToEditor = (
     editorId: string,
-    options?: { focusEditor?: boolean; searchText?: string },
+    options?: { focusEditor?: boolean; searchText?: string; imageId?: string },
   ) => {
     const shouldFocusEditor = options?.focusEditor ?? true;
     if (shouldFocusEditor) {
@@ -303,10 +355,28 @@ export default function DocumentPage() {
     } else {
       sessionStorage.removeItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
     }
+    if (options?.imageId) {
+      sessionStorage.setItem(SCROLL_TO_IMAGE_ON_LOAD_KEY, options.imageId);
+    } else {
+      sessionStorage.removeItem(SCROLL_TO_IMAGE_ON_LOAD_KEY);
+    }
     window.location.assign(`/editor/${editorId}`);
   };
   useEffect(() => {
     if (!editorState.editorId) return;
+    const imageId = sessionStorage.getItem(SCROLL_TO_IMAGE_ON_LOAD_KEY);
+    if (imageId) {
+      sessionStorage.removeItem(SCROLL_TO_IMAGE_ON_LOAD_KEY);
+      const searchText = sessionStorage.getItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
+      sessionStorage.removeItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
+      const timer = window.setTimeout(() => {
+        if (!scrollToEditorImage(imageId) && searchText) {
+          scrollToEditorText(searchText);
+        }
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+
     const searchText = sessionStorage.getItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
     if (searchText) {
       sessionStorage.removeItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);

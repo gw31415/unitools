@@ -32,8 +32,9 @@ export type SearchDockItem = {
   createdAt: number;
   title?: string;
   match?: {
-    source?: "title" | "content";
+    source?: "title" | "content" | "image";
     text?: string | null;
+    imageId?: string;
   };
 };
 
@@ -105,10 +106,10 @@ export function EditorSearchDock({
   onRetry: () => void;
   onLoadMore: () => void;
   currentEditorId: string;
-  onRequestFocusEditor: (options?: { searchText?: string }) => void;
+  onRequestFocusEditor: (options?: { searchText?: string; imageId?: string }) => void;
   onNavigateToEditor: (
     editorId: string,
-    options?: { focusEditor?: boolean; searchText?: string },
+    options?: { focusEditor?: boolean; searchText?: string; imageId?: string },
   ) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -196,9 +197,14 @@ export function EditorSearchDock({
     inputRef.current?.blur();
   };
   const selectItem = (item: SearchDockItem, focusEditor = true) => {
-    const searchText = normalizedQuery.length > 0 ? value.trim() : undefined;
+    const imageId = item.match?.source === "image" ? item.match.imageId : undefined;
+    const searchText = normalizedQuery.length > 0 && !imageId ? value.trim() : undefined;
     if (item.id === currentEditorId) {
       closeSearch({ restoreDockButtonFocus: !focusEditor });
+      if (imageId) {
+        onRequestFocusEditor({ imageId, searchText: value.trim() || undefined });
+        return;
+      }
       if (searchText) {
         onRequestFocusEditor({ searchText });
         return;
@@ -211,7 +217,7 @@ export function EditorSearchDock({
       window.clearTimeout(navigationTimerRef.current);
     }
     navigationTimerRef.current = window.setTimeout(() => {
-      onNavigateToEditor(item.id, { focusEditor, searchText });
+      onNavigateToEditor(item.id, { focusEditor, searchText, imageId });
     }, CLOSE_ANIMATION_MS);
   };
 
@@ -527,7 +533,11 @@ export function EditorSearchDock({
                         </span>
                         {item.match?.text ? (
                           <span className="[display:-webkit-box] min-w-0 overflow-hidden text-xs leading-snug text-muted-foreground [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
-                            {item.match.source === "title" ? "Title: " : "Content: "}
+                            {item.match.source === "title"
+                              ? "Title: "
+                              : item.match.source === "image"
+                                ? "Image: "
+                                : "Content: "}
                             {item.match.text}
                           </span>
                         ) : null}

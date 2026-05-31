@@ -5,8 +5,9 @@ type SearchResponse = {
     id: string;
     title: string;
     match?: {
-      source: "title" | "content";
+      source: "title" | "content" | "image";
       text?: string;
+      imageId?: string;
     };
   }>;
   pageInfo: {
@@ -20,6 +21,7 @@ const sessionId = "01H00000000000000000000001";
 const sessionSecret = "secret";
 const alphaId = "01H00000000000000000000002";
 const betaId = "01H00000000000000000000003";
+const imageId = "01H00000000000000000000004";
 
 const mocks = vi.hoisted(() => ({
   db: {
@@ -136,6 +138,47 @@ describe("editor search API", () => {
       id: betaId,
       title: "Beta title",
       match: { source: "content" },
+    });
+  });
+
+  it("routes image AutoRAG matches to their parent editor with image jump metadata", async () => {
+    const autorag = vi.fn(() => ({
+      search: vi.fn().mockResolvedValue({
+        data: [
+          {
+            filename: `images/${betaId}/${imageId}.png`,
+            file_id: `images/${betaId}/${imageId}.png`,
+            attributes: { id: imageId },
+            content: [{ text: "Diagram text includes Alpha keyword." }],
+          },
+        ],
+      }),
+    }));
+    const env = {
+      AUTH_KV: {
+        get: vi.fn().mockResolvedValue({
+          user: { id: userId, username: "ama", createdAt: Date.now() },
+          secret: sessionSecret,
+        }),
+        put: vi.fn().mockResolvedValue(undefined),
+      },
+      AI: {
+        autorag,
+      },
+    } as unknown as CloudflareBindings;
+    mocks.db.query.editors.findMany.mockResolvedValue([
+      { id: betaId, createdAt: new Date("2026-01-02T00:00:00Z"), title: "Beta title" },
+    ]);
+
+    const res = await requestSearch("http://localhost/?keyword=Alpha&searchMode=content", env);
+    const body = (await res.json()) as SearchResponse;
+
+    expect(res.status).toBe(200);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      id: betaId,
+      title: "Beta title",
+      match: { source: "image", imageId },
     });
   });
 
