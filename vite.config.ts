@@ -14,7 +14,14 @@ function clientOnlyPWA() {
   return VitePWA({
     injectRegister: false,
     registerType: "autoUpdate",
-    includeAssets: ["favicon.ico", "icon.svg", "apple-touch-icon.png"],
+    includeAssets: [
+      "favicon.ico",
+      "icon.svg",
+      "apple-touch-icon.png",
+      "pwa-splash-light.png",
+      "pwa-splash-dark.png",
+      "pwa-splash/*.png",
+    ],
     manifest: {
       name: "Unitools",
       short_name: "Unitools",
@@ -22,6 +29,7 @@ function clientOnlyPWA() {
       theme_color: "#ffffff",
       background_color: "#ffffff",
       display: "standalone",
+      orientation: "any",
       icons: [
         {
           src: "/pwa-192x192.png",
