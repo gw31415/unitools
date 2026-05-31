@@ -71,4 +71,13 @@ describe("editor FTS helpers", () => {
     );
     expect(mock.bind).toHaveBeenCalledWith("Alpha Beta", 20);
   });
+
+  it("segments Japanese keyword with the index tokenizer before querying MATCH", async () => {
+    const mock = createD1Mock([{ editor_id: editorId, content: "東京 都 で 検索" }]);
+
+    await expect(searchEditorFtsIndex(mock.db, "東京都で検索", 20)).resolves.toEqual([
+      { editorId, text: "東京 都 で 検索" },
+    ]);
+    expect(mock.bind).toHaveBeenCalledWith("東京 都 で 検索", 20);
+  });
 });
