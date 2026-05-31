@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { EditorSearchDock, type SearchDockItem } from "../EditorSearchDock";
 
@@ -8,7 +9,7 @@ const items: SearchDockItem[] = Array.from({ length: 12 }, (_, index) => ({
   title: `Article ${String(index + 1).padStart(2, "0")}`,
 }));
 
-function renderSearchDock() {
+function renderSearchDock(props: Partial<React.ComponentProps<typeof EditorSearchDock>> = {}) {
   return render(
     <EditorSearchDock
       value=""
@@ -24,6 +25,7 @@ function renderSearchDock() {
       currentEditorId="editor-1"
       onRequestFocusEditor={vi.fn()}
       onNavigateToEditor={vi.fn()}
+      {...props}
     />,
   );
 }
@@ -61,5 +63,32 @@ describe("EditorSearchDock", () => {
       "true",
     );
     expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+  });
+
+  it("keeps existing results visible while loading", () => {
+    renderSearchDock({ isLoading: true });
+
+    fireEvent.click(screen.getByLabelText("Open search"));
+
+    expect(screen.getByRole("button", { name: "Article 01" })).toBeInTheDocument();
+    expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
+  });
+
+  it("shows content search progress while title results are visible", () => {
+    renderSearchDock({ value: "Article", isSearchingContent: true });
+
+    fireEvent.click(screen.getByLabelText("Open search"));
+
+    expect(screen.getByRole("button", { name: "Article 01" })).toBeInTheDocument();
+    expect(screen.getByText("Searching content...")).toBeInTheDocument();
+  });
+
+  it("shows content search errors without clearing visible results", () => {
+    renderSearchDock({ value: "Article", contentSearchError: "Content search failed." });
+
+    fireEvent.click(screen.getByLabelText("Open search"));
+
+    expect(screen.getByRole("button", { name: "Article 01" })).toBeInTheDocument();
+    expect(screen.getByText("Content search failed.")).toBeInTheDocument();
   });
 });

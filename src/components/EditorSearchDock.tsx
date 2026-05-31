@@ -1,5 +1,6 @@
 import { useAtomValue } from "jotai";
 import { Search } from "lucide-react";
+import type React from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,10 +80,12 @@ export function EditorSearchDock({
   onValueChange,
   items,
   isLoading,
+  isSearchingContent = false,
   isLoadingMore,
   hasMore,
   isAuthRequired,
   error,
+  contentSearchError = null,
   onRetry,
   onLoadMore,
   currentEditorId,
@@ -93,10 +96,12 @@ export function EditorSearchDock({
   onValueChange: (value: string) => void;
   items: SearchDockItem[];
   isLoading: boolean;
+  isSearchingContent?: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;
   isAuthRequired: boolean;
   error: string | null;
+  contentSearchError?: string | null;
   onRetry: () => void;
   onLoadMore: () => void;
   currentEditorId: string;
@@ -466,9 +471,9 @@ export function EditorSearchDock({
             className="flex max-h-72 flex-col gap-1 overflow-y-auto overscroll-none"
             onScroll={maybeLoadMore}
           >
-            {isLoading ? (
+            {isLoading && panelItems.length === 0 ? (
               <div className="px-2 py-3 text-sm text-muted-foreground">Loading...</div>
-            ) : error ? (
+            ) : error && panelItems.length === 0 ? (
               <div className="px-2 py-3 text-sm text-muted-foreground">
                 <span>{error}</span>
                 <Button
@@ -484,56 +489,67 @@ export function EditorSearchDock({
             ) : isAuthRequired ? (
               <div className="px-2 py-3 text-sm text-muted-foreground">Login is required.</div>
             ) : panelItems.length > 0 ? (
-              panelItems.map((item, index) => {
-                const isActive = panelItems[activeIndex]?.id === item.id;
+              <>
+                {panelItems.map((item, index) => {
+                  const isActive = panelItems[activeIndex]?.id === item.id;
 
-                return (
-                  <Button
-                    key={item.id}
-                    ref={index === activeIndex ? activeItemRef : undefined}
-                    type="button"
-                    variant="ghost"
-                    data-active={isActive ? "true" : undefined}
-                    className={cn(
-                      "h-auto w-full justify-start rounded-xl border-2 border-transparent px-2 py-2 text-left",
-                      "hover:bg-accent/60 hover:text-accent-foreground dark:hover:bg-accent/40",
-                      isActive &&
-                        "border-border/80 bg-background/75 shadow-xs hover:bg-background/75 dark:border-white/15 dark:bg-background/35 dark:hover:bg-background/35",
-                    )}
-                    onPointerDown={(event) => {
-                      event.preventDefault();
-                      touchSelectionRef.current = event.pointerType === "touch";
-                    }}
-                    onClick={() => {
-                      const focusEditor = !touchSelectionRef.current;
-                      touchSelectionRef.current = false;
-                      selectItem(item, focusEditor);
-                    }}
-                  >
-                    <span className="flex min-w-0 flex-col gap-0.5">
-                      <span
-                        className={cn(
-                          "min-w-0 truncate",
-                          item.id === currentEditorId && "font-medium",
-                        )}
-                      >
-                        {formatEditorLabel(item)}
-                      </span>
-                      {item.match?.text ? (
-                        <span className="[display:-webkit-box] min-w-0 overflow-hidden text-xs leading-snug text-muted-foreground [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
-                          {item.match.source === "title" ? "Title: " : "Content: "}
-                          {item.match.text}
+                  return (
+                    <Button
+                      key={item.id}
+                      ref={index === activeIndex ? activeItemRef : undefined}
+                      type="button"
+                      variant="ghost"
+                      data-active={isActive ? "true" : undefined}
+                      className={cn(
+                        "h-auto w-full justify-start rounded-xl border-2 border-transparent px-2 py-2 text-left",
+                        "hover:bg-accent/60 hover:text-accent-foreground dark:hover:bg-accent/40",
+                        isActive &&
+                          "border-border/80 bg-background/75 shadow-xs hover:bg-background/75 dark:border-white/15 dark:bg-background/35 dark:hover:bg-background/35",
+                      )}
+                      onPointerDown={(event: React.PointerEvent<HTMLButtonElement>) => {
+                        event.preventDefault();
+                        touchSelectionRef.current = event.pointerType === "touch";
+                      }}
+                      onClick={() => {
+                        const focusEditor = !touchSelectionRef.current;
+                        touchSelectionRef.current = false;
+                        selectItem(item, focusEditor);
+                      }}
+                    >
+                      <span className="flex min-w-0 flex-col gap-0.5">
+                        <span
+                          className={cn(
+                            "min-w-0 truncate",
+                            item.id === currentEditorId && "font-medium",
+                          )}
+                        >
+                          {formatEditorLabel(item)}
                         </span>
-                      ) : null}
-                    </span>
-                  </Button>
-                );
-              })
+                        {item.match?.text ? (
+                          <span className="[display:-webkit-box] min-w-0 overflow-hidden text-xs leading-snug text-muted-foreground [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                            {item.match.source === "title" ? "Title: " : "Content: "}
+                            {item.match.text}
+                          </span>
+                        ) : null}
+                      </span>
+                    </Button>
+                  );
+                })}
+                {error ? (
+                  <div className="px-2 py-2 text-xs text-muted-foreground">{error}</div>
+                ) : null}
+              </>
             ) : (
               <div className="px-2 py-3 text-sm text-muted-foreground">
                 {normalizedQuery.length > 0 ? "No matching articles." : "No articles yet."}
               </div>
             )}
+            {!error && !isAuthRequired && normalizedQuery.length > 0 && isSearchingContent ? (
+              <div className="px-2 py-2 text-xs text-muted-foreground">Searching content...</div>
+            ) : null}
+            {!error && !isAuthRequired && contentSearchError ? (
+              <div className="px-2 py-2 text-xs text-muted-foreground">{contentSearchError}</div>
+            ) : null}
             {!isLoading && !error && !isAuthRequired && isLoadingMore ? (
               <div className="px-2 py-2 text-xs text-muted-foreground">Loading more...</div>
             ) : null}
@@ -565,7 +581,7 @@ export function EditorSearchDock({
               }
             }
           }}
-          onPointerDown={(e) => {
+          onPointerDown={(e: React.PointerEvent<HTMLButtonElement>) => {
             // Only start drag on primary mouse button, or any touch/pen contact.
             if (e.pointerType === "mouse" && e.button !== 0) return;
             activePointerIdRef.current = e.pointerId;

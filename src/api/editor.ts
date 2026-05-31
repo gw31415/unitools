@@ -150,6 +150,7 @@ const editor = createApp()
               return z.NEVER;
             }
           }),
+        searchMode: z.enum(["title", "content"]).optional(),
       }),
     ),
     async (c) => {
@@ -171,26 +172,43 @@ const editor = createApp()
       const db = drizzle(c.env.DB, { schema });
       if (query.keyword) {
         const keyword = query.keyword;
-        const titleRows: Editor[] = await db.query.editors.findMany({
-          where: (editors) =>
-            sql`${editors.title} LIKE ${`%${escapeSqlLikePattern(keyword)}%`} ESCAPE '\\'`,
-          orderBy: (editors) => [desc(editors.createdAt), desc(editors.id)],
-          limit,
-        });
-        const searchResults = await c.env.AI.autorag("unitools-editors").search({
-          query: keyword,
-          max_num_results: Math.min(limit, AI_SEARCH_MAX_RESULTS),
-        });
-        const matchesById = getSearchMatchesByEditorId(searchResults.data, keyword);
-        const titleIds = titleRows.map((editor) => editor.id);
-        for (const editor of titleRows) {
-          matchesById.set(editor.id, { source: "title", text: editor.title });
+
+        const fetchTitleRows = () =>
+          db.query.editors.findMany({
+            where: (editors) =>
+              sql`${editors.title} LIKE ${`%${escapeSqlLikePattern(keyword)}%`} ESCAPE '\\'`,
+            orderBy: (editors) => [desc(editors.createdAt), desc(editors.id)],
+            limit,
+          }) as Promise<Editor[]>;
+
+        const fetchContentMatches = async () => {
+          const searchResults = await c.env.AI.autorag("unitools-editors").search({
+            query: keyword,
+            max_num_results: Math.min(limit, AI_SEARCH_MAX_RESULTS),
+          });
+          return getSearchMatchesByEditorId(searchResults.data, keyword);
+        };
+
+        const titleRows = query.searchMode === "content" ? [] : await fetchTitleRows();
+        const matchesById =
+          query.searchMode === "title"
+            ? new Map<ULID, EditorSearchMatch>()
+            : await fetchContentMatches();
+
+        if (query.searchMode !== "content") {
+          for (const editor of titleRows) {
+            matchesById.set(editor.id, { source: "title", text: editor.title });
+          }
         }
 
-        const ids = [
-          ...titleIds,
-          ...[...matchesById.keys()].filter((id) => !titleIds.includes(id)),
-        ].slice(0, limit);
+        const titleIds = titleRows.map((editor) => editor.id);
+        const ids =
+          query.searchMode === "content"
+            ? [...matchesById.keys()].slice(0, limit)
+            : [
+                ...titleIds,
+                ...[...matchesById.keys()].filter((id) => !titleIds.includes(id)),
+              ].slice(0, limit);
         if (ids.length === 0) {
           return c.json({
             items: [],

@@ -1,7 +1,7 @@
 import { hc } from "hono/client";
 import { useAtomValue } from "jotai";
 import { Clock } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { EditorSearchDock, type SearchDockItem } from "@/components/EditorSearchDock";
 import Markdown from "@/components/Markdown";
 import {
@@ -81,6 +81,15 @@ function scrollToEditorText(searchText: string, attempt = 0) {
   return true;
 }
 
+function mergeSearchItems(primaryItems: SearchDockItem[], secondaryItems: SearchDockItem[]) {
+  const mergedItems = [...primaryItems];
+  for (const item of secondaryItems) {
+    if (mergedItems.some((existing) => existing.id === item.id)) continue;
+    mergedItems.push(item);
+  }
+  return mergedItems;
+}
+
 export default function DocumentPage() {
   const editorState = useAtomValue(editorStateAtom);
   const user = useAtomValue(currentUserAtom);
@@ -88,20 +97,29 @@ export default function DocumentPage() {
   const [searchValue, setSearchValue] = useState("");
   const [searchItems, setSearchItems] = useState<SearchDockItem[]>([]);
   const [isSearchLoading, setIsSearchLoading] = useState(true);
+  const [isSearchContentLoading, setIsSearchContentLoading] = useState(false);
   const [isSearchLoadingMore, setIsSearchLoadingMore] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchContentError, setSearchContentError] = useState<string | null>(null);
   const [isSearchAuthRequired, setIsSearchAuthRequired] = useState(false);
   const [searchHasMore, setSearchHasMore] = useState(false);
   const [searchNextCursor, setSearchNextCursor] = useState<string | null>(null);
+  const searchRequestIdRef = useRef(0);
 
   const fetchSearchItems = useCallback(
     async ({
       cursor,
       keyword,
+      searchMode,
       append = false,
-    }: { cursor?: string | null; keyword?: string; append?: boolean } = {}) => {
+    }: {
+      cursor?: string | null;
+      keyword?: string;
+      searchMode?: "title" | "content";
+      append?: boolean;
+    } = {}) => {
       const client = getClient();
-      if (!client) return;
+      if (!client) return null;
       if (append) {
         setIsSearchLoadingMore(true);
       } else {
@@ -114,6 +132,7 @@ export default function DocumentPage() {
             limit: String(SIDEBAR_PAGE_SIZE),
             ...(cursor ? { cursor } : {}),
             ...(keyword ? { keyword } : {}),
+            ...(searchMode ? { searchMode } : {}),
           },
         });
         if (res.status === 401) {
@@ -121,11 +140,11 @@ export default function DocumentPage() {
           setSearchItems([]);
           setSearchHasMore(false);
           setSearchNextCursor(null);
-          return;
+          return null;
         }
         if (!res.ok) {
           setSearchError("Failed to load articles.");
-          return;
+          return null;
         }
         const { items, pageInfo } = await res.json();
         setSearchItems((prev) => {
@@ -140,9 +159,11 @@ export default function DocumentPage() {
         setSearchHasMore(pageInfo.hasMore);
         setSearchNextCursor(pageInfo.nextCursor);
         setIsSearchAuthRequired(false);
+        return { items, pageInfo };
       } catch (error) {
         console.error(error);
         setSearchError("Failed to load articles.");
+        return null;
       } finally {
         if (append) {
           setIsSearchLoadingMore(false);
@@ -162,7 +183,95 @@ export default function DocumentPage() {
   }, [fetchSearchItems, isSearchLoading, isSearchLoadingMore, searchHasMore, searchNextCursor]);
 
   const refreshSearchItems = useCallback(async () => {
-    await fetchSearchItems({ keyword: searchValue.trim() || undefined });
+    const keyword = searchValue.trim();
+    const requestId = searchRequestIdRef.current + 1;
+    searchRequestIdRef.current = requestId;
+    setSearchContentError(null);
+
+    if (!keyword) {
+      setIsSearchContentLoading(false);
+      await fetchSearchItems();
+      return;
+    }
+
+    const client = getClient();
+    if (!client) return;
+
+    setIsSearchLoading(true);
+    setIsSearchContentLoading(true);
+    setSearchError(null);
+    setSearchContentError(null);
+    setSearchHasMore(false);
+    setSearchNextCursor(null);
+
+    const fetchSearchMode = async (searchMode: "title" | "content") => {
+      const res = await client.api.v1.editor.$get({
+        query: {
+          limit: String(SIDEBAR_PAGE_SIZE),
+          keyword,
+          searchMode,
+        },
+      });
+      if (res.status === 401) {
+        return { authRequired: true as const };
+      }
+      if (!res.ok) {
+        throw new Error(`Failed to load ${searchMode} search results.`);
+      }
+      return res.json();
+    };
+
+    const titlePromise = fetchSearchMode("title");
+    const contentPromise = fetchSearchMode("content");
+    void contentPromise.catch(() => undefined);
+    let titleItems: SearchDockItem[] = [];
+
+    try {
+      const titleResult = await titlePromise;
+      if (requestId !== searchRequestIdRef.current) return;
+      if ("authRequired" in titleResult) {
+        setIsSearchAuthRequired(true);
+        setSearchItems([]);
+        setSearchHasMore(false);
+        setSearchNextCursor(null);
+        setIsSearchContentLoading(false);
+        return;
+      }
+      titleItems = titleResult.items;
+      setSearchItems(titleItems);
+      setSearchHasMore(false);
+      setSearchNextCursor(null);
+      setIsSearchAuthRequired(false);
+    } catch (error) {
+      if (requestId !== searchRequestIdRef.current) return;
+      console.error(error);
+      setSearchError("Failed to load articles.");
+    } finally {
+      if (requestId === searchRequestIdRef.current) {
+        setIsSearchLoading(false);
+      }
+    }
+
+    try {
+      const contentResult = await contentPromise;
+      if (requestId !== searchRequestIdRef.current) return;
+      if ("authRequired" in contentResult) {
+        setIsSearchAuthRequired(true);
+        setSearchItems([]);
+        return;
+      }
+      setSearchItems((currentItems) =>
+        mergeSearchItems(titleItems.length > 0 ? titleItems : currentItems, contentResult.items),
+      );
+    } catch (error) {
+      if (requestId !== searchRequestIdRef.current) return;
+      console.error(error);
+      setSearchContentError("Content search failed.");
+    } finally {
+      if (requestId === searchRequestIdRef.current) {
+        setIsSearchContentLoading(false);
+      }
+    }
   }, [fetchSearchItems, searchValue]);
 
   useEffect(() => {
@@ -268,10 +377,12 @@ export default function DocumentPage() {
         onValueChange={setSearchValue}
         items={searchItems}
         isLoading={isSearchLoading}
+        isSearchingContent={isSearchContentLoading}
         isLoadingMore={isSearchLoadingMore}
         hasMore={searchHasMore}
         isAuthRequired={isSearchAuthRequired}
         error={searchError}
+        contentSearchError={searchContentError}
         onRetry={refreshSearchItems}
         onLoadMore={loadMoreSearchItems}
         currentEditorId={editorState.editorId}
