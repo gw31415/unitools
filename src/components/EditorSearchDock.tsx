@@ -541,10 +541,18 @@ export function EditorSearchDock({
               </>
             ) : (
               <div className="px-2 py-3 text-sm text-muted-foreground">
-                {normalizedQuery.length > 0 ? "No matching articles." : "No articles yet."}
+                {normalizedQuery.length > 0 && isSearchingContent
+                  ? "Searching content..."
+                  : normalizedQuery.length > 0
+                    ? "No matching articles."
+                    : "No articles yet."}
               </div>
             )}
-            {!error && !isAuthRequired && normalizedQuery.length > 0 && isSearchingContent ? (
+            {!error &&
+            !isAuthRequired &&
+            normalizedQuery.length > 0 &&
+            isSearchingContent &&
+            panelItems.length > 0 ? (
               <div className="px-2 py-2 text-xs text-muted-foreground">Searching content...</div>
             ) : null}
             {!error && !isAuthRequired && contentSearchError ? (
