@@ -31,6 +31,7 @@ import {
 
 const PASSKEY_SESSION_COOKIE = "sid";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+const SESSION_EXPIRATION_REFRESH_INTERVAL_MS = 1000 * 60 * 60 * 24;
 
 const SESSION_PREFIX = "session";
 
@@ -45,6 +46,12 @@ interface RegistrationWebAuthnJSON extends RegistrationResponseJSON {
 interface AuthenticationWebAuthnJSON extends AuthenticationResponseJSON {
   challengeId: string;
 }
+
+type SessionRecord = {
+  user: User;
+  secret: string;
+  expirationRefreshedAt?: number;
+};
 
 function getRpConfig(c: Context) {
   const url = new URL(c.req.url);
@@ -85,20 +92,26 @@ async function loadSessionFromRequest<EnvExtended extends Env>(
     return null;
   }
 
-  const record = await c.env.AUTH_KV.get<{ user: User; secret: string }>(
-    sessionKey(userId, sessionId),
-    "json",
-  );
+  const record = await c.env.AUTH_KV.get<SessionRecord>(sessionKey(userId, sessionId), "json");
   if (!record || record.secret !== secret || record.user.id !== userId) {
     clearSessionCookie();
     return null;
   }
 
-  // Update session expiration
-  await c.env.AUTH_KV.put(sessionKey(userId, sessionId), JSON.stringify(record), {
-    expirationTtl: SESSION_TTL_SECONDS,
-  });
-  setCookie(c, PASSKEY_SESSION_COOKIE, sessionToken, getRpConfig(c).toCookieOptions());
+  const now = Date.now();
+  if (
+    record.expirationRefreshedAt === undefined ||
+    now - record.expirationRefreshedAt >= SESSION_EXPIRATION_REFRESH_INTERVAL_MS
+  ) {
+    await c.env.AUTH_KV.put(
+      sessionKey(userId, sessionId),
+      JSON.stringify({ ...record, expirationRefreshedAt: now } satisfies SessionRecord),
+      {
+        expirationTtl: SESSION_TTL_SECONDS,
+      },
+    );
+    setCookie(c, PASSKEY_SESSION_COOKIE, sessionToken, getRpConfig(c).toCookieOptions());
+  }
 
   return { user: record.user, sessionId };
 }
@@ -161,7 +174,11 @@ function removeChallengeId<T extends { challengeId: string }>(payload: T) {
 async function createSession(c: Context<Env>, user: User, sessionId: ULID, sessionSecret: string) {
   await c.env.AUTH_KV.put(
     sessionKey(user.id, sessionId),
-    JSON.stringify({ user, secret: sessionSecret }),
+    JSON.stringify({
+      user,
+      secret: sessionSecret,
+      expirationRefreshedAt: Date.now(),
+    } satisfies SessionRecord),
     {
       expirationTtl: SESSION_TTL_SECONDS,
     },

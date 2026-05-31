@@ -46,21 +46,24 @@ vi.mock("y-durableobjects", async () => {
 const { default: editor } = await import("../editor");
 
 function createEnv() {
+  const sessionRecord = {
+    user: { id: userId, username: "ama", createdAt: Date.now() },
+    secret: sessionSecret,
+  };
   const ftsAll = vi.fn().mockResolvedValue({
     results: [{ editor_id: betaId, content: "Beta content includes Alpha keyword" }],
   });
   const ftsRun = vi.fn().mockResolvedValue({});
   const ftsBind = vi.fn(() => ({ all: ftsAll, run: ftsRun }));
   const ftsPrepare = vi.fn(() => ({ bind: ftsBind }));
+  const authKvGet = vi.fn().mockResolvedValue(sessionRecord);
+  const authKvPut = vi.fn().mockResolvedValue(undefined);
 
   return {
     env: {
       AUTH_KV: {
-        get: vi.fn().mockResolvedValue({
-          user: { id: userId, username: "ama", createdAt: Date.now() },
-          secret: sessionSecret,
-        }),
-        put: vi.fn().mockResolvedValue(undefined),
+        get: authKvGet,
+        put: authKvPut,
       },
       DB: {
         prepare: ftsPrepare,
@@ -69,6 +72,8 @@ function createEnv() {
     ftsAll,
     ftsBind,
     ftsPrepare,
+    authKvGet,
+    authKvPut,
   };
 }
 
@@ -86,6 +91,7 @@ function requestSearch(url: string, env: CloudflareBindings) {
 
 describe("editor search API", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     mocks.drizzle.mockReturnValue(mocks.db);
     mocks.db.query.editors.findMany.mockReset();
   });
@@ -148,5 +154,39 @@ describe("editor search API", () => {
     expect(body.items.map((item: { id: string }) => item.id)).toEqual([alphaId, betaId]);
     expect(body.items[0].match).toEqual({ source: "title", text: "Alpha title" });
     expect(body.items[1]?.match?.source).toBe("content");
+  });
+
+  it("skips refreshing session expiration when it was refreshed recently", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-02T00:00:00Z"));
+    const { env, authKvGet, authKvPut } = createEnv();
+    authKvGet.mockResolvedValue({
+      user: { id: userId, username: "ama", createdAt: Date.now() },
+      secret: sessionSecret,
+      expirationRefreshedAt: new Date("2026-01-01T12:00:00Z").getTime(),
+    });
+    mocks.db.query.editors.findMany.mockResolvedValue([]);
+
+    const res = await requestSearch("http://localhost/?keyword=Alpha", env);
+
+    expect(res.status).toBe(200);
+    expect(authKvPut).not.toHaveBeenCalled();
+  });
+
+  it("refreshes session expiration about once a day", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-02T00:00:00Z"));
+    const { env, authKvGet, authKvPut } = createEnv();
+    authKvGet.mockResolvedValue({
+      user: { id: userId, username: "ama", createdAt: Date.now() },
+      secret: sessionSecret,
+      expirationRefreshedAt: new Date("2026-01-01T00:00:00Z").getTime(),
+    });
+    mocks.db.query.editors.findMany.mockResolvedValue([]);
+
+    const res = await requestSearch("http://localhost/?keyword=Alpha", env);
+
+    expect(res.status).toBe(200);
+    expect(authKvPut).toHaveBeenCalledTimes(1);
   });
 });
