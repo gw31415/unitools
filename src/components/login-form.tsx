@@ -7,12 +7,12 @@ import {
   FieldDescription,
   FieldGroup,
   FieldLabel,
-  FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { User } from "@/models";
 import { usernameRegex } from "@/validators/auth";
+import { AccordionItem, Accordion, AccordionContent, AccordionTrigger } from "./ui/accordion";
 
 type LoginFormProps = ComponentProps<"div"> & {
   user?: User;
@@ -125,15 +125,27 @@ export function LoginForm({
             </Field>
           </>
         ) : (
-          <>
-            <SignUpFormItems onSignup={onSignup} disabled={authBusy} />
-            <FieldSeparator>Or</FieldSeparator>
-            <Field className="flex gap-4">
-              <Button variant="outline" type="button" onClick={onLogin} disabled={authBusy}>
-                Login
-              </Button>
-            </Field>
-          </>
+          <Accordion
+            type="single"
+            defaultValue="login"
+          >
+            <AccordionItem value="login">
+              <AccordionTrigger>Login</AccordionTrigger>
+              <AccordionContent>
+                <Field className="flex gap-4">
+                  <Button type="button" onClick={onLogin} disabled={authBusy}>
+                    Login
+                  </Button>
+                </Field>
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="signup">
+              <AccordionTrigger>Sign up</AccordionTrigger>
+              <AccordionContent>
+                <SignUpFormItems onSignup={onSignup} disabled={authBusy} />
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         )}
         {authError ? (
           <FieldDescription className="text-center text-sm text-destructive">
