@@ -1,6 +1,6 @@
 import { getSchema } from "@tiptap/core";
 import { renderToMarkdown } from "@tiptap/static-renderer";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, notInArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { YDurableObjects as BaseYDurableObjects, WSSharedDoc } from "y-durableobjects";
 import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
@@ -92,7 +92,14 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
         error,
       });
     }
-    // TODO: FTS Vocab の一覧を保持する
+    try {
+      await this.collectConfigureFtsVocabEmbeddings();
+    } catch (error) {
+      console.error("Failed to collect and configure the FTS vocabulary", {
+        editorId: this.state.id.name,
+        error,
+      });
+    }
     try {
       await this.cleanupUnreferencedImages();
     } catch (error) {
@@ -121,6 +128,38 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
         });
       }
     }
+  }
+
+  private async collectConfigureFtsVocabEmbeddings(): Promise<void> {
+    const ftsVocabDoneLabel = "ftsVocabDone";
+    const ftsVocabDone = (await this.state.storage.get<string[]>(ftsVocabDoneLabel)) ?? [];
+
+    const db = drizzle(this.env.DB, { schema });
+    const ftsVocabToProcess = (
+      await db.query.editorsFtsVocab.findMany({
+        columns: { term: true },
+        where: (vocab) => notInArray(vocab.term, ftsVocabDone),
+      })
+    ).map(({ term }) => term);
+
+    const vectors: VectorizeVector[] = [];
+    const EMBEDDINGS_BATCH_SIZE = 128;
+    for (let i = 0; i < ftsVocabToProcess.length; i += EMBEDDINGS_BATCH_SIZE) {
+      const batch = ftsVocabToProcess.slice(i, i + EMBEDDINGS_BATCH_SIZE);
+      const embeddingsResponse = await this.env.AI.run("@cf/baai/bge-m3", {
+        text: batch,
+      });
+      if (!("data" in embeddingsResponse) || !embeddingsResponse.data) {
+        continue;
+      }
+      const embeddings = embeddingsResponse.data;
+      batch.forEach((term, index) => {
+        ftsVocabDone.push(term);
+        vectors.push({ id: term, values: embeddings[index] });
+      });
+    }
+    await this.env.VECTORIZE_FTS_VOCAB_EMBEDDINGS.upsert(vectors);
+    await this.state.storage.put(ftsVocabDoneLabel, ftsVocabDone);
   }
 
   private async cleanupUnreferencedImages(): Promise<void> {

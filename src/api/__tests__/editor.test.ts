@@ -30,6 +30,9 @@ const mocks = vi.hoisted(() => ({
       editorsFtsIndex: {
         findMany: vi.fn(),
       },
+      editorsFtsVocab: {
+        findMany: vi.fn(),
+      },
     },
   },
   drizzle: vi.fn(),
@@ -147,6 +150,9 @@ describe("editor search API", () => {
     mocks.drizzle.mockReturnValue(mocks.db);
     mocks.db.query.editors.findMany.mockReset();
     mocks.db.query.editorsFtsIndex.findMany.mockReset();
+    mocks.db.query.editorsFtsVocab.findMany.mockReset();
+    // Default empty responses
+    mocks.db.query.editorsFtsVocab.findMany.mockResolvedValue([]);
   });
 
   it("returns title matches without querying FTS in title search mode", async () => {
@@ -260,6 +266,13 @@ describe("editor search API", () => {
         { term: "検索", doc: 3, cnt: 7 },
       ], // Vocab results
     );
+
+    // Set up the editorsFtsVocab mock for the new drizzle-based implementation
+    mocks.db.query.editorsFtsVocab.findMany.mockResolvedValue([
+      { term: "コンピューター" },
+      { term: "コンピューターサイエンス" },
+      { term: "検索" },
+    ]);
 
     const res = await requestEditorApi(
       "http://localhost/keywords/suggest?query=コンピュータ&limit=2",

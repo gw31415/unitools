@@ -10,8 +10,6 @@ type EditorFtsVocabSuggestion = {
 
 const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
 
-const EMBEDDINGS_BATCH_SIZE = 100; // Workers AI の一度のリクエストで処理するテキスト数
-
 export function tokenize(text: string): string {
   return [...segmenter.segment(text)]
     .filter((s) => s.isWordLike)
@@ -43,33 +41,6 @@ function partialSimilarity(query: string, term: string): number {
   return 0;
 }
 
-export async function updateKeywordEmbeddings(
-  terms: string[],
-  ai: Ai,
-  vectorize: VectorizeIndex,
-): Promise<void> {
-  const normalizedTerms = terms.map((row) => normalizeFtsTerm(row));
-
-  // バッチ処理で embeddings を生成
-  const vectors: VectorizeVector[] = [];
-  for (let i = 0; i < normalizedTerms.length; i += EMBEDDINGS_BATCH_SIZE) {
-    const batch = normalizedTerms.slice(i, i + EMBEDDINGS_BATCH_SIZE);
-    const embeddingsResponse = await ai.run("@cf/baai/bge-m3", {
-      text: batch,
-    });
-
-    if (!("data" in embeddingsResponse) || !embeddingsResponse.data)
-      throw new Error("embeddings response missing data");
-
-    const embeddings = embeddingsResponse.data;
-    batch.forEach((term, index) => {
-      vectors.push({ id: term, values: embeddings[index] });
-    });
-  }
-
-  await vectorize.upsert(vectors);
-}
-
 export async function suggestEditorFtsTerms(
   terms: string[],
   query: string,
@@ -82,10 +53,12 @@ export async function suggestEditorFtsTerms(
   const queryEmbeddingResponse = await options.ai.run("@cf/baai/bge-m3", {
     text: [normalizedQuery],
   });
-  const queryEmbedding = (queryEmbeddingResponse as { data: number[][] }).data[0];
+  if (!("data" in queryEmbeddingResponse) || !queryEmbeddingResponse.data) {
+    throw new Error("Failed to get embedding for query");
+  }
 
   // Vectorize で類似キーワードを検索（topK は limit の数倍取得してフィルタリング）
-  const matches = await options.vectorize.query(queryEmbedding, {
+  const matches = await options.vectorize.query(queryEmbeddingResponse.data[0], {
     topK: options.limit * 10,
     returnValues: true,
     returnMetadata: false,
