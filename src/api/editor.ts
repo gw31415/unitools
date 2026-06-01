@@ -4,14 +4,9 @@ import { drizzle } from "drizzle-orm/d1";
 import type { Context, MiddlewareHandler } from "hono";
 import { yRoute } from "y-durableobjects";
 import z from "zod";
-import {
-  deleteEditorFtsIndex,
-  searchEditorFtsIndex,
-  listEditorFtsVocab,
-} from "@/db/editorFtsVocab";
 import * as schema from "@/db/schema";
 import { b64urlToStruct, structToBase64Url } from "@/lib/base64";
-import { segmentText, suggestEditorFtsTerms } from "@/lib/editorFts";
+import { segmentText, suggestEditorFtsTerms, tokenize } from "@/lib/editorFts";
 import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
 import type { Editor } from "@/models";
@@ -133,9 +128,12 @@ const editor = createApp()
           }) as Promise<Editor[]>;
 
         const fetchContentMatches = async () => {
-          const ftsMatches = await searchEditorFtsIndex(c.env.DB, keyword, limit);
+          const ftsMatches = await db.query.editorsFtsIndex.findMany({
+            where: sql`editors_fts_index MATCH ${tokenize(keyword)}`,
+            limit: limit,
+          });
           return new Map<ULID, EditorSearchMatch>(
-            ftsMatches.map((match) => [match.editorId, { source: "content", text: match.text }]),
+            ftsMatches.map((match) => [match.editorId, { source: "content", text: match.content }]),
           );
         };
 
@@ -253,7 +251,12 @@ const editor = createApp()
         Math.max(1, query.limit ?? DEFAULT_SUGGESTION_LIMIT),
         MAX_SUGGESTION_LIMIT,
       );
-      const terms = await listEditorFtsVocab(c.env.DB);
+      const terms = (
+        await drizzle(c.env.DB, { schema }).query.editorsFtsVocab.findMany({
+          columns: { term: true },
+          orderBy: (eb) => eb.term,
+        })
+      ).map(({ term }) => term);
       const items = await suggestEditorFtsTerms(terms, query.query, {
         limit,
         minScore: query.minScore ?? DEFAULT_SUGGESTION_MIN_SCORE,
@@ -328,7 +331,8 @@ const editor = createApp()
     const res = await db.delete(schema.editors).where(eq(schema.editors.id, id)).returning();
 
     if (res.length > 0) {
-      await deleteEditorFtsIndex(c.env.DB, id);
+      // FTSインデックスも削除
+      await db.delete(schema.editorsFtsIndex).where(eq(schema.editorsFtsIndex.editorId, id)).run();
 
       // R2から画像を一括削除（1000個ずつチャンク）
       if (imagesToDelete.length > 0) {

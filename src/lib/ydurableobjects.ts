@@ -9,15 +9,13 @@ import * as schema from "@/db/schema";
 import type { Env } from "@/lib/hono";
 import type { ULID } from "@/lib/ulid";
 import { baseExtensions } from "./editorExtensions";
-import { upsertEditorFtsIndex, listEditorFtsTerms, updateKeywordEmbeddings } from "./editorFts";
+import { tokenize } from "./editorFts";
 import { collectReferencedImageIdsFromYXmlFragment } from "./editorImageCleanup";
 import { normalizeMarkdownExportContent } from "./markdownExport";
 
 const EXPORT_DEBOUNCE_MS = 60000; // 1分
 const R2_BULK_DELETE_LIMIT = 1000;
 const EDITOR_ID_STORAGE_KEY = "editorId";
-const FTS_VOCAB_STORAGE_KEY = "fts-vocab";
-const FTS_VOCAB_TTL = 60 * 60 * 1000; // 1時間（ミリ秒）
 
 export class YDurableObjects extends BaseYDurableObjects<Env> {
   override createRoom(roomId: string): WebSocket {
@@ -69,7 +67,8 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
 
     // デバウンス付きのupdateリスナー（DO Alarmで実装）
     this.doc.on("update", async (_update) => {
-      await this.scheduleUpdateDebounceAlarm();
+      // Update Debounce Alarm
+      await this.state.storage.setAlarm(Date.now() + EXPORT_DEBOUNCE_MS);
     });
   }
 
@@ -82,6 +81,8 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     }
   }
 
+  // 全員切断した時のコールバック
+
   async alarm(): Promise<void> {
     try {
       await this.updateFtsIndex();
@@ -91,17 +92,7 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
         error,
       });
     }
-    // FTS Vocab の一覧を保持する
-    try {
-      const terms = await this.getOrFetchFtsTerms();
-      await this.saveFtsTerms(terms);
-      await updateKeywordEmbeddings(terms, this.env.AI, this.env.VECTORIZE_FTS_VOCAB_EMBEDDINGS);
-    } catch (error) {
-      console.error("Failed to update FTS vocab embeddings", {
-        editorId: this.state.id.name,
-        error,
-      });
-    }
+    // TODO: FTS Vocab の一覧を保持する
     try {
       await this.cleanupUnreferencedImages();
     } catch (error) {
@@ -112,17 +103,24 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     }
   }
 
-  private async scheduleUpdateDebounceAlarm(): Promise<void> {
-    await this.state.storage.setAlarm(Date.now() + EXPORT_DEBOUNCE_MS);
-  }
-
   private async updateFtsIndex(): Promise<void> {
     const id = await this.resolveEditorId();
     if (!id) {
       return;
     }
     const markdown = this.convertToMarkdown(this.doc);
-    await upsertEditorFtsIndex(this.env.DB, id, markdown);
+    {
+      const db = drizzle(this.env.DB);
+      await db.delete(schema.editorsFtsIndex).where(eq(schema.editorsFtsIndex.editorId, id));
+
+      const content = tokenize(markdown);
+      if (content) {
+        await db.insert(schema.editorsFtsIndex).values({
+          editorId: id,
+          content,
+        });
+      }
+    }
   }
 
   private async cleanupUnreferencedImages(): Promise<void> {
@@ -154,6 +152,8 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     await db.delete(schema.images).where(inArray(schema.images.id, staleImageIds));
   }
 
+  // Utils
+
   private async resolveEditorId(): Promise<ULID | undefined> {
     const namedId = this.state.id.name as ULID | undefined;
     if (namedId) {
@@ -182,37 +182,5 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
       content: normalizedContent,
       extensions: baseExtensions,
     });
-  }
-
-  private async getFtsTerms(): Promise<string[] | null> {
-    const stored = await this.state.storage.get<{ terms: string[]; timestamp: number }>(
-      FTS_VOCAB_STORAGE_KEY,
-    );
-    if (!stored) return null;
-
-    // 有効期限チェック
-    const now = Date.now();
-    if (now - stored.timestamp > FTS_VOCAB_TTL) {
-      await this.state.storage.delete(FTS_VOCAB_STORAGE_KEY);
-      return null;
-    }
-
-    return stored.terms;
-  }
-
-  private async saveFtsTerms(terms: string[]): Promise<void> {
-    await this.state.storage.put(FTS_VOCAB_STORAGE_KEY, {
-      terms,
-      timestamp: Date.now(),
-    });
-  }
-
-  private async getOrFetchFtsTerms(): Promise<string[]> {
-    // まずDOストレージから取得を試みる
-    const cached = await this.getFtsTerms();
-    if (cached) return cached;
-
-    // キャッシュがない場合はDBから取得
-    return await listEditorFtsTerms(this.env.DB);
   }
 }

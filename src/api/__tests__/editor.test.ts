@@ -27,6 +27,9 @@ const mocks = vi.hoisted(() => ({
       editors: {
         findMany: vi.fn(),
       },
+      editorsFtsIndex: {
+        findMany: vi.fn(),
+      },
     },
   },
   drizzle: vi.fn(),
@@ -143,6 +146,7 @@ describe("editor search API", () => {
     vi.useRealTimers();
     mocks.drizzle.mockReturnValue(mocks.db);
     mocks.db.query.editors.findMany.mockReset();
+    mocks.db.query.editorsFtsIndex.findMany.mockReset();
   });
 
   it("returns title matches without querying FTS in title search mode", async () => {
@@ -169,6 +173,9 @@ describe("editor search API", () => {
 
   it("returns unique content matches in content search mode", async () => {
     const { env } = createEnv();
+    mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([
+      { editorId: betaId, content: "Beta content includes Alpha keyword" },
+    ]);
     mocks.db.query.editors.findMany.mockResolvedValue([
       { id: betaId, createdAt: new Date("2026-01-02T00:00:00Z"), title: "Beta title" },
     ]);
@@ -187,6 +194,9 @@ describe("editor search API", () => {
 
   it("keeps combined search behavior when searchMode is omitted", async () => {
     const { env } = createEnv();
+    mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([
+      { editorId: betaId, content: "Beta content includes Alpha keyword" },
+    ]);
     mocks.db.query.editors.findMany
       .mockResolvedValueOnce([
         { id: alphaId, createdAt: new Date("2026-01-01T00:00:00Z"), title: "Alpha title" },
@@ -214,6 +224,7 @@ describe("editor search API", () => {
       secret: sessionSecret,
       expirationRefreshedAt: new Date("2026-01-01T12:00:00Z").getTime(),
     });
+    mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([]);
     mocks.db.query.editors.findMany.mockResolvedValue([]);
 
     const res = await requestSearch("http://localhost/?keyword=Alpha", env);
@@ -231,6 +242,7 @@ describe("editor search API", () => {
       secret: sessionSecret,
       expirationRefreshedAt: new Date("2026-01-01T00:00:00Z").getTime(),
     });
+    mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([]);
     mocks.db.query.editors.findMany.mockResolvedValue([]);
 
     const res = await requestSearch("http://localhost/?keyword=Alpha", env);

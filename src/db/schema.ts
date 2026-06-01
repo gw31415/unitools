@@ -42,6 +42,17 @@ export const editors = sqliteTable("editors", {
   title: text("title").notNull().default(""),
 });
 
+export const editorsFtsIndex = sqliteTable("editors_fts_index", {
+  editorId: ulid("editor_id").primaryKey(),
+  content: text("content").notNull(),
+});
+
+export const editorsFtsVocab = sqliteTable("editors_fts_vocab", {
+  term: text("term").primaryKey(),
+  doc: integer("doc").notNull(),
+  cnt: integer("cnt").notNull(),
+});
+
 export const images = sqliteTable("images", {
   id: ulid("id").primaryKey(),
   createdAt,

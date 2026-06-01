@@ -1,4 +1,12 @@
-import type { EditorFtsVocabSuggestion } from "@/db/editorFtsVocab";
+type EditorFtsVocabSuggestion = {
+  term: string;
+  normalizedTerm: string;
+  score: number;
+  metrics: {
+    partial: number;
+    embedding: number;
+  };
+};
 
 const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
 
