@@ -34,4 +34,7 @@ index_name = "unitools-fts-vocab-embeddings"
 tag = "v1"
 new_classes = ["YDurableObjects"]
 
+[observability]
+enabled = true
+
 #:schema ./node_modules/wrangler/config-schema.json
