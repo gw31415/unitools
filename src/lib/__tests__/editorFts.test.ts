@@ -41,6 +41,12 @@ function createTermD1Mock(rows: Array<{ term: string; doc: number; cnt: number }
   };
 }
 
+function createKvMock() {
+  const get = vi.fn().mockResolvedValue(null);
+  const put = vi.fn().mockResolvedValue(undefined);
+  return { get, put } as unknown as KVNamespace;
+}
+
 describe("tokenize", () => {
   it("segments Japanese words with spaces", () => {
     expect(tokenize("東京都で検索します")).toBe("東京 都 で 検索 し ます");
@@ -112,41 +118,28 @@ describe("editor FTS helpers", () => {
       { term: "検索", doc: 2, cnt: 4 },
       { term: "東京", doc: 1, cnt: 1 },
     ]);
+    const kv = createKvMock();
 
-    await expect(listEditorFtsTerms(mock.db)).resolves.toEqual([
+    await expect(
+      listEditorFtsTerms(mock.db, { kv, kv_key: "fts-vocab:all", expirationTtl: 3600 }),
+    ).resolves.toEqual([
       { term: "検索", docCount: 2, occurrenceCount: 4 },
       { term: "東京", docCount: 1, occurrenceCount: 1 },
     ]);
-    expect(mock.prepare).toHaveBeenNthCalledWith(
-      2,
-      "SELECT term, doc, cnt FROM temp.editors_fts_vocab ORDER BY cnt DESC, term ASC",
+    expect(mock.prepare).toHaveBeenCalledWith(
+      "SELECT term, doc, cnt FROM editors_fts_vocab ORDER BY cnt DESC, term ASC",
     );
   });
 
-  it("falls back to indexed content when fts5vocab is unavailable", async () => {
-    const run = vi.fn().mockRejectedValue(new Error("unsupported"));
-    const all = vi.fn().mockResolvedValue({
-      results: [{ content: "検索 東京 検索" }, { content: "検索 京都" }],
-    });
-    const prepare = vi.fn().mockReturnValueOnce({ run }).mockReturnValueOnce({ all });
-    const db = { prepare } as unknown as D1Database;
-
-    await expect(listEditorFtsTerms(db)).resolves.toEqual([
-      { term: "検索", docCount: 2, occurrenceCount: 3 },
-      { term: "京都", docCount: 1, occurrenceCount: 1 },
-      { term: "東京", docCount: 1, occurrenceCount: 1 },
-    ]);
-  });
-
   it("suggests normalized and partial term matches by score", async () => {
-    const mock = createTermD1Mock([
-      { term: "コンピューター", doc: 2, cnt: 5 },
-      { term: "検索", doc: 3, cnt: 7 },
-      { term: "コンピューターサイエンス", doc: 1, cnt: 1 },
-      { term: "京都", doc: 1, cnt: 1 },
-    ]);
+    const terms = [
+      { term: "コンピューター", docCount: 2, occurrenceCount: 5 },
+      { term: "検索", docCount: 3, occurrenceCount: 7 },
+      { term: "コンピューターサイエンス", docCount: 1, occurrenceCount: 1 },
+      { term: "京都", docCount: 1, occurrenceCount: 1 },
+    ];
 
-    const suggestions = await suggestEditorFtsTerms(mock.db, "コンピュータ", {
+    const suggestions = await suggestEditorFtsTerms(terms, "コンピュータ", {
       limit: 3,
       minScore: 0.2,
     });

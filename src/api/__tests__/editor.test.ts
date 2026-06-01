@@ -49,25 +49,42 @@ function createEnv(
   ftsResults: Array<Record<string, unknown>> = [
     { editor_id: betaId, content: "Beta content includes Alpha keyword" },
   ],
+  vocabResults: Array<Record<string, unknown>> = [],
 ) {
   const sessionRecord = {
     user: { id: userId, username: "ama", createdAt: Date.now() },
     secret: sessionSecret,
+    expirationRefreshedAt: undefined as number | undefined,
   };
   const ftsAll = vi.fn().mockResolvedValue({
     results: ftsResults,
   });
   const ftsRun = vi.fn().mockResolvedValue({});
+  const vocabAll = vi.fn().mockResolvedValue({
+    results: vocabResults,
+  });
   const ftsBind = vi.fn(() => ({ all: ftsAll, run: ftsRun }));
-  const ftsPrepare = vi.fn(() => ({ bind: ftsBind, all: ftsAll, run: ftsRun }));
-  const authKvGet = vi.fn().mockResolvedValue(sessionRecord);
-  const authKvPut = vi.fn().mockResolvedValue(undefined);
+  const vocabBind = vi.fn(() => ({ all: vocabAll, run: ftsRun }));
+
+  const ftsPrepare = vi.fn((query: string) => {
+    if (query.includes("editors_fts_vocab")) {
+      return { bind: vocabBind, all: vocabAll, run: ftsRun };
+    }
+    return { bind: ftsBind, all: ftsAll, run: ftsRun };
+  });
+  const kvGet = vi.fn((key: string) => {
+    if (key === "fts-vocab:all") {
+      return Promise.resolve(null);
+    }
+    return Promise.resolve(sessionRecord);
+  });
+  const kvPut = vi.fn().mockResolvedValue(undefined);
 
   return {
     env: {
-      AUTH_KV: {
-        get: authKvGet,
-        put: authKvPut,
+      KV: {
+        get: kvGet,
+        put: kvPut,
       },
       DB: {
         prepare: ftsPrepare,
@@ -76,35 +93,30 @@ function createEnv(
     ftsAll,
     ftsBind,
     ftsPrepare,
-    authKvGet,
-    authKvPut,
+    kvGet,
+    kvPut,
   };
 }
 
 function requestSearch(url: string, env: CloudflareBindings) {
-  return editor.request(
-    url,
-    {
-      headers: {
-        Cookie: `sid=${userId}:${sessionId}:${sessionSecret}`,
-      },
+  const urlObj = new URL(url);
+  const req = new Request(urlObj, {
+    headers: {
+      Cookie: `sid=${userId}:${sessionId}:${sessionSecret}`,
     },
-    env,
-  );
+  });
+  return editor.fetch(req, env);
 }
 
 function requestEditorApi(url: string, env: CloudflareBindings, cookie = true) {
-  return editor.request(
-    url,
-    {
-      headers: cookie
-        ? {
-            Cookie: `sid=${userId}:${sessionId}:${sessionSecret}`,
-          }
-        : undefined,
-    },
-    env,
-  );
+  const urlObj = new URL(url);
+  const headers = cookie
+    ? {
+        Cookie: `sid=${userId}:${sessionId}:${sessionSecret}`,
+      }
+    : undefined;
+  const req = new Request(urlObj, { headers });
+  return editor.fetch(req, env);
 }
 
 describe("editor search API", () => {
@@ -177,8 +189,8 @@ describe("editor search API", () => {
   it("skips refreshing session expiration when it was refreshed recently", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-02T00:00:00Z"));
-    const { env, authKvGet, authKvPut } = createEnv();
-    authKvGet.mockResolvedValue({
+    const { env, kvGet, kvPut } = createEnv();
+    kvGet.mockResolvedValue({
       user: { id: userId, username: "ama", createdAt: Date.now() },
       secret: sessionSecret,
       expirationRefreshedAt: new Date("2026-01-01T12:00:00Z").getTime(),
@@ -188,14 +200,14 @@ describe("editor search API", () => {
     const res = await requestSearch("http://localhost/?keyword=Alpha", env);
 
     expect(res.status).toBe(200);
-    expect(authKvPut).not.toHaveBeenCalled();
+    expect(kvPut).not.toHaveBeenCalled();
   });
 
   it("refreshes session expiration about once a day", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-02T00:00:00Z"));
-    const { env, authKvGet, authKvPut } = createEnv();
-    authKvGet.mockResolvedValue({
+    const { env, kvGet, kvPut } = createEnv();
+    kvGet.mockResolvedValue({
       user: { id: userId, username: "ama", createdAt: Date.now() },
       secret: sessionSecret,
       expirationRefreshedAt: new Date("2026-01-01T00:00:00Z").getTime(),
@@ -205,15 +217,18 @@ describe("editor search API", () => {
     const res = await requestSearch("http://localhost/?keyword=Alpha", env);
 
     expect(res.status).toBe(200);
-    expect(authKvPut).toHaveBeenCalledTimes(1);
+    expect(kvPut).toHaveBeenCalledTimes(1);
   });
 
   it("returns keyword suggestions from indexed FTS terms", async () => {
-    const { env } = createEnv([
-      { term: "コンピューター", doc: 2, cnt: 5 },
-      { term: "コンピューターサイエンス", doc: 1, cnt: 1 },
-      { term: "検索", doc: 3, cnt: 7 },
-    ]);
+    const { env } = createEnv(
+      [], // FTS content results (not used for keyword suggestions)
+      [
+        { term: "コンピューター", doc: 2, cnt: 5 },
+        { term: "コンピューターサイエンス", doc: 1, cnt: 1 },
+        { term: "検索", doc: 3, cnt: 7 },
+      ], // Vocab results
+    );
 
     const res = await requestEditorApi(
       "http://localhost/keywords/suggest?query=コンピュータ&limit=2",
@@ -247,7 +262,7 @@ describe("editor search API", () => {
   });
 
   it("returns empty keyword suggestions when signed out", async () => {
-    const { env, ftsPrepare } = createEnv([{ term: "Alpha", doc: 1, cnt: 1 }]);
+    const { env, ftsPrepare } = createEnv([], [{ term: "Alpha", doc: 1, cnt: 1 }]);
 
     const res = await requestEditorApi("http://localhost/keywords/suggest?query=Alpha", env, false);
 

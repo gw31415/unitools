@@ -92,7 +92,7 @@ async function loadSessionFromRequest<EnvExtended extends Env>(
     return null;
   }
 
-  const record = await c.env.AUTH_KV.get<SessionRecord>(sessionKey(userId, sessionId), "json");
+  const record = await c.env.KV.get<SessionRecord>(sessionKey(userId, sessionId), "json");
   if (!record || record.secret !== secret || record.user.id !== userId) {
     clearSessionCookie();
     return null;
@@ -103,7 +103,7 @@ async function loadSessionFromRequest<EnvExtended extends Env>(
     record.expirationRefreshedAt === undefined ||
     now - record.expirationRefreshedAt >= SESSION_EXPIRATION_REFRESH_INTERVAL_MS
   ) {
-    await c.env.AUTH_KV.put(
+    await c.env.KV.put(
       sessionKey(userId, sessionId),
       JSON.stringify({ ...record, expirationRefreshedAt: now } satisfies SessionRecord),
       {
@@ -116,7 +116,7 @@ async function loadSessionFromRequest<EnvExtended extends Env>(
   return { user: record.user, sessionId };
 }
 
-const deleteUserSessionsFromKv = async (kv: CloudflareBindings["AUTH_KV"], userId: string) => {
+const deleteUserSessionsFromKv = async (kv: CloudflareBindings["KV"], userId: string) => {
   const prefix = userSessionPrefix(userId);
   let cursor: string | undefined;
   for (;;) {
@@ -172,7 +172,7 @@ function removeChallengeId<T extends { challengeId: string }>(payload: T) {
 }
 
 async function createSession(c: Context<Env>, user: User, sessionId: ULID, sessionSecret: string) {
-  await c.env.AUTH_KV.put(
+  await c.env.KV.put(
     sessionKey(user.id, sessionId),
     JSON.stringify({
       user,
@@ -215,24 +215,22 @@ async function isValidInvitation(c: Context<Env>, code: string | undefined): Pro
   const prefixWithHash = `${prefix}${hash}`;
   let cursor: string | undefined;
   for (;;) {
-    const result = await c.env.AUTH_KV.list({ prefix, cursor });
+    const result = await c.env.KV.list({ prefix, cursor });
     for (const key of result.keys) {
       // Delete entries that don't match current hash
       if (key.name !== prefixWithHash) {
-        await c.env.AUTH_KV.delete(key.name);
+        await c.env.KV.delete(key.name);
       }
     }
     if (result.list_complete) break;
     cursor = result.cursor;
   }
 
-  const unused = new Set(
-    (await c.env.AUTH_KV.get<string[]>(prefixWithHash, "json")) ?? invitationCodes,
-  );
+  const unused = new Set((await c.env.KV.get<string[]>(prefixWithHash, "json")) ?? invitationCodes);
 
   const ok = unused.delete(code);
   if (ok) {
-    await c.env.AUTH_KV.put(prefixWithHash, JSON.stringify([...unused]));
+    await c.env.KV.put(prefixWithHash, JSON.stringify([...unused]));
   }
   return ok;
 }
@@ -279,13 +277,9 @@ export const usersApi = createApp()
       challenge: options.challenge,
     };
 
-    await c.env.AUTH_KV.put(
-      `webauthn:challenge:${challengeId}`,
-      JSON.stringify(registrationChallenge),
-      {
-        expirationTtl: options.timeout ?? 60000,
-      },
-    );
+    await c.env.KV.put(`webauthn:challenge:${challengeId}`, JSON.stringify(registrationChallenge), {
+      expirationTtl: options.timeout ?? 60000,
+    });
 
     return c.json(
       {
@@ -299,7 +293,7 @@ export const usersApi = createApp()
   // サインアップチャレンジの検証
   .post("/-/challenge", registrationChallengeValidator, async (c) => {
     const payload = c.req.valid("json") as unknown as RegistrationWebAuthnJSON;
-    const rawChallengeRecord = await c.env.AUTH_KV.get<WebAuthnChallenge>(
+    const rawChallengeRecord = await c.env.KV.get<WebAuthnChallenge>(
       `webauthn:challenge:${payload.challengeId}`,
       "json",
     );
@@ -360,7 +354,7 @@ export const usersApi = createApp()
       } satisfies PasskeyCredentialInsert)
       .returning();
 
-    await c.env.AUTH_KV.delete(`webauthn:challenge:${payload.challengeId}`);
+    await c.env.KV.delete(`webauthn:challenge:${payload.challengeId}`);
 
     const sessionId = ulid();
     const sessionSecret = createSessionSecret();
@@ -376,7 +370,7 @@ export const usersApi = createApp()
     await db.delete(users).where(eq(users.id, user.id));
 
     // Clean up all sessions from KV
-    await deleteUserSessionsFromKv(c.env.AUTH_KV, user.id);
+    await deleteUserSessionsFromKv(c.env.KV, user.id);
 
     // Delete session cookie
     deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
@@ -406,7 +400,7 @@ export const sessionsApi = createApp()
       if (!requestedUserId) {
         return c.json({ error: "user_id_required" }, 400);
       }
-      const sessionRecord = await c.env.AUTH_KV.get<{
+      const sessionRecord = await c.env.KV.get<{
         user: User;
         secret: string;
       }>(sessionKey(requestedUserId, requestedSessionId), "json");
@@ -442,7 +436,7 @@ export const sessionsApi = createApp()
       sessionSecret,
       userId,
     };
-    await c.env.AUTH_KV.put(
+    await c.env.KV.put(
       `webauthn:challenge:${challengeId}`,
       JSON.stringify(authenticationChallenge),
       { expirationTtl: options.timeout ?? 60000 },
@@ -460,7 +454,7 @@ export const sessionsApi = createApp()
   // ログイン検証
   .post("/-/challenge", authenticationChallengeValidator, async (c) => {
     const payload = c.req.valid("json") as unknown as AuthenticationWebAuthnJSON;
-    const rawChallengeRecord = await c.env.AUTH_KV.get<WebAuthnChallenge>(
+    const rawChallengeRecord = await c.env.KV.get<WebAuthnChallenge>(
       `webauthn:challenge:${payload.challengeId}`,
       "json",
     );
@@ -519,7 +513,7 @@ export const sessionsApi = createApp()
       return c.json({ error: "user_not_found" }, 404);
     }
 
-    await c.env.AUTH_KV.delete(`webauthn:challenge:${payload.challengeId}`);
+    await c.env.KV.delete(`webauthn:challenge:${payload.challengeId}`);
 
     await createSession(c, user, challengeRecord.sessionId, challengeRecord.sessionSecret);
 
@@ -528,7 +522,7 @@ export const sessionsApi = createApp()
   .delete("/-", requireSid, async (c) => {
     const sessionId = c.get("sessionId");
     const userId = c.get("userId");
-    await c.env.AUTH_KV.delete(sessionKey(userId, sessionId));
+    await c.env.KV.delete(sessionKey(userId, sessionId));
     deleteCookie(c, PASSKEY_SESSION_COOKIE, { path: "/" });
     return c.body(null, 204);
   });

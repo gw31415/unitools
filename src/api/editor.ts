@@ -11,6 +11,7 @@ import {
   searchEditorFtsIndex,
   segmentText,
   suggestEditorFtsTerms,
+  listEditorFtsTerms,
 } from "@/lib/editorFts";
 import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
@@ -253,7 +254,12 @@ const editor = createApp()
         Math.max(1, query.limit ?? DEFAULT_SUGGESTION_LIMIT),
         MAX_SUGGESTION_LIMIT,
       );
-      const items = await suggestEditorFtsTerms(c.env.DB, query.query, {
+      const db = await listEditorFtsTerms(c.env.DB, {
+        kv: c.env.KV,
+        kv_key: "fts-vocab:all",
+        expirationTtl: 60 * 60, // 1時間
+      });
+      const items = await suggestEditorFtsTerms(db, query.query, {
         limit,
         minScore: query.minScore ?? DEFAULT_SUGGESTION_MIN_SCORE,
       });

@@ -14,7 +14,7 @@ database_id = "a77060bf-9808-4199-946a-bef359ebdc30"
 migrations_dir = "./src/db/migrations"
 
 [[kv_namespaces]]
-binding = "AUTH_KV"
+binding = "KV"
 id = "7d67dbf809c246b786db685c69b8bab1"
 preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
 

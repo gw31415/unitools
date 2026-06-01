@@ -31,10 +31,6 @@ type FtsVocabRow = {
   cnt: number;
 };
 
-type FtsContentRow = {
-  content: string;
-};
-
 export function tokenize(text: string): string {
   return [...segmenter.segment(text)]
     .filter((s) => s.isWordLike)
@@ -240,49 +236,36 @@ export async function searchEditorFtsIndex(
   }));
 }
 
-export async function listEditorFtsTerms(db: D1Database): Promise<EditorFtsTerm[]> {
-  try {
-    const result = await db
-      .prepare("SELECT term, doc, cnt FROM editors_fts_vocab ORDER BY cnt DESC, term ASC")
-      .all<FtsVocabRow>();
+export async function listEditorFtsTerms(
+  db: D1Database,
+  options: { kv: KVNamespace; kv_key: string; expirationTtl: number },
+): Promise<EditorFtsTerm[]> {
+  const { kv, expirationTtl, kv_key } = options;
+  const cached = await kv.get<EditorFtsTerm[]>(kv_key, "json");
+  if (cached) return cached;
 
-    return result.results.map((row) => ({
-      term: row.term,
-      docCount: Number(row.doc),
-      occurrenceCount: Number(row.cnt),
-    }));
-  } catch {
-    const result = await db.prepare("SELECT content FROM editors_fts_index").all<FtsContentRow>();
-    const terms = new Map<string, EditorFtsTerm>();
-    for (const row of result.results) {
-      const uniqueTermsInRow = new Set<string>();
-      for (const term of row.content.split(/\s+/).filter(Boolean)) {
-        const current = terms.get(term) ?? { term, docCount: 0, occurrenceCount: 0 };
-        current.occurrenceCount++;
-        uniqueTermsInRow.add(term);
-        terms.set(term, current);
-      }
-      for (const term of uniqueTermsInRow) {
-        const current = terms.get(term);
-        if (current) current.docCount++;
-      }
-    }
-    return [...terms.values()].sort(
-      (a, b) => b.occurrenceCount - a.occurrenceCount || a.term.localeCompare(b.term),
-    );
-  }
+  const result = await db
+    .prepare("SELECT term, doc, cnt FROM editors_fts_vocab ORDER BY cnt DESC, term ASC")
+    .all<FtsVocabRow>();
+
+  const res = result.results.map((row) => ({
+    term: row.term,
+    docCount: Number(row.doc),
+    occurrenceCount: Number(row.cnt),
+  }));
+  await kv.put(kv_key, JSON.stringify(res), { expirationTtl }); // キャッシュは1時間有効
+  return res;
 }
 
 export async function suggestEditorFtsTerms(
-  db: D1Database,
+  db: EditorFtsTerm[],
   query: string,
   options: { limit: number; minScore: number },
 ): Promise<EditorFtsTermSuggestion[]> {
   const normalizedQuery = normalizeFtsTerm(query);
   if (!normalizedQuery) return [];
 
-  const terms = await listEditorFtsTerms(db);
-  return terms
+  return db
     .map((term) => {
       const normalizedTerm = normalizeFtsTerm(term.term);
       const { score, metrics } = calculateTermSuggestionScore(normalizedQuery, normalizedTerm);
