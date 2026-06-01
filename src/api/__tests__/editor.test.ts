@@ -49,7 +49,7 @@ function createEnv(
   ftsResults: Array<Record<string, unknown>> = [
     { editor_id: betaId, content: "Beta content includes Alpha keyword" },
   ],
-  vocabResults: Array<Record<string, unknown>> = [],
+  vocabResults: Array<{ term: string; doc: number; cnt: number }> = [],
 ) {
   const sessionRecord = {
     user: { id: userId, username: "ama", createdAt: Date.now() },
@@ -72,13 +72,24 @@ function createEnv(
     }
     return { bind: ftsBind, all: ftsAll, run: ftsRun };
   });
-  const kvGet = vi.fn((key: string) => {
-    if (key === "fts-vocab:all") {
-      return Promise.resolve(null);
-    }
+  const kvGet = vi.fn(() => {
     return Promise.resolve(sessionRecord);
   });
   const kvPut = vi.fn().mockResolvedValue(undefined);
+
+  // AI binding モック
+  const aiRun = vi.fn().mockResolvedValue({
+    shape: [1, 1024],
+    data: [Array.from({ length: 1024 }, () => Math.random() - 0.5)],
+  });
+
+  // Vectorize binding モック
+  const vectorizeQuery = vi.fn().mockResolvedValue({
+    matches: [
+      { id: "コンピュタ", score: 0.9 },
+      { id: "コンピュタサイエンス", score: 0.7 },
+    ],
+  });
 
   return {
     env: {
@@ -89,12 +100,20 @@ function createEnv(
       DB: {
         prepare: ftsPrepare,
       },
+      AI: {
+        run: aiRun,
+      },
+      VECTORIZE_FTS_VOCAB_EMBEDDINGS: {
+        query: vectorizeQuery,
+      },
     } as unknown as CloudflareBindings,
     ftsAll,
     ftsBind,
     ftsPrepare,
     kvGet,
     kvPut,
+    aiRun,
+    vectorizeQuery,
   };
 }
 
@@ -235,7 +254,12 @@ describe("editor search API", () => {
       env,
     );
     const body = (await res.json()) as {
-      items: Array<{ term: string; docCount: number; occurrenceCount: number; score: number }>;
+      items: Array<{
+        term: string;
+        normalizedTerm: string;
+        score: number;
+        metrics: { partial: number; embedding: number };
+      }>;
     };
 
     expect(res.status).toBe(200);
@@ -243,7 +267,11 @@ describe("editor search API", () => {
       "コンピューター",
       "コンピューターサイエンス",
     ]);
-    expect(body.items[0]).toMatchObject({ docCount: 2, occurrenceCount: 5 });
+    expect(body.items[0]).toMatchObject({
+      term: "コンピューター",
+      normalizedTerm: "コンピュタ",
+      score: expect.any(Number),
+    });
     expect(body.items[0]?.score).toBeGreaterThan(body.items[1]?.score ?? 0);
   });
 

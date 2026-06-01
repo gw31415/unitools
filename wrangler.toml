@@ -26,6 +26,10 @@ bucket_name = "unitools"
 binding = "AI"
 remote = true
 
+[[vectorize]]
+binding = "VECTORIZE_FTS_VOCAB_EMBEDDINGS"
+index_name = "unitools-fts-vocab-embeddings"
+
 [[migrations]]
 tag = "v1"
 new_classes = ["YDurableObjects"]

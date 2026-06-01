@@ -4,15 +4,14 @@ import { drizzle } from "drizzle-orm/d1";
 import type { Context, MiddlewareHandler } from "hono";
 import { yRoute } from "y-durableobjects";
 import z from "zod";
-import * as schema from "@/db/schema";
-import { b64urlToStruct, structToBase64Url } from "@/lib/base64";
 import {
   deleteEditorFtsIndex,
   searchEditorFtsIndex,
-  segmentText,
-  suggestEditorFtsTerms,
-  listEditorFtsTerms,
-} from "@/lib/editorFts";
+  listEditorFtsVocab,
+} from "@/db/editorFtsVocab";
+import * as schema from "@/db/schema";
+import { b64urlToStruct, structToBase64Url } from "@/lib/base64";
+import { segmentText, suggestEditorFtsTerms } from "@/lib/editorFts";
 import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
 import type { Editor } from "@/models";
@@ -254,14 +253,12 @@ const editor = createApp()
         Math.max(1, query.limit ?? DEFAULT_SUGGESTION_LIMIT),
         MAX_SUGGESTION_LIMIT,
       );
-      const db = await listEditorFtsTerms(c.env.DB, {
-        kv: c.env.KV,
-        kv_key: "fts-vocab:all",
-        expirationTtl: 60 * 60, // 1時間
-      });
-      const items = await suggestEditorFtsTerms(db, query.query, {
+      const terms = await listEditorFtsVocab(c.env.DB);
+      const items = await suggestEditorFtsTerms(terms, query.query, {
         limit,
         minScore: query.minScore ?? DEFAULT_SUGGESTION_MIN_SCORE,
+        ai: c.env.AI,
+        vectorize: c.env.VECTORIZE_FTS_VOCAB_EMBEDDINGS,
       });
 
       return c.json({ items });

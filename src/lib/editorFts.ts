@@ -1,32 +1,8 @@
-import type { ULID } from "@/lib/ulid";
+import type { EditorFtsVocabSuggestion } from "@/db/editorFtsVocab";
 
 const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
-const graphemeSegmenter = new Intl.Segmenter("ja", { granularity: "grapheme" });
 
-export type EditorFtsSearchMatch = {
-  editorId: ULID;
-  text: string;
-};
-
-export type EditorFtsTerm = {
-  term: string;
-  docCount: number;
-  occurrenceCount: number;
-};
-
-export type EditorFtsTermSuggestion = EditorFtsTerm & {
-  normalizedTerm: string;
-  score: number;
-  metrics: {
-    partial: number;
-  };
-};
-
-type FtsVocabRow = {
-  term: string;
-  doc: number;
-  cnt: number;
-};
+const EMBEDDINGS_BATCH_SIZE = 100; // Workers AI の一度のリクエストで処理するテキスト数
 
 export function tokenize(text: string): string {
   return [...segmenter.segment(text)]
@@ -43,6 +19,7 @@ export function normalizeFtsTerm(text: string): string {
   return text.normalize("NFKC").toLocaleLowerCase("ja-JP").replaceAll("ー", "").trim();
 }
 
+const graphemeSegmenter = new Intl.Segmenter("ja", { granularity: "grapheme" });
 function toCharacters(value: string): string[] {
   return Array.from(graphemeSegmenter.segment(value), (segment) => segment.segment);
 }
@@ -58,103 +35,82 @@ function partialSimilarity(query: string, term: string): number {
   return 0;
 }
 
-function calculateTermSuggestionScore(query: string, term: string) {
-  const metrics = {
-    partial: partialSimilarity(query, term),
-  };
-  const score = metrics.partial * 0.72;
-  return { score, metrics };
-}
-
-export async function deleteEditorFtsIndex(db: D1Database, editorId: ULID): Promise<void> {
-  await db.prepare("DELETE FROM editors_fts_index WHERE editor_id = ?").bind(editorId).run();
-}
-
-export async function upsertEditorFtsIndex(
-  db: D1Database,
-  editorId: ULID,
-  text: string,
+export async function updateKeywordEmbeddings(
+  terms: string[],
+  ai: Ai,
+  vectorize: VectorizeIndex,
 ): Promise<void> {
-  const content = tokenize(text);
-  await deleteEditorFtsIndex(db, editorId);
+  const normalizedTerms = terms.map((row) => normalizeFtsTerm(row));
 
-  if (!content) {
-    return;
+  // バッチ処理で embeddings を生成
+  const vectors: VectorizeVector[] = [];
+  for (let i = 0; i < normalizedTerms.length; i += EMBEDDINGS_BATCH_SIZE) {
+    const batch = normalizedTerms.slice(i, i + EMBEDDINGS_BATCH_SIZE);
+    const embeddingsResponse = await ai.run("@cf/baai/bge-m3", {
+      text: batch,
+    });
+
+    if (!("data" in embeddingsResponse) || !embeddingsResponse.data)
+      throw new Error("embeddings response missing data");
+
+    const embeddings = embeddingsResponse.data;
+    batch.forEach((term, index) => {
+      vectors.push({ id: term, values: embeddings[index] });
+    });
   }
 
-  await db
-    .prepare("INSERT INTO editors_fts_index (editor_id, content) VALUES (?, ?)")
-    .bind(editorId, content)
-    .run();
-}
-
-export async function searchEditorFtsIndex(
-  db: D1Database,
-  keyword: string,
-  limit: number,
-): Promise<EditorFtsSearchMatch[]> {
-  const query = tokenize(keyword);
-  if (!query) {
-    return [];
-  }
-
-  const result = await db
-    .prepare(
-      "SELECT editor_id, content FROM editors_fts_index WHERE editors_fts_index MATCH ? LIMIT ?",
-    )
-    .bind(query, limit)
-    .all<{ editor_id: ULID; content: string }>();
-
-  return result.results.map((row) => ({
-    editorId: row.editor_id,
-    text: row.content,
-  }));
-}
-
-export async function listEditorFtsTerms(
-  db: D1Database,
-  options: { kv: KVNamespace; kv_key: string; expirationTtl: number },
-): Promise<EditorFtsTerm[]> {
-  const { kv, expirationTtl, kv_key } = options;
-  const cached = await kv.get<EditorFtsTerm[]>(kv_key, "json");
-  if (cached) return cached;
-
-  const result = await db
-    .prepare("SELECT term, doc, cnt FROM editors_fts_vocab ORDER BY cnt DESC, term ASC")
-    .all<FtsVocabRow>();
-
-  const res = result.results.map((row) => ({
-    term: row.term,
-    docCount: Number(row.doc),
-    occurrenceCount: Number(row.cnt),
-  }));
-  await kv.put(kv_key, JSON.stringify(res), { expirationTtl }); // キャッシュは1時間有効
-  return res;
+  await vectorize.upsert(vectors);
 }
 
 export async function suggestEditorFtsTerms(
-  db: EditorFtsTerm[],
+  terms: string[],
   query: string,
-  options: { limit: number; minScore: number },
-): Promise<EditorFtsTermSuggestion[]> {
+  options: { limit: number; minScore: number; ai: Ai; vectorize: VectorizeIndex },
+): Promise<EditorFtsVocabSuggestion[]> {
   const normalizedQuery = normalizeFtsTerm(query);
   if (!normalizedQuery) return [];
 
-  return db
-    .map((term) => {
-      const normalizedTerm = normalizeFtsTerm(term.term);
-      const { score, metrics } = calculateTermSuggestionScore(normalizedQuery, normalizedTerm);
-      return {
-        ...term,
-        normalizedTerm,
-        score,
-        metrics,
-      };
-    })
-    .filter((suggestion) => suggestion.score >= options.minScore)
-    .sort(
-      (a, b) =>
-        b.score - a.score || b.occurrenceCount - a.occurrenceCount || a.term.localeCompare(b.term),
-    )
-    .slice(0, options.limit);
+  // クエリの embedding を生成
+  const queryEmbeddingResponse = await options.ai.run("@cf/baai/bge-m3", {
+    text: [normalizedQuery],
+  });
+  const queryEmbedding = (queryEmbeddingResponse as { data: number[][] }).data[0];
+
+  // Vectorize で類似キーワードを検索（topK は limit の数倍取得してフィルタリング）
+  const matches = await options.vectorize.query(queryEmbedding, {
+    topK: options.limit * 10,
+    returnValues: true,
+    returnMetadata: false,
+  });
+
+  // normalizedTerm をキーにして db を検索できるようにする
+  const termMap = new Map(terms.map((term) => [normalizeFtsTerm(term), term]));
+
+  const suggestions: EditorFtsVocabSuggestion[] = [];
+
+  for (const match of matches.matches) {
+    const normalizedTerm = match.id;
+    const term = termMap.get(normalizedTerm);
+    if (!term) continue;
+
+    const embeddingScore = match.score;
+    const partial = partialSimilarity(normalizedQuery, normalizedTerm);
+    const score = Math.max(partial * 0.3, embeddingScore * 0.7);
+
+    if (score < options.minScore) continue;
+
+    suggestions.push({
+      term,
+      normalizedTerm,
+      score,
+      metrics: {
+        partial,
+        embedding: embeddingScore,
+      },
+    });
+
+    if (suggestions.length >= options.limit) break;
+  }
+
+  return suggestions.sort((a, b) => b.score - a.score || a.term.localeCompare(b.term));
 }

@@ -1,15 +1,26 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import {
-  listEditorFtsTerms,
+  listEditorFtsVocab,
   searchEditorFtsIndex,
-  segmentText,
-  suggestEditorFtsTerms,
-  tokenize,
   upsertEditorFtsIndex,
-} from "@/lib/editorFts";
+} from "@/db/editorFtsVocab";
+import { segmentText, suggestEditorFtsTerms, tokenize } from "@/lib/editorFts";
 import type { ULID } from "@/lib/ulid";
 
 const editorId = "01H00000000000000000000002" as ULID;
+
+function createAiMock(embeddings?: number[][]) {
+  const run = vi.fn().mockResolvedValue({
+    shape: [embeddings?.length ?? 0, 1024],
+    data: embeddings ?? [],
+  });
+  return { run } as unknown as Ai;
+}
+
+function createVectorizeMock(matches: Array<{ id: string; score: number }>) {
+  const query = vi.fn().mockResolvedValue({ matches });
+  return { query } as unknown as VectorizeIndex;
+}
 
 function createD1Mock(rows: Array<{ editor_id: ULID; content: string }> = []) {
   const run = vi.fn().mockResolvedValue({});
@@ -39,12 +50,6 @@ function createTermD1Mock(rows: Array<{ term: string; doc: number; cnt: number }
     run,
     all,
   };
-}
-
-function createKvMock() {
-  const get = vi.fn().mockResolvedValue(null);
-  const put = vi.fn().mockResolvedValue(undefined);
-  return { get, put } as unknown as KVNamespace;
 }
 
 describe("tokenize", () => {
@@ -118,30 +123,32 @@ describe("editor FTS helpers", () => {
       { term: "検索", doc: 2, cnt: 4 },
       { term: "東京", doc: 1, cnt: 1 },
     ]);
-    const kv = createKvMock();
 
-    await expect(
-      listEditorFtsTerms(mock.db, { kv, kv_key: "fts-vocab:all", expirationTtl: 3600 }),
-    ).resolves.toEqual([
-      { term: "検索", docCount: 2, occurrenceCount: 4 },
-      { term: "東京", docCount: 1, occurrenceCount: 1 },
-    ]);
+    await expect(listEditorFtsVocab(mock.db)).resolves.toEqual(["検索", "東京"]);
     expect(mock.prepare).toHaveBeenCalledWith(
-      "SELECT term, doc, cnt FROM editors_fts_vocab ORDER BY cnt DESC, term ASC",
+      "SELECT term FROM editors_fts_vocab ORDER BY term ASC",
     );
   });
 
   it("suggests normalized and partial term matches by score", async () => {
-    const terms = [
-      { term: "コンピューター", docCount: 2, occurrenceCount: 5 },
-      { term: "検索", docCount: 3, occurrenceCount: 7 },
-      { term: "コンピューターサイエンス", docCount: 1, occurrenceCount: 1 },
-      { term: "京都", docCount: 1, occurrenceCount: 1 },
-    ];
+    const terms = ["コンピューター", "検索", "コンピューターサイエンス", "京都"];
+
+    // クエリの embedding モック
+    const queryEmbedding = Array.from({ length: 1024 }, () => Math.random() - 0.5);
+    const ai = createAiMock([queryEmbedding]);
+
+    // Vectorize モック - 類似キーワードを返す
+    // 正規化された用語を ID として使用
+    const vectorize = createVectorizeMock([
+      { id: "コンピュタ", score: 0.9 }, // コンピューター（高類似度）
+      { id: "コンピュタサイエンス", score: 0.7 }, // コンピューターサイエンス（中類似度）
+    ]);
 
     const suggestions = await suggestEditorFtsTerms(terms, "コンピュータ", {
       limit: 3,
       minScore: 0.2,
+      ai,
+      vectorize,
     });
 
     expect(suggestions.map((suggestion) => suggestion.term)).toEqual([
