@@ -59,9 +59,9 @@ export async function suggestEditorFtsTerms(
 
   // Vectorize で類似キーワードを検索（topK は limit の数倍取得してフィルタリング）
   const matches = await options.vectorize.query(queryEmbeddingResponse.data[0], {
-    topK: options.limit * 10,
+    topK: Math.min(options.limit * 10, 50),
     returnValues: true,
-    returnMetadata: false,
+    returnMetadata: "none",
   });
 
   // normalizedTerm をキーにして db を検索できるようにする
