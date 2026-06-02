@@ -7,7 +7,6 @@ type SearchResponse = {
     match?: {
       source: "title" | "content";
       text?: string;
-      termGroups?: string[][];
     };
   }>;
   pageInfo: {
@@ -196,7 +195,31 @@ describe("editor search API", () => {
     expect(body.items[0]).toMatchObject({
       id: betaId,
       title: "Beta title",
-      match: { source: "content", text: "Alpha", termGroups: [["Alpha"]] },
+      match: { source: "content", text: "Alpha" },
+    });
+  });
+
+  it("returns the server-selected content phrase for content matches", async () => {
+    const { env } = createEnv();
+    mocks.db.query.editorsFtsVocab.findMany.mockResolvedValue([]);
+    mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([
+      { editorId: betaId, content: "Intro Alpha related keyword after" },
+    ]);
+    mocks.db.query.editors.findMany.mockResolvedValue([
+      { id: betaId, createdAt: new Date("2026-01-02T00:00:00Z"), title: "Beta title" },
+    ]);
+
+    const res = await requestSearch(
+      "http://localhost/?keyword=Alpha%20keyword&searchMode=content",
+      env,
+    );
+    const body = (await res.json()) as SearchResponse;
+
+    expect(res.status).toBe(200);
+    expect(body.items[0]).toMatchObject({
+      id: betaId,
+      title: "Beta title",
+      match: { source: "content", text: "Alpha related keyword" },
     });
   });
 

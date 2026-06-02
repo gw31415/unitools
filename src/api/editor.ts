@@ -12,6 +12,7 @@ import {
   segmentText,
   suggestEditorFtsTerms,
 } from "@/lib/editorFts";
+import { findContentMatchText } from "@/lib/editorSearchMatch";
 import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
 import type { Editor } from "@/models";
@@ -33,8 +34,7 @@ const cursorPayloadSchema = z.object({
 
 type EditorSearchMatch = {
   source: "title" | "content";
-  text: string;
-  termGroups?: string[][];
+  text?: string;
 };
 
 const toTimestamp = (value: unknown) => (value instanceof Date ? value.getTime() : Number(value));
@@ -170,6 +170,7 @@ const editor = createApp()
               minScore: 0.05,
               ai: c.env.AI,
               vectorize: c.env.VECTORIZE_FTS_VOCAB_EMBEDDINGS,
+              includeLexicalSuggestions: false,
             },
             terms,
           );
@@ -190,14 +191,14 @@ const editor = createApp()
             .sort((a, b) => b.score - a.score || a.term.localeCompare(b.term));
 
           // 各マッチに対して、コンテンツ内に実際に現れる用語を探す
-          const findMatchedTerm = (content: string): { score: number; text: string } => {
+          const findMatchedTerm = (content: string): { score: number; text?: string } => {
             const normalizedContent = normalizeFtsTerm(content);
             for (const item of allSearchTerms) {
               if (normalizedContent.includes(item.normalizedTerm)) {
                 return { score: item.score, text: item.term };
               }
             }
-            return { score: 0, text: keyword }; // フォールバック
+            return { score: 0 };
           };
 
           return new Map<ULID, EditorSearchMatch>(
@@ -211,7 +212,12 @@ const editor = createApp()
               .slice(0, limit)
               .map(({ match, matchedTerm }) => [
                 match.editorId,
-                { source: "content", text: matchedTerm.text, termGroups },
+                {
+                  source: "content",
+                  text:
+                    findContentMatchText(match.content, termGroups) ??
+                    (matchedTerm.text ? matchedTerm.text : undefined),
+                },
               ]),
           );
         };

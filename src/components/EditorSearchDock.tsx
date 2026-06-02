@@ -34,7 +34,6 @@ export type SearchDockItem = {
   match?: {
     source?: "title" | "content" | "image";
     text?: string | null;
-    termGroups?: string[][];
     imageId?: string;
   };
 };
@@ -107,19 +106,12 @@ export function EditorSearchDock({
   onRetry: () => void;
   onLoadMore: () => void;
   currentEditorId: string;
-  onRequestFocusEditor: (options?: {
-    searchText?: string;
-    fallbackSearchText?: string;
-    searchTermGroups?: string[][];
-    imageId?: string;
-  }) => void;
+  onRequestFocusEditor: (options?: { searchText?: string; imageId?: string }) => void;
   onNavigateToEditor: (
     editorId: string,
     options?: {
       focusEditor?: boolean;
       searchText?: string;
-      fallbackSearchText?: string;
-      searchTermGroups?: string[][];
       imageId?: string;
     },
   ) => void;
@@ -212,23 +204,19 @@ export function EditorSearchDock({
     const imageId = item.match?.source === "image" ? item.match.imageId : undefined;
     const queryText = value.trim();
     const matchText = item.match?.text?.trim();
-    const searchTermGroups = item.match?.source === "content" ? item.match.termGroups : undefined;
     const searchText =
       matchText || (queryText && normalizedQuery.length > 0 && !imageId ? queryText : undefined);
-    const fallbackSearchText = queryText || undefined;
     if (item.id === currentEditorId) {
       closeSearch({ restoreDockButtonFocus: !focusEditor });
       if (imageId) {
         onRequestFocusEditor({
           imageId,
-          searchText: queryText || undefined,
-          fallbackSearchText,
-          searchTermGroups,
+          searchText,
         });
         return;
       }
       if (searchText) {
-        onRequestFocusEditor({ searchText, fallbackSearchText, searchTermGroups });
+        onRequestFocusEditor({ searchText });
         return;
       }
       if (focusEditor) onRequestFocusEditor();
@@ -242,8 +230,6 @@ export function EditorSearchDock({
       onNavigateToEditor(item.id, {
         focusEditor,
         searchText,
-        fallbackSearchText,
-        searchTermGroups,
         imageId,
       });
     }, CLOSE_ANIMATION_MS);

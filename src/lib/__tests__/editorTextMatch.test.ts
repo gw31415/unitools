@@ -7,8 +7,8 @@ function createRoot(text: string) {
   return root;
 }
 
-function matchedText(root: HTMLElement, searchTexts: Array<string | null | undefined>) {
-  const match = findEditorTextMatch(root, searchTexts);
+function matchedText(root: HTMLElement, searchText: string) {
+  const match = findEditorTextMatch(root, searchText);
   if (!match) return null;
 
   const range = document.createRange();
@@ -21,66 +21,24 @@ describe("editor text matching", () => {
   it("matches only the requested phrase instead of the rest of the text node", () => {
     const root = createRoot("Before Alpha keyword after");
 
-    expect(matchedText(root, ["Alpha keyword"])).toBe("Alpha keyword");
+    expect(matchedText(root, "Alpha keyword")).toBe("Alpha keyword");
   });
 
-  it("prefers a longer phrase over a shorter fallback match", () => {
-    const root = createRoot("Intro Alpha keyword after");
-
-    expect(matchedText(root, ["Alpha keyword", "Alpha"])).toBe("Alpha keyword");
-  });
-
-  it("falls back to a shorter term when the longer phrase is absent", () => {
+  it("does not fuzzy-match a similar phrase on the client", () => {
     const root = createRoot("Intro Alpha related after");
 
-    expect(matchedText(root, ["Alpha keyword", "Alpha"])).toBe("Alpha");
-  });
-
-  it("selects a similar long phrase before falling back to an exact short term", () => {
-    const root = createRoot("Intro Alpha related keyword after");
-
-    const match = findEditorTextMatch(root, ["Alpha", "Alpha keyword"], {
-      termGroups: [["Alpha"], ["keyword"]],
-    });
-    expect(match).not.toBeNull();
-
-    const range = document.createRange();
-    range.setStart(match!.node, match!.startOffset);
-    range.setEnd(match!.node, match!.endOffset);
-    expect(range.toString()).toBe("Alpha related keyword");
-  });
-
-  it("selects a high-similarity Japanese phrase when particles differ from the query", () => {
-    const root = createRoot("前置き プロンプトを改善する方法 後続");
-
-    const match = findEditorTextMatch(root, ["プロンプト", "プロンプト改善"], {
-      termGroups: [["プロンプト"], ["改善"]],
-    });
-    expect(match).not.toBeNull();
-
-    const range = document.createRange();
-    range.setStart(match!.node, match!.startOffset);
-    range.setEnd(match!.node, match!.endOffset);
-    expect(range.toString()).toBe("プロンプトを改善");
-  });
-
-  it("treats alternatives inside each term group as OR", () => {
-    const root = createRoot("前置き プロンプトを改良する方法 後続");
-
-    const match = findEditorTextMatch(root, ["プロンプト", "プロンプト改善"], {
-      termGroups: [["プロンプト"], ["改善", "改良"]],
-    });
-    expect(match).not.toBeNull();
-
-    const range = document.createRange();
-    range.setStart(match!.node, match!.startOffset);
-    range.setEnd(match!.node, match!.endOffset);
-    expect(range.toString()).toBe("プロンプトを改良");
+    expect(matchedText(root, "Alpha keyword")).toBeNull();
   });
 
   it("maps normalized matches back to the original text offsets", () => {
     const root = createRoot("Ａｌｐｈａ keyword after");
 
-    expect(matchedText(root, ["Alpha keyword"])).toBe("Ａｌｐｈａ keyword");
+    expect(matchedText(root, "Alpha keyword")).toBe("Ａｌｐｈａ keyword");
+  });
+
+  it("matches server-provided phrases across punctuation and whitespace differences", () => {
+    const root = createRoot("夜間のADH分泌↓が関連→中途覚醒の強制は逆効果。");
+
+    expect(matchedText(root, "ADH分泌が関連")).toBe("ADH分泌↓が関連");
   });
 });

@@ -17,10 +17,9 @@ import type { ServerAppType } from "@/server";
 import { currentUserAtom, editorStateAtom, markdownBootstrapAtom } from "@/store";
 
 const SIDEBAR_PAGE_SIZE = 20;
+const SEARCH_SUGGESTION_DEBOUNCE_MS = 600;
 const FOCUS_EDITOR_ON_LOAD_KEY = "focus-editor-on-load";
 const SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY = "scroll-to-search-text-on-load";
-const SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY = "scroll-to-fallback-search-text-on-load";
-const SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY = "scroll-to-search-term-groups-on-load";
 const SCROLL_TO_IMAGE_ON_LOAD_KEY = "scroll-to-image-on-load";
 const IMAGE_API_PATH_PREFIX = "/api/v1/images/";
 const getClient = () =>
@@ -42,36 +41,28 @@ function focusEditorElement() {
   root.focus({ preventScroll: true });
 }
 
-function scrollToEditorText(
-  searchText: string,
-  {
-    attempt = 0,
-    fallbackSearchText,
-    searchTermGroups,
-  }: {
-    attempt?: number;
-    fallbackSearchText?: string | null;
-    searchTermGroups?: string[][];
-  } = {},
-) {
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedValue(value);
+    }, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [delayMs, value]);
+
+  return debouncedValue;
+}
+
+function scrollToEditorText(searchText: string, attempt = 0) {
   const normalizedSearchText = normalizeEditorSearchText(searchText);
   if (!normalizedSearchText) return false;
 
   const root = getEditorRoot();
-  const match = root
-    ? findEditorTextMatch(root, [searchText, fallbackSearchText], { termGroups: searchTermGroups })
-    : null;
+  const match = root ? findEditorTextMatch(root, searchText) : null;
   if (!root || !match) {
     if (attempt < 20) {
-      window.setTimeout(
-        () =>
-          scrollToEditorText(searchText, {
-            attempt: attempt + 1,
-            fallbackSearchText,
-            searchTermGroups,
-          }),
-        100,
-      );
+      window.setTimeout(() => scrollToEditorText(searchText, attempt + 1), 100);
     }
     return false;
   }
@@ -90,22 +81,16 @@ function scrollToEditorText(
   return true;
 }
 
-function parseSearchTermGroups(value: string | null): string[][] | undefined {
-  if (!value) return undefined;
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (
-      Array.isArray(parsed) &&
-      parsed.every(
-        (group) => Array.isArray(group) && group.every((term) => typeof term === "string"),
-      )
-    ) {
-      return parsed;
-    }
-  } catch {
-    return undefined;
+function scheduleScrollToEditorText(searchText: string) {
+  const timers: number[] = [];
+  for (const delay of [0, 100, 300, 700, 1200]) {
+    timers.push(window.setTimeout(() => scrollToEditorText(searchText), delay));
   }
-  return undefined;
+  return () => {
+    for (const timer of timers) {
+      window.clearTimeout(timer);
+    }
+  };
 }
 
 function getImageIdFromElement(image: HTMLImageElement) {
@@ -169,6 +154,7 @@ export default function DocumentPage() {
   const user = useAtomValue(currentUserAtom);
   const bootstrap = useAtomValue(markdownBootstrapAtom);
   const [searchValue, setSearchValue] = useState("");
+  const debouncedSearchValue = useDebouncedValue(searchValue, SEARCH_SUGGESTION_DEBOUNCE_MS);
   const [searchItems, setSearchItems] = useState<SearchDockItem[]>([]);
   const [isSearchLoading, setIsSearchLoading] = useState(true);
   const [isSearchContentLoading, setIsSearchContentLoading] = useState(false);
@@ -257,7 +243,7 @@ export default function DocumentPage() {
   }, [fetchSearchItems, isSearchLoading, isSearchLoadingMore, searchHasMore, searchNextCursor]);
 
   const refreshSearchItems = useCallback(async () => {
-    const keyword = searchValue.trim();
+    const keyword = debouncedSearchValue.trim();
     const requestId = searchRequestIdRef.current + 1;
     searchRequestIdRef.current = requestId;
     setSearchContentError(null);
@@ -346,31 +332,17 @@ export default function DocumentPage() {
         setIsSearchContentLoading(false);
       }
     }
-  }, [fetchSearchItems, searchValue]);
+  }, [debouncedSearchValue, fetchSearchItems]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void refreshSearchItems();
-    }, 200);
-    return () => window.clearTimeout(timer);
+    void refreshSearchItems();
   }, [refreshSearchItems]);
 
-  const handleRequestFocusEditor = (options?: {
-    searchText?: string;
-    fallbackSearchText?: string;
-    searchTermGroups?: string[][];
-    imageId?: string;
-  }) => {
+  const handleRequestFocusEditor = (options?: { searchText?: string; imageId?: string }) => {
     if (options?.imageId && scrollToEditorImage(options.imageId)) {
       return;
     }
-    if (
-      options?.searchText &&
-      scrollToEditorText(options.searchText, {
-        fallbackSearchText: options.fallbackSearchText,
-        searchTermGroups: options.searchTermGroups,
-      })
-    ) {
+    if (options?.searchText && scrollToEditorText(options.searchText)) {
       return;
     }
     focusEditorElement();
@@ -381,8 +353,6 @@ export default function DocumentPage() {
     options?: {
       focusEditor?: boolean;
       searchText?: string;
-      fallbackSearchText?: string;
-      searchTermGroups?: string[][];
       imageId?: string;
     },
   ) => {
@@ -397,22 +367,6 @@ export default function DocumentPage() {
     } else {
       sessionStorage.removeItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
     }
-    if (options?.fallbackSearchText) {
-      sessionStorage.setItem(
-        SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY,
-        options.fallbackSearchText,
-      );
-    } else {
-      sessionStorage.removeItem(SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY);
-    }
-    if (options?.searchTermGroups) {
-      sessionStorage.setItem(
-        SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY,
-        JSON.stringify(options.searchTermGroups),
-      );
-    } else {
-      sessionStorage.removeItem(SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY);
-    }
     if (options?.imageId) {
       sessionStorage.setItem(SCROLL_TO_IMAGE_ON_LOAD_KEY, options.imageId);
     } else {
@@ -426,34 +380,19 @@ export default function DocumentPage() {
     if (imageId) {
       sessionStorage.removeItem(SCROLL_TO_IMAGE_ON_LOAD_KEY);
       const searchText = sessionStorage.getItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
-      const fallbackSearchText = sessionStorage.getItem(SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY);
-      const searchTermGroups = parseSearchTermGroups(
-        sessionStorage.getItem(SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY),
-      );
       sessionStorage.removeItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
-      sessionStorage.removeItem(SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY);
-      sessionStorage.removeItem(SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY);
       const timer = window.setTimeout(() => {
         if (!scrollToEditorImage(imageId) && searchText) {
-          scrollToEditorText(searchText, { fallbackSearchText, searchTermGroups });
+          scrollToEditorText(searchText);
         }
       }, 0);
       return () => window.clearTimeout(timer);
     }
 
     const searchText = sessionStorage.getItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
-    const fallbackSearchText = sessionStorage.getItem(SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY);
-    const searchTermGroups = parseSearchTermGroups(
-      sessionStorage.getItem(SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY),
-    );
     if (searchText) {
       sessionStorage.removeItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
-      sessionStorage.removeItem(SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY);
-      sessionStorage.removeItem(SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY);
-      const timer = window.setTimeout(() => {
-        scrollToEditorText(searchText, { fallbackSearchText, searchTermGroups });
-      }, 0);
-      return () => window.clearTimeout(timer);
+      return scheduleScrollToEditorText(searchText);
     }
 
     if (sessionStorage.getItem(FOCUS_EDITOR_ON_LOAD_KEY) !== "1") {

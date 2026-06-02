@@ -164,4 +164,53 @@ describe("editor FTS helpers", () => {
     expect(Array.isArray(termGroups[0])).toBe(true);
     expect(Array.isArray(termGroups[1])).toBe(true);
   });
+
+  it("can skip lexical vocab scans when building search term groups", async () => {
+    const terms = ["マス", "スクリーニング", "マスク"];
+    const ai = createAiMock([Array.from({ length: 1024 }, () => 0)]);
+    const vectorize = createVectorizeMock([]);
+
+    const termGroups = await buildExpandedFtsTerms(
+      "マススクリーニング",
+      {
+        limit: 5,
+        minScore: 0.05,
+        ai,
+        vectorize,
+        includeLexicalSuggestions: false,
+      },
+      terms,
+    );
+
+    expect(termGroups).toEqual([["マス"], ["スクリーニング"]]);
+  });
+
+  it("limits vector-only search term groups", async () => {
+    const terms = ["マス", "測定", "水", "機", "ス", "ガス", "人"];
+    const ai = createAiMock([Array.from({ length: 1024 }, () => 0)]);
+    const vectorize = createVectorizeMock([
+      { id: "測定", score: 0.9 },
+      { id: "水", score: 0.8 },
+      { id: "機", score: 0.7 },
+      { id: "ス", score: 0.6 },
+      { id: "ガス", score: 0.5 },
+      { id: "人", score: 0.4 },
+    ]);
+
+    const termGroups = await buildExpandedFtsTerms(
+      "マス",
+      {
+        limit: 5,
+        minScore: 0.05,
+        ai,
+        vectorize,
+        includeLexicalSuggestions: false,
+      },
+      terms,
+    );
+
+    expect(termGroups).toHaveLength(1);
+    expect(termGroups[0]).toHaveLength(5);
+    expect(termGroups[0]).toContain("マス");
+  });
 });

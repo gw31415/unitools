@@ -31,9 +31,8 @@ export function normalizeFtsTerm(text: string): string {
   return text.normalize("NFKC").toLocaleLowerCase("ja-JP").replaceAll("ー", "").trim();
 }
 
-const graphemeSegmenter = new Intl.Segmenter("ja", { granularity: "grapheme" });
 function toCharacters(value: string): string[] {
-  return Array.from(graphemeSegmenter.segment(value), (segment) => segment.segment);
+  return Array.from(value);
 }
 
 function partialSimilarity(query: string, term: string): number {
@@ -58,7 +57,13 @@ function asciiLexicalBoost(partial: number): number {
 export async function suggestEditorFtsTerms(
   terms: string[],
   query: string,
-  options: { limit: number; minScore: number; ai: Ai; vectorize: VectorizeIndex },
+  options: {
+    limit: number;
+    minScore: number;
+    ai: Ai;
+    vectorize: VectorizeIndex;
+    includeLexicalSuggestions?: boolean;
+  },
 ): Promise<EditorFtsVocabSuggestion[]> {
   const normalizedQuery = normalizeFtsTerm(query);
   if (!normalizedQuery) return [];
@@ -116,8 +121,10 @@ export async function suggestEditorFtsTerms(
     addSuggestion(term, match.score);
   }
 
-  for (const term of terms) {
-    addSuggestion(term, 0);
+  if (options.includeLexicalSuggestions ?? true) {
+    for (const term of terms) {
+      addSuggestion(term, 0);
+    }
   }
 
   const suggestions = [...suggestionsByTerm.values()];
@@ -128,7 +135,13 @@ export async function suggestEditorFtsTerms(
 
 export async function buildExpandedFtsTerms(
   query: string,
-  options: { minScore: number; limit: number; ai: Ai; vectorize: VectorizeIndex },
+  options: {
+    minScore: number;
+    limit: number;
+    ai: Ai;
+    vectorize: VectorizeIndex;
+    includeLexicalSuggestions?: boolean;
+  },
   terms: string[],
 ): Promise<string[][]> {
   const termGroups = await buildExpandedFtsTermGroups(query, options, terms);
@@ -137,11 +150,67 @@ export async function buildExpandedFtsTerms(
 
 export async function buildExpandedFtsTermGroups(
   query: string,
-  options: { minScore: number; limit: number; ai: Ai; vectorize: VectorizeIndex },
+  options: {
+    minScore: number;
+    limit: number;
+    ai: Ai;
+    vectorize: VectorizeIndex;
+    includeLexicalSuggestions?: boolean;
+  },
   terms: string[],
 ): Promise<EditorFtsTermGroupItem[][]> {
   const segments = segmentText(query);
   if (segments.length === 0) return [];
+
+  if (options.includeLexicalSuggestions === false) {
+    const normalizedSegments = segments.map(normalizeFtsTerm);
+    const queryEmbeddingResponse = await options.ai.run("@cf/baai/bge-m3", {
+      text: normalizedSegments,
+    });
+    if (!("data" in queryEmbeddingResponse) || !queryEmbeddingResponse.data) {
+      throw new Error("Failed to get embedding for query");
+    }
+
+    const termMap = new Map(terms.map((term) => [normalizeFtsTerm(term), term]));
+    const matchesPerSegment = await Promise.all(
+      queryEmbeddingResponse.data.map((embedding) =>
+        options.vectorize.query(embedding, {
+          topK: Math.min(options.limit * 10, 50),
+          returnValues: true,
+          returnMetadata: "none",
+        }),
+      ),
+    );
+
+    return segments.map((segment, i) => {
+      const group = new Map<string, EditorFtsTermGroupItem>();
+      const normalizedSegment = normalizedSegments[i] ?? normalizeFtsTerm(segment);
+      group.set(segment, {
+        term: segment,
+        normalizedTerm: normalizedSegment,
+        score: 1,
+      });
+
+      for (const match of matchesPerSegment[i]?.matches ?? []) {
+        const term = termMap.get(match.id);
+        if (!term) continue;
+
+        const normalizedTerm = normalizeFtsTerm(term);
+        if (!normalizedTerm) continue;
+
+        const score = Math.max(partialSimilarity(normalizedSegment, normalizedTerm), match.score);
+        if (score < options.minScore) continue;
+
+        const current = group.get(term);
+        if (current && current.score >= score) continue;
+        group.set(term, { term, normalizedTerm, score });
+      }
+
+      return [...group.values()]
+        .sort((a, b) => b.score - a.score || a.term.localeCompare(b.term))
+        .slice(0, options.limit);
+    });
+  }
 
   // 各セグメントに対して類似キーワードを取得
   const suggestionsPerSegment = await Promise.all(
@@ -151,6 +220,7 @@ export async function buildExpandedFtsTermGroups(
         minScore: options.minScore,
         ai: options.ai,
         vectorize: options.vectorize,
+        includeLexicalSuggestions: options.includeLexicalSuggestions,
       }),
     ),
   );

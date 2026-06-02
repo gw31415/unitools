@@ -93,7 +93,7 @@ describe("EditorSearchDock", () => {
     expect(screen.getByText("Content search failed.")).toBeInTheDocument();
   });
 
-  it("passes content term groups and keeps the query as fallback", () => {
+  it("passes the server-provided content match text", () => {
     const onRequestFocusEditor = vi.fn();
     renderSearchDock({
       value: "Alpha keyword",
@@ -103,18 +103,18 @@ describe("EditorSearchDock", () => {
           id: "editor-1",
           createdAt: Date.UTC(2026, 0, 1),
           title: "Article 01",
-          match: { source: "content", text: "Alpha", termGroups: [["Alpha"], ["keyword"]] },
+          match: { source: "content", text: "Alpha related keyword" },
         },
       ],
     });
 
     fireEvent.click(screen.getByLabelText("Open search"));
-    fireEvent.click(screen.getByRole("button", { name: /Article 01/ }));
+    const resultButton = screen.getByRole("button", { name: /Article 01/ });
+    expect(resultButton).toHaveTextContent("Content: Alpha related keyword");
+    fireEvent.click(resultButton);
 
     expect(onRequestFocusEditor).toHaveBeenCalledWith({
-      searchText: "Alpha",
-      fallbackSearchText: "Alpha keyword",
-      searchTermGroups: [["Alpha"], ["keyword"]],
+      searchText: "Alpha related keyword",
     });
   });
 });
