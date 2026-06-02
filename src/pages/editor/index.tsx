@@ -39,16 +39,26 @@ function focusEditorElement() {
   root.focus({ preventScroll: true });
 }
 
+function normalizeSearchText(text: string): string {
+  return text
+    .normalize("NFKC")
+    .toLocaleLowerCase("ja-JP")
+    .replaceAll("ー", "")
+    .replaceAll("-", "")
+    .trim();
+}
+
 function findTextMatch(root: HTMLElement, searchText: string) {
-  const needle = searchText.toLocaleLowerCase();
+  const needle = normalizeSearchText(searchText);
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let node = walker.nextNode();
 
   while (node) {
     const text = node.textContent ?? "";
-    const index = text.toLocaleLowerCase().indexOf(needle);
+    const normalizedText = normalizeSearchText(text);
+    const index = normalizedText.indexOf(needle);
     if (index >= 0) {
-      return { node, index };
+      return { node, index, originalText: text };
     }
     node = walker.nextNode();
   }
@@ -57,21 +67,21 @@ function findTextMatch(root: HTMLElement, searchText: string) {
 }
 
 function scrollToEditorText(searchText: string, attempt = 0) {
-  const normalizedSearchText = searchText.trim();
+  const normalizedSearchText = normalizeSearchText(searchText);
   if (!normalizedSearchText) return false;
 
   const root = getEditorRoot();
   const match = root ? findTextMatch(root, normalizedSearchText) : null;
   if (!root || !match) {
     if (attempt < 20) {
-      window.setTimeout(() => scrollToEditorText(normalizedSearchText, attempt + 1), 100);
+      window.setTimeout(() => scrollToEditorText(searchText, attempt + 1), 100);
     }
     return false;
   }
 
   const range = document.createRange();
   range.setStart(match.node, match.index);
-  range.setEnd(match.node, match.index + normalizedSearchText.length);
+  range.setEnd(match.node, match.index + match.originalText.slice(match.index).length);
 
   const selection = window.getSelection();
   selection?.removeAllRanges();

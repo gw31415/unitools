@@ -179,6 +179,7 @@ describe("editor search API", () => {
 
   it("returns unique content matches in content search mode", async () => {
     const { env } = createEnv();
+    mocks.db.query.editorsFtsVocab.findMany.mockResolvedValue([]);
     mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([
       { editorId: betaId, content: "Beta content includes Alpha keyword" },
     ]);
@@ -194,7 +195,7 @@ describe("editor search API", () => {
     expect(body.items[0]).toMatchObject({
       id: betaId,
       title: "Beta title",
-      match: { source: "content", text: "Beta content includes Alpha keyword" },
+      match: { source: "content", text: "alpha" },
     });
   });
 

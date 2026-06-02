@@ -158,8 +158,12 @@ const editor = createApp()
             where: groupConditions.length > 0 ? and(...groupConditions) : undefined,
             limit: limit,
           });
+
+          // ヒットした用語を取得（最初のセグメントの最初の用語）
+          const matchedTerm = termGroups[0]?.[0] ?? keyword;
+
           return new Map<ULID, EditorSearchMatch>(
-            ftsMatches.map((match) => [match.editorId, { source: "content", text: match.content }]),
+            ftsMatches.map((match) => [match.editorId, { source: "content", text: matchedTerm }]),
           );
         };
 
