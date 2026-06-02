@@ -198,7 +198,12 @@ export function EditorSearchDock({
   };
   const selectItem = (item: SearchDockItem, focusEditor = true) => {
     const imageId = item.match?.source === "image" ? item.match.imageId : undefined;
-    const searchText = normalizedQuery.length > 0 && !imageId ? value.trim() : undefined;
+    const searchText =
+      item.match?.source === "content" && item.match.text
+        ? item.match.text
+        : normalizedQuery.length > 0 && !imageId
+          ? value.trim()
+          : undefined;
     if (item.id === currentEditorId) {
       closeSearch({ restoreDockButtonFocus: !focusEditor });
       if (imageId) {
