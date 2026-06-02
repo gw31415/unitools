@@ -159,11 +159,35 @@ const editor = createApp()
             limit: limit,
           });
 
-          // ヒットした用語を取得（最初のセグメントの最初の用語）
-          const matchedTerm = termGroups[0]?.[0] ?? keyword;
+          // すべての検索用語をフラット化（重複を除去）
+          const allSearchTerms = [...new Set(termGroups.flat())];
+
+          // 各マッチに対して、コンテンツ内に実際に現れる用語を探す
+          const findMatchedTerm = (content: string): string => {
+            const normalizedContent = content.toLowerCase();
+            // 最初に見つかった用語を返す（優先度: 元のキーワード > 最初のセグメントの用語 > その他）
+            const keywordIndex = allSearchTerms.indexOf(keyword.toLowerCase());
+            if (keywordIndex !== -1 && normalizedContent.includes(allSearchTerms[keywordIndex])) {
+              return allSearchTerms[keywordIndex];
+            }
+            for (const term of termGroups[0] ?? []) {
+              if (normalizedContent.includes(term)) {
+                return term;
+              }
+            }
+            for (const term of allSearchTerms) {
+              if (normalizedContent.includes(term)) {
+                return term;
+              }
+            }
+            return keyword; // フォールバック
+          };
 
           return new Map<ULID, EditorSearchMatch>(
-            ftsMatches.map((match) => [match.editorId, { source: "content", text: matchedTerm }]),
+            ftsMatches.map((match) => [
+              match.editorId,
+              { source: "content", text: findMatchedTerm(match.content) },
+            ]),
           );
         };
 
