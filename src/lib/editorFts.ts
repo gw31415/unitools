@@ -95,3 +95,34 @@ export async function suggestEditorFtsTerms(
 
   return suggestions.sort((a, b) => b.score - a.score || a.term.localeCompare(b.term));
 }
+
+export async function buildExpandedFtsTerms(
+  query: string,
+  options: { minScore: number; limit: number; ai: Ai; vectorize: VectorizeIndex },
+  terms: string[],
+): Promise<string[][]> {
+  const segments = segmentText(query);
+  if (segments.length === 0) return [];
+
+  // 各セグメントに対して類似キーワードを取得
+  const suggestionsPerSegment = await Promise.all(
+    segments.map((segment) =>
+      suggestEditorFtsTerms(terms, segment, {
+        limit: options.limit,
+        minScore: options.minScore,
+        ai: options.ai,
+        vectorize: options.vectorize,
+      }),
+    ),
+  );
+
+  // セグメントごとに用語グループを作成（元のセグメント + 類似キーワード）
+  return segments.map((segment, i) => {
+    const normalizedSegment = normalizeFtsTerm(segment);
+    const group = new Set([normalizedSegment]);
+    for (const suggestion of suggestionsPerSegment[i]) {
+      group.add(suggestion.normalizedTerm);
+    }
+    return [...group];
+  });
+}

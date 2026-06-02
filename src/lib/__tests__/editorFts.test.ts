@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { segmentText, suggestEditorFtsTerms, tokenize } from "@/lib/editorFts";
+import {
+  buildExpandedFtsTerms,
+  segmentText,
+  suggestEditorFtsTerms,
+  tokenize,
+} from "@/lib/editorFts";
 
 function createAiMock(embeddings?: number[][]) {
   const run = vi.fn().mockResolvedValue({
@@ -60,5 +65,60 @@ describe("editor FTS helpers", () => {
     ]);
     expect(suggestions[0]?.score).toBeGreaterThan(suggestions[1]?.score ?? 0);
     expect(suggestions[0]?.normalizedTerm).toBe("コンピュタ");
+  });
+
+  it("builds expanded FTS terms grouped by segment", async () => {
+    const terms = ["コンピューター", "検索", "コンピューターサイエンス", "京都", "PC"];
+
+    const queryEmbedding = Array.from({ length: 1024 }, () => Math.random() - 0.5);
+    const ai = createAiMock([queryEmbedding]);
+
+    const vectorize = createVectorizeMock([
+      { id: "コンピュタ", score: 0.9 },
+      { id: "pc", score: 0.85 },
+    ]);
+
+    const termGroups = await buildExpandedFtsTerms(
+      "コンピュータ",
+      {
+        limit: 5,
+        minScore: 0.35,
+        ai,
+        vectorize,
+      },
+      terms,
+    );
+
+    // 2次元配列が返される（セグメントごとのグループ）
+    expect(Array.isArray(termGroups)).toBe(true);
+    expect(termGroups.length).toBe(1); // "コンピュータ"は1セグメント
+    expect(Array.isArray(termGroups[0])).toBe(true);
+    // 元のセグメント（正規化）＋類似キーワードが含まれる
+    expect(termGroups[0]).toContain("コンピュタ");
+    expect(termGroups[0].length).toBeGreaterThan(1);
+  });
+
+  it("builds expanded FTS terms for multiple segments", async () => {
+    const terms = ["コンピューター", "検索", "コンピューターサイエンス", "京都", "PC"];
+
+    const ai = createAiMock([Array.from({ length: 1024 }, () => Math.random() - 0.5)]);
+    const vectorize = createVectorizeMock([{ id: "コンピュタ", score: 0.9 }]);
+
+    const termGroups = await buildExpandedFtsTerms(
+      "コンピュータ 検索",
+      {
+        limit: 5,
+        minScore: 0.35,
+        ai,
+        vectorize,
+      },
+      terms,
+    );
+
+    // 2つのセグメントグループが返される
+    expect(termGroups.length).toBe(2);
+    // 各グループは配列
+    expect(Array.isArray(termGroups[0])).toBe(true);
+    expect(Array.isArray(termGroups[1])).toBe(true);
   });
 });

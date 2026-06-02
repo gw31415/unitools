@@ -6,7 +6,7 @@ import { yRoute } from "y-durableobjects";
 import z from "zod";
 import * as schema from "@/db/schema";
 import { b64urlToStruct, structToBase64Url } from "@/lib/base64";
-import { segmentText, suggestEditorFtsTerms, tokenize } from "@/lib/editorFts";
+import { buildExpandedFtsTerms, segmentText, suggestEditorFtsTerms } from "@/lib/editorFts";
 import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
 import type { Editor } from "@/models";
@@ -128,8 +128,34 @@ const editor = createApp()
           }) as Promise<Editor[]>;
 
         const fetchContentMatches = async () => {
+          // vocabを取得
+          const terms = (
+            await db.query.editorsFtsVocab.findMany({
+              columns: { term: true },
+              orderBy: (eb) => eb.term,
+            })
+          ).map(({ term }) => term);
+
+          // 拡張FTS用語をセグメントごとのグループで取得
+          const termGroups = await buildExpandedFtsTerms(
+            keyword,
+            {
+              limit: 5,
+              minScore: 0.35,
+              ai: c.env.AI,
+              vectorize: c.env.VECTORIZE_FTS_VOCAB_EMBEDDINGS,
+            },
+            terms,
+          );
+
+          // セグメントごとのグループをANDで結合し、各グループ内ではORで結合
+          const groupConditions = termGroups.map((group) => {
+            const termConditions = group.map((term) => sql`editors_fts_index MATCH ${term}`);
+            return or(...termConditions);
+          });
+
           const ftsMatches = await db.query.editorsFtsIndex.findMany({
-            where: sql`editors_fts_index MATCH ${tokenize(keyword)}`,
+            where: groupConditions.length > 0 ? and(...groupConditions) : undefined,
             limit: limit,
           });
           return new Map<ULID, EditorSearchMatch>(
