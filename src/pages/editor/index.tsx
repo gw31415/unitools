@@ -11,6 +11,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { findEditorTextMatch, normalizeEditorSearchText } from "@/lib/editorTextMatch";
 import { Header } from "@/pages/editor/Header";
 import type { ServerAppType } from "@/server";
 import { currentUserAtom, editorStateAtom, markdownBootstrapAtom } from "@/store";
@@ -18,6 +19,8 @@ import { currentUserAtom, editorStateAtom, markdownBootstrapAtom } from "@/store
 const SIDEBAR_PAGE_SIZE = 20;
 const FOCUS_EDITOR_ON_LOAD_KEY = "focus-editor-on-load";
 const SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY = "scroll-to-search-text-on-load";
+const SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY = "scroll-to-fallback-search-text-on-load";
+const SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY = "scroll-to-search-term-groups-on-load";
 const SCROLL_TO_IMAGE_ON_LOAD_KEY = "scroll-to-image-on-load";
 const IMAGE_API_PATH_PREFIX = "/api/v1/images/";
 const getClient = () =>
@@ -39,49 +42,43 @@ function focusEditorElement() {
   root.focus({ preventScroll: true });
 }
 
-function normalizeSearchText(text: string): string {
-  return text
-    .normalize("NFKC")
-    .toLocaleLowerCase("ja-JP")
-    .replaceAll("ー", "")
-    .replaceAll("-", "")
-    .trim();
-}
-
-function findTextMatch(root: HTMLElement, searchText: string) {
-  const needle = normalizeSearchText(searchText);
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let node = walker.nextNode();
-
-  while (node) {
-    const text = node.textContent ?? "";
-    const normalizedText = normalizeSearchText(text);
-    const index = normalizedText.indexOf(needle);
-    if (index >= 0) {
-      return { node, index, originalText: text };
-    }
-    node = walker.nextNode();
-  }
-
-  return null;
-}
-
-function scrollToEditorText(searchText: string, attempt = 0) {
-  const normalizedSearchText = normalizeSearchText(searchText);
+function scrollToEditorText(
+  searchText: string,
+  {
+    attempt = 0,
+    fallbackSearchText,
+    searchTermGroups,
+  }: {
+    attempt?: number;
+    fallbackSearchText?: string | null;
+    searchTermGroups?: string[][];
+  } = {},
+) {
+  const normalizedSearchText = normalizeEditorSearchText(searchText);
   if (!normalizedSearchText) return false;
 
   const root = getEditorRoot();
-  const match = root ? findTextMatch(root, normalizedSearchText) : null;
+  const match = root
+    ? findEditorTextMatch(root, [searchText, fallbackSearchText], { termGroups: searchTermGroups })
+    : null;
   if (!root || !match) {
     if (attempt < 20) {
-      window.setTimeout(() => scrollToEditorText(searchText, attempt + 1), 100);
+      window.setTimeout(
+        () =>
+          scrollToEditorText(searchText, {
+            attempt: attempt + 1,
+            fallbackSearchText,
+            searchTermGroups,
+          }),
+        100,
+      );
     }
     return false;
   }
 
   const range = document.createRange();
-  range.setStart(match.node, match.index);
-  range.setEnd(match.node, match.index + match.originalText.slice(match.index).length);
+  range.setStart(match.node, match.startOffset);
+  range.setEnd(match.node, match.endOffset);
 
   const selection = window.getSelection();
   selection?.removeAllRanges();
@@ -91,6 +88,24 @@ function scrollToEditorText(searchText: string, attempt = 0) {
     (match.node.parentNode instanceof HTMLElement ? match.node.parentNode : root);
   container.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
   return true;
+}
+
+function parseSearchTermGroups(value: string | null): string[][] | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (
+      Array.isArray(parsed) &&
+      parsed.every(
+        (group) => Array.isArray(group) && group.every((term) => typeof term === "string"),
+      )
+    ) {
+      return parsed;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
 }
 
 function getImageIdFromElement(image: HTMLImageElement) {
@@ -340,11 +355,22 @@ export default function DocumentPage() {
     return () => window.clearTimeout(timer);
   }, [refreshSearchItems]);
 
-  const handleRequestFocusEditor = (options?: { searchText?: string; imageId?: string }) => {
+  const handleRequestFocusEditor = (options?: {
+    searchText?: string;
+    fallbackSearchText?: string;
+    searchTermGroups?: string[][];
+    imageId?: string;
+  }) => {
     if (options?.imageId && scrollToEditorImage(options.imageId)) {
       return;
     }
-    if (options?.searchText && scrollToEditorText(options.searchText)) {
+    if (
+      options?.searchText &&
+      scrollToEditorText(options.searchText, {
+        fallbackSearchText: options.fallbackSearchText,
+        searchTermGroups: options.searchTermGroups,
+      })
+    ) {
       return;
     }
     focusEditorElement();
@@ -352,7 +378,13 @@ export default function DocumentPage() {
 
   const handleNavigateToEditor = (
     editorId: string,
-    options?: { focusEditor?: boolean; searchText?: string; imageId?: string },
+    options?: {
+      focusEditor?: boolean;
+      searchText?: string;
+      fallbackSearchText?: string;
+      searchTermGroups?: string[][];
+      imageId?: string;
+    },
   ) => {
     const shouldFocusEditor = options?.focusEditor ?? true;
     if (shouldFocusEditor) {
@@ -364,6 +396,22 @@ export default function DocumentPage() {
       sessionStorage.setItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY, options.searchText);
     } else {
       sessionStorage.removeItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
+    }
+    if (options?.fallbackSearchText) {
+      sessionStorage.setItem(
+        SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY,
+        options.fallbackSearchText,
+      );
+    } else {
+      sessionStorage.removeItem(SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY);
+    }
+    if (options?.searchTermGroups) {
+      sessionStorage.setItem(
+        SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY,
+        JSON.stringify(options.searchTermGroups),
+      );
+    } else {
+      sessionStorage.removeItem(SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY);
     }
     if (options?.imageId) {
       sessionStorage.setItem(SCROLL_TO_IMAGE_ON_LOAD_KEY, options.imageId);
@@ -378,20 +426,32 @@ export default function DocumentPage() {
     if (imageId) {
       sessionStorage.removeItem(SCROLL_TO_IMAGE_ON_LOAD_KEY);
       const searchText = sessionStorage.getItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
+      const fallbackSearchText = sessionStorage.getItem(SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY);
+      const searchTermGroups = parseSearchTermGroups(
+        sessionStorage.getItem(SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY),
+      );
       sessionStorage.removeItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
+      sessionStorage.removeItem(SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY);
+      sessionStorage.removeItem(SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY);
       const timer = window.setTimeout(() => {
         if (!scrollToEditorImage(imageId) && searchText) {
-          scrollToEditorText(searchText);
+          scrollToEditorText(searchText, { fallbackSearchText, searchTermGroups });
         }
       }, 0);
       return () => window.clearTimeout(timer);
     }
 
     const searchText = sessionStorage.getItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
+    const fallbackSearchText = sessionStorage.getItem(SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY);
+    const searchTermGroups = parseSearchTermGroups(
+      sessionStorage.getItem(SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY),
+    );
     if (searchText) {
       sessionStorage.removeItem(SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY);
+      sessionStorage.removeItem(SCROLL_TO_FALLBACK_SEARCH_TEXT_ON_LOAD_KEY);
+      sessionStorage.removeItem(SCROLL_TO_SEARCH_TERM_GROUPS_ON_LOAD_KEY);
       const timer = window.setTimeout(() => {
-        scrollToEditorText(searchText);
+        scrollToEditorText(searchText, { fallbackSearchText, searchTermGroups });
       }, 0);
       return () => window.clearTimeout(timer);
     }

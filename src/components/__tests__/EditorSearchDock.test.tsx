@@ -32,6 +32,7 @@ function renderSearchDock(props: Partial<React.ComponentProps<typeof EditorSearc
 
 describe("EditorSearchDock", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: false,
       media: query,
@@ -90,5 +91,30 @@ describe("EditorSearchDock", () => {
 
     expect(screen.getByRole("button", { name: "Article 01" })).toBeInTheDocument();
     expect(screen.getByText("Content search failed.")).toBeInTheDocument();
+  });
+
+  it("passes content term groups and keeps the query as fallback", () => {
+    const onRequestFocusEditor = vi.fn();
+    renderSearchDock({
+      value: "Alpha keyword",
+      onRequestFocusEditor,
+      items: [
+        {
+          id: "editor-1",
+          createdAt: Date.UTC(2026, 0, 1),
+          title: "Article 01",
+          match: { source: "content", text: "Alpha", termGroups: [["Alpha"], ["keyword"]] },
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByLabelText("Open search"));
+    fireEvent.click(screen.getByRole("button", { name: /Article 01/ }));
+
+    expect(onRequestFocusEditor).toHaveBeenCalledWith({
+      searchText: "Alpha",
+      fallbackSearchText: "Alpha keyword",
+      searchTermGroups: [["Alpha"], ["keyword"]],
+    });
   });
 });

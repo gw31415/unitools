@@ -34,6 +34,7 @@ const cursorPayloadSchema = z.object({
 type EditorSearchMatch = {
   source: "title" | "content";
   text: string;
+  termGroups?: string[][];
 };
 
 const toTimestamp = (value: unknown) => (value instanceof Date ? value.getTime() : Number(value));
@@ -210,7 +211,7 @@ const editor = createApp()
               .slice(0, limit)
               .map(({ match, matchedTerm }) => [
                 match.editorId,
-                { source: "content", text: matchedTerm.text },
+                { source: "content", text: matchedTerm.text, termGroups },
               ]),
           );
         };

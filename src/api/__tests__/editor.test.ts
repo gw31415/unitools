@@ -7,6 +7,7 @@ type SearchResponse = {
     match?: {
       source: "title" | "content";
       text?: string;
+      termGroups?: string[][];
     };
   }>;
   pageInfo: {
@@ -195,7 +196,7 @@ describe("editor search API", () => {
     expect(body.items[0]).toMatchObject({
       id: betaId,
       title: "Beta title",
-      match: { source: "content", text: "Alpha" },
+      match: { source: "content", text: "Alpha", termGroups: [["Alpha"]] },
     });
   });
 
