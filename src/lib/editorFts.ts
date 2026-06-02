@@ -8,6 +8,12 @@ type EditorFtsVocabSuggestion = {
   };
 };
 
+export type EditorFtsTermGroupItem = {
+  term: string;
+  normalizedTerm: string;
+  score: number;
+};
+
 const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
 
 export function tokenize(text: string): string {
@@ -41,6 +47,14 @@ function partialSimilarity(query: string, term: string): number {
   return 0;
 }
 
+function isAsciiSearchTerm(term: string): boolean {
+  return /^[a-z0-9]+$/i.test(term);
+}
+
+function asciiLexicalBoost(partial: number): number {
+  return partial === 0 ? 0.1 : partial;
+}
+
 export async function suggestEditorFtsTerms(
   terms: string[],
   query: string,
@@ -67,20 +81,23 @@ export async function suggestEditorFtsTerms(
   // normalizedTerm をキーにして db を検索できるようにする
   const termMap = new Map(terms.map((term) => [normalizeFtsTerm(term), term]));
 
-  const suggestions: EditorFtsVocabSuggestion[] = [];
+  const suggestionsByTerm = new Map<string, EditorFtsVocabSuggestion>();
+  const useAsciiLexicalScoring = isAsciiSearchTerm(normalizedQuery);
 
-  for (const match of matches.matches) {
-    const normalizedTerm = match.id;
-    const term = termMap.get(normalizedTerm);
-    if (!term) continue;
+  const addSuggestion = (term: string, embeddingScore: number) => {
+    const normalizedTerm = normalizeFtsTerm(term);
+    if (!normalizedTerm) return;
 
-    const embeddingScore = match.score;
     const partial = partialSimilarity(normalizedQuery, normalizedTerm);
-    const score = Math.max(partial * 0.3, embeddingScore * 0.7);
+    const score = useAsciiLexicalScoring
+      ? Math.max(partial, embeddingScore * asciiLexicalBoost(partial))
+      : Math.max(partial, embeddingScore);
+    if (score < options.minScore) return;
 
-    if (score < options.minScore) continue;
+    const current = suggestionsByTerm.get(normalizedTerm);
+    if (current && current.score >= score) return;
 
-    suggestions.push({
+    suggestionsByTerm.set(normalizedTerm, {
       term,
       normalizedTerm,
       score,
@@ -89,11 +106,24 @@ export async function suggestEditorFtsTerms(
         embedding: embeddingScore,
       },
     });
+  };
 
-    if (suggestions.length >= options.limit) break;
+  for (const match of matches.matches) {
+    const normalizedTerm = match.id;
+    const term = termMap.get(normalizedTerm);
+    if (!term) continue;
+
+    addSuggestion(term, match.score);
   }
 
-  return suggestions.sort((a, b) => b.score - a.score || a.term.localeCompare(b.term));
+  for (const term of terms) {
+    addSuggestion(term, 0);
+  }
+
+  const suggestions = [...suggestionsByTerm.values()];
+  return suggestions
+    .sort((a, b) => b.score - a.score || a.term.localeCompare(b.term))
+    .slice(0, options.limit);
 }
 
 export async function buildExpandedFtsTerms(
@@ -101,6 +131,15 @@ export async function buildExpandedFtsTerms(
   options: { minScore: number; limit: number; ai: Ai; vectorize: VectorizeIndex },
   terms: string[],
 ): Promise<string[][]> {
+  const termGroups = await buildExpandedFtsTermGroups(query, options, terms);
+  return termGroups.map((group) => group.map((item) => item.term));
+}
+
+export async function buildExpandedFtsTermGroups(
+  query: string,
+  options: { minScore: number; limit: number; ai: Ai; vectorize: VectorizeIndex },
+  terms: string[],
+): Promise<EditorFtsTermGroupItem[][]> {
   const segments = segmentText(query);
   if (segments.length === 0) return [];
 
@@ -118,11 +157,22 @@ export async function buildExpandedFtsTerms(
 
   // セグメントごとに用語グループを作成（元のセグメント + 類似キーワード）
   return segments.map((segment, i) => {
+    const group = new Map<string, EditorFtsTermGroupItem>();
     const normalizedSegment = normalizeFtsTerm(segment);
-    const group = new Set([normalizedSegment]);
+    group.set(segment, {
+      term: segment,
+      normalizedTerm: normalizedSegment,
+      score: 1,
+    });
     for (const suggestion of suggestionsPerSegment[i]) {
-      group.add(suggestion.normalizedTerm);
+      const current = group.get(suggestion.term);
+      if (current && current.score >= suggestion.score) continue;
+      group.set(suggestion.term, {
+        term: suggestion.term,
+        normalizedTerm: suggestion.normalizedTerm,
+        score: suggestion.score,
+      });
     }
-    return [...group];
+    return [...group.values()].sort((a, b) => b.score - a.score || a.term.localeCompare(b.term));
   });
 }

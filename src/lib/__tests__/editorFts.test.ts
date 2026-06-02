@@ -67,6 +67,48 @@ describe("editor FTS helpers", () => {
     expect(suggestions[0]?.normalizedTerm).toBe("コンピュタ");
   });
 
+  it("suggests partial term matches even when vector search does not return them", async () => {
+    const terms = ["Alpha", "Alphabet", "Beta"];
+    const ai = createAiMock([Array.from({ length: 1024 }, () => 0)]);
+    const vectorize = createVectorizeMock([]);
+
+    const suggestions = await suggestEditorFtsTerms(terms, "alpha", {
+      limit: 5,
+      minScore: 0.35,
+      ai,
+      vectorize,
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.term)).toEqual(["Alpha", "Alphabet"]);
+    expect(suggestions[0]).toMatchObject({
+      term: "Alpha",
+      metrics: { partial: 1, embedding: 0 },
+    });
+  });
+
+  it("ranks ASCII embedding-only noise below lexical matches", async () => {
+    const terms = ["NSAIDs", "NSAID", "ssss"];
+    const ai = createAiMock([Array.from({ length: 1024 }, () => 0)]);
+    const vectorize = createVectorizeMock([
+      { id: "ssss", score: 0.99 },
+      { id: "nsaid", score: 0.7 },
+    ]);
+
+    const suggestions = await suggestEditorFtsTerms(terms, "NSAIDs", {
+      limit: 5,
+      minScore: 0.05,
+      ai,
+      vectorize,
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.term)).toEqual(["NSAIDs", "NSAID", "ssss"]);
+    expect(suggestions.at(-1)).toMatchObject({
+      term: "ssss",
+      metrics: { partial: 0, embedding: 0.99 },
+    });
+    expect(suggestions.at(-1)?.score).toBeCloseTo(0.099);
+  });
+
   it("builds expanded FTS terms grouped by segment", async () => {
     const terms = ["コンピューター", "検索", "コンピューターサイエンス", "京都", "PC"];
 
@@ -93,8 +135,9 @@ describe("editor FTS helpers", () => {
     expect(Array.isArray(termGroups)).toBe(true);
     expect(termGroups.length).toBe(1); // "コンピュータ"は1セグメント
     expect(Array.isArray(termGroups[0])).toBe(true);
-    // 元のセグメント（正規化）＋類似キーワードが含まれる
-    expect(termGroups[0]).toContain("コンピュタ");
+    // 元のセグメント＋実際にインデックスされている類似キーワードが含まれる
+    expect(termGroups[0]).toContain("コンピュータ");
+    expect(termGroups[0]).toContain("コンピューター");
     expect(termGroups[0].length).toBeGreaterThan(1);
   });
 

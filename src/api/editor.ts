@@ -6,7 +6,12 @@ import { yRoute } from "y-durableobjects";
 import z from "zod";
 import * as schema from "@/db/schema";
 import { b64urlToStruct, structToBase64Url } from "@/lib/base64";
-import { buildExpandedFtsTerms, segmentText, suggestEditorFtsTerms } from "@/lib/editorFts";
+import {
+  buildExpandedFtsTermGroups,
+  normalizeFtsTerm,
+  segmentText,
+  suggestEditorFtsTerms,
+} from "@/lib/editorFts";
 import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
 import type { Editor } from "@/models";
@@ -35,6 +40,26 @@ const toTimestamp = (value: unknown) => (value instanceof Date ? value.getTime()
 
 function escapeSqlLikePattern(value: string) {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+function buildFts5PhraseExpression(term: string) {
+  return sql`'"' || replace(${term}, '"', '""') || '"'`;
+}
+
+function buildFts5MatchExpression(termGroups: string[][]) {
+  const groupExpressions = termGroups
+    .map((group) => [...new Set(group.map((term) => term.trim()).filter(Boolean))])
+    .filter((group) => group.length > 0)
+    .map((group) => {
+      const termExpressions = group.map(buildFts5PhraseExpression);
+      return termExpressions.length === 1
+        ? termExpressions[0]
+        : sql`'(' || ${sql.join(termExpressions, sql` || ' OR ' || `)} || ')'`;
+    });
+
+  return groupExpressions.length === 0
+    ? undefined
+    : sql.join(groupExpressions, sql` || ' AND ' || `);
 }
 
 const requireDocExists: MiddlewareHandler<Env> = async (c, next) => {
@@ -137,57 +162,56 @@ const editor = createApp()
           ).map(({ term }) => term);
 
           // 拡張FTS用語をセグメントごとのグループで取得
-          const termGroups = await buildExpandedFtsTerms(
+          const scoredTermGroups = await buildExpandedFtsTermGroups(
             keyword,
             {
               limit: 5,
-              minScore: 0.35,
+              minScore: 0.05,
               ai: c.env.AI,
               vectorize: c.env.VECTORIZE_FTS_VOCAB_EMBEDDINGS,
             },
             terms,
           );
+          const termGroups = scoredTermGroups.map((group) => group.map((item) => item.term));
 
-          // セグメントごとのグループをANDで結合し、各グループ内ではORで結合
-          const groupConditions = termGroups.map((group) => {
-            const termConditions = group.map((term) => sql`editors_fts_index MATCH ${term}`);
-            return or(...termConditions);
-          });
+          const ftsQueryExpression = buildFts5MatchExpression(termGroups);
+          if (!ftsQueryExpression) return new Map<ULID, EditorSearchMatch>();
 
+          const ftsLimit = Math.min(Math.max(limit * 5, limit), MAX_PAGE_SIZE);
           const ftsMatches = await db.query.editorsFtsIndex.findMany({
-            where: groupConditions.length > 0 ? and(...groupConditions) : undefined,
-            limit: limit,
+            where: () => sql`editors_fts_index MATCH (${ftsQueryExpression})`,
+            orderBy: () => sql`bm25(editors_fts_index)`,
+            limit: ftsLimit,
           });
 
-          // すべての検索用語をフラット化（重複を除去）
-          const allSearchTerms = [...new Set(termGroups.flat())];
+          const allSearchTerms = scoredTermGroups
+            .flat()
+            .sort((a, b) => b.score - a.score || a.term.localeCompare(b.term));
 
           // 各マッチに対して、コンテンツ内に実際に現れる用語を探す
-          const findMatchedTerm = (content: string): string => {
-            const normalizedContent = content.toLowerCase();
-            // 最初に見つかった用語を返す（優先度: 元のキーワード > 最初のセグメントの用語 > その他）
-            const keywordIndex = allSearchTerms.indexOf(keyword.toLowerCase());
-            if (keywordIndex !== -1 && normalizedContent.includes(allSearchTerms[keywordIndex])) {
-              return allSearchTerms[keywordIndex];
-            }
-            for (const term of termGroups[0] ?? []) {
-              if (normalizedContent.includes(term)) {
-                return term;
+          const findMatchedTerm = (content: string): { score: number; text: string } => {
+            const normalizedContent = normalizeFtsTerm(content);
+            for (const item of allSearchTerms) {
+              if (normalizedContent.includes(item.normalizedTerm)) {
+                return { score: item.score, text: item.term };
               }
             }
-            for (const term of allSearchTerms) {
-              if (normalizedContent.includes(term)) {
-                return term;
-              }
-            }
-            return keyword; // フォールバック
+            return { score: 0, text: keyword }; // フォールバック
           };
 
           return new Map<ULID, EditorSearchMatch>(
-            ftsMatches.map((match) => [
-              match.editorId,
-              { source: "content", text: findMatchedTerm(match.content) },
-            ]),
+            ftsMatches
+              .map((match, index) => ({
+                match,
+                index,
+                matchedTerm: findMatchedTerm(match.content),
+              }))
+              .sort((a, b) => b.matchedTerm.score - a.matchedTerm.score || a.index - b.index)
+              .slice(0, limit)
+              .map(({ match, matchedTerm }) => [
+                match.editorId,
+                { source: "content", text: matchedTerm.text },
+              ]),
           );
         };
 

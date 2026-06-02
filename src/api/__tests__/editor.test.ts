@@ -195,7 +195,7 @@ describe("editor search API", () => {
     expect(body.items[0]).toMatchObject({
       id: betaId,
       title: "Beta title",
-      match: { source: "content", text: "alpha" },
+      match: { source: "content", text: "Alpha" },
     });
   });
 
