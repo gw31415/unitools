@@ -14,6 +14,9 @@ export type EditorFtsTermGroupItem = {
   score: number;
 };
 
+export const FTS_VOCAB_DONE_STORAGE_KEY = "ftsVocabDone";
+export const FTS_VOCAB_CACHE_DO_NAME = "fts-vocab-cache";
+
 const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
 
 export function tokenize(text: string): string {

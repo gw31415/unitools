@@ -9,7 +9,7 @@ import * as schema from "@/db/schema";
 import type { Env } from "@/lib/hono";
 import type { ULID } from "@/lib/ulid";
 import { baseExtensions } from "./editorExtensions";
-import { tokenize } from "./editorFts";
+import { FTS_VOCAB_CACHE_DO_NAME, FTS_VOCAB_DONE_STORAGE_KEY, tokenize } from "./editorFts";
 import { collectReferencedImageIdsFromYXmlFragment } from "./editorImageCleanup";
 import { normalizeMarkdownExportContent } from "./markdownExport";
 
@@ -81,6 +81,16 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     }
   }
 
+  async getFtsVocabTerms(): Promise<string[]> {
+    return (await this.state.storage.get<string[]>(FTS_VOCAB_DONE_STORAGE_KEY)) ?? [];
+  }
+
+  async addFtsVocabTerms(terms: string[]): Promise<void> {
+    const currentTerms = await this.getFtsVocabTerms();
+    const nextTerms = [...new Set([...currentTerms, ...terms])];
+    await this.state.storage.put(FTS_VOCAB_DONE_STORAGE_KEY, nextTerms);
+  }
+
   // 全員切断した時のコールバック
 
   async alarm(): Promise<void> {
@@ -131,8 +141,7 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
   }
 
   private async collectConfigureFtsVocabEmbeddings(): Promise<void> {
-    const ftsVocabDoneLabel = "ftsVocabDone";
-    const ftsVocabDone = (await this.state.storage.get<string[]>(ftsVocabDoneLabel)) ?? [];
+    const ftsVocabDone = await this.getSharedFtsVocabTerms();
 
     const db = drizzle(this.env.DB, { schema });
     const ftsVocabToProcess = (
@@ -143,6 +152,7 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     ).map(({ term }) => term);
 
     const vectors: VectorizeVector[] = [];
+    const processedTerms: string[] = [];
     const EMBEDDINGS_BATCH_SIZE = 128;
     for (let i = 0; i < ftsVocabToProcess.length; i += EMBEDDINGS_BATCH_SIZE) {
       const batch = ftsVocabToProcess.slice(i, i + EMBEDDINGS_BATCH_SIZE);
@@ -154,12 +164,32 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
       }
       const embeddings = embeddingsResponse.data;
       batch.forEach((term, index) => {
-        ftsVocabDone.push(term);
+        processedTerms.push(term);
         vectors.push({ id: term, values: embeddings[index] });
       });
     }
     await this.env.VECTORIZE_FTS_VOCAB_EMBEDDINGS.upsert(vectors);
-    await this.state.storage.put(ftsVocabDoneLabel, ftsVocabDone);
+    await this.addSharedFtsVocabTerms(processedTerms);
+  }
+
+  private getFtsVocabCacheObject() {
+    return this.env.UNITOOLS_EDITORS.getByName(FTS_VOCAB_CACHE_DO_NAME);
+  }
+
+  private async getSharedFtsVocabTerms(): Promise<string[]> {
+    if (this.state.id.name === FTS_VOCAB_CACHE_DO_NAME) {
+      return this.getFtsVocabTerms();
+    }
+    return this.getFtsVocabCacheObject().getFtsVocabTerms();
+  }
+
+  private async addSharedFtsVocabTerms(terms: string[]): Promise<void> {
+    if (terms.length === 0) return;
+    if (this.state.id.name === FTS_VOCAB_CACHE_DO_NAME) {
+      await this.addFtsVocabTerms(terms);
+      return;
+    }
+    await this.getFtsVocabCacheObject().addFtsVocabTerms(terms);
   }
 
   private async cleanupUnreferencedImages(): Promise<void> {

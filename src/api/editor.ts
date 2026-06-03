@@ -1,6 +1,7 @@
 import { sValidator } from "@hono/standard-validator";
 import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type { Context, MiddlewareHandler } from "hono";
 import { yRoute } from "y-durableobjects";
 import z from "zod";
@@ -8,6 +9,7 @@ import * as schema from "@/db/schema";
 import { b64urlToStruct, structToBase64Url } from "@/lib/base64";
 import {
   buildExpandedFtsTermGroups,
+  FTS_VOCAB_CACHE_DO_NAME,
   normalizeFtsTerm,
   segmentText,
   suggestEditorFtsTerms,
@@ -25,6 +27,9 @@ const MAX_PAGE_SIZE = 100;
 const DEFAULT_SUGGESTION_LIMIT = 20;
 const MAX_SUGGESTION_LIMIT = 100;
 const DEFAULT_SUGGESTION_MIN_SCORE = 0.35;
+const SEARCH_CACHE_TTL_SECONDS = 60;
+const EDITOR_FTS_TERMS_CACHE_KEY = "editor:fts:vocab:terms:v1";
+const CONTENT_SEARCH_CACHE_PREFIX = "editor:search:content:v1:";
 const R2_BULK_DELETE_LIMIT = 1000;
 
 const cursorPayloadSchema = z.object({
@@ -37,7 +42,79 @@ type EditorSearchMatch = {
   text?: string;
 };
 
+type CachedContentSearchMatch = {
+  editorId: ULID;
+  match: EditorSearchMatch;
+};
+
+type CachedContentSearchResult = {
+  matches: CachedContentSearchMatch[];
+};
+
 const toTimestamp = (value: unknown) => (value instanceof Date ? value.getTime() : Number(value));
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isCachedContentSearchResult(value: unknown): value is CachedContentSearchResult {
+  if (!value || typeof value !== "object") return false;
+  const { matches } = value as { matches?: unknown };
+  return (
+    Array.isArray(matches) &&
+    matches.every((item) => {
+      if (!item || typeof item !== "object") return false;
+      const { editorId, match } = item as { editorId?: unknown; match?: unknown };
+      if (typeof editorId !== "string" || !match || typeof match !== "object") return false;
+      const { source, text } = match as { source?: unknown; text?: unknown };
+      return source === "content" && (typeof text === "string" || typeof text === "undefined");
+    })
+  );
+}
+
+function bytesToHex(bytes: Uint8Array) {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function hashCacheKey(value: unknown) {
+  const encoded = new TextEncoder().encode(JSON.stringify(value));
+  const hash = await crypto.subtle.digest("SHA-256", encoded);
+  return bytesToHex(new Uint8Array(hash));
+}
+
+async function getCachedFtsTerms<T extends Env>(
+  c: Context<T>,
+  db: DrizzleD1Database<typeof schema>,
+) {
+  const cachedTerms = await c.env.KV.get<string[]>(EDITOR_FTS_TERMS_CACHE_KEY, "json");
+  if (isStringArray(cachedTerms)) {
+    return cachedTerms;
+  }
+
+  const vocabCache = c.env.UNITOOLS_EDITORS.getByName(FTS_VOCAB_CACHE_DO_NAME);
+  const cachedDoTerms = await vocabCache.getFtsVocabTerms();
+  if (cachedDoTerms.length > 0) {
+    await c.env.KV.put(EDITOR_FTS_TERMS_CACHE_KEY, JSON.stringify(cachedDoTerms), {
+      expirationTtl: SEARCH_CACHE_TTL_SECONDS,
+    });
+    return cachedDoTerms;
+  }
+
+  const terms = (
+    await db.query.editorsFtsVocab.findMany({
+      columns: { term: true },
+      orderBy: (eb) => eb.term,
+    })
+  ).map(({ term }) => term);
+  await c.env.KV.put(EDITOR_FTS_TERMS_CACHE_KEY, JSON.stringify(terms), {
+    expirationTtl: SEARCH_CACHE_TTL_SECONDS,
+  });
+  return terms;
+}
+
+function contentSearchMatchesToMap(matches: CachedContentSearchMatch[]) {
+  return new Map<ULID, EditorSearchMatch>(matches.map(({ editorId, match }) => [editorId, match]));
+}
 
 function escapeSqlLikePattern(value: string) {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
@@ -154,13 +231,19 @@ const editor = createApp()
           }) as Promise<Editor[]>;
 
         const fetchContentMatches = async () => {
-          // vocabを取得
-          const terms = (
-            await db.query.editorsFtsVocab.findMany({
-              columns: { term: true },
-              orderBy: (eb) => eb.term,
-            })
-          ).map(({ term }) => term);
+          const contentSearchCacheKey = `${CONTENT_SEARCH_CACHE_PREFIX}${await hashCacheKey({
+            keyword,
+            limit,
+          })}`;
+          const cachedContentMatches = await c.env.KV.get<CachedContentSearchResult>(
+            contentSearchCacheKey,
+            "json",
+          );
+          if (isCachedContentSearchResult(cachedContentMatches)) {
+            return contentSearchMatchesToMap(cachedContentMatches.matches);
+          }
+
+          const terms = await getCachedFtsTerms(c, db);
 
           // 拡張FTS用語をセグメントごとのグループで取得
           const scoredTermGroups = await buildExpandedFtsTermGroups(
@@ -201,25 +284,30 @@ const editor = createApp()
             return { score: 0 };
           };
 
-          return new Map<ULID, EditorSearchMatch>(
-            ftsMatches
-              .map((match, index) => ({
-                match,
-                index,
-                matchedTerm: findMatchedTerm(match.content),
-              }))
-              .sort((a, b) => b.matchedTerm.score - a.matchedTerm.score || a.index - b.index)
-              .slice(0, limit)
-              .map(({ match, matchedTerm }) => [
-                match.editorId,
-                {
-                  source: "content",
-                  text:
-                    findContentMatchText(match.content, termGroups) ??
-                    (matchedTerm.text ? matchedTerm.text : undefined),
-                },
-              ]),
+          const contentMatches = ftsMatches
+            .map((match, index) => ({
+              match,
+              index,
+              matchedTerm: findMatchedTerm(match.content),
+            }))
+            .sort((a, b) => b.matchedTerm.score - a.matchedTerm.score || a.index - b.index)
+            .slice(0, limit)
+            .map(({ match, matchedTerm }) => ({
+              editorId: match.editorId,
+              match: {
+                source: "content" as const,
+                text:
+                  findContentMatchText(match.content, termGroups) ??
+                  (matchedTerm.text ? matchedTerm.text : undefined),
+              },
+            }));
+
+          await c.env.KV.put(
+            contentSearchCacheKey,
+            JSON.stringify({ matches: contentMatches satisfies CachedContentSearchMatch[] }),
+            { expirationTtl: SEARCH_CACHE_TTL_SECONDS },
           );
+          return contentSearchMatchesToMap(contentMatches);
         };
 
         const titleRows = query.searchMode === "content" ? [] : await fetchTitleRows();
@@ -336,12 +424,8 @@ const editor = createApp()
         Math.max(1, query.limit ?? DEFAULT_SUGGESTION_LIMIT),
         MAX_SUGGESTION_LIMIT,
       );
-      const terms = (
-        await drizzle(c.env.DB, { schema }).query.editorsFtsVocab.findMany({
-          columns: { term: true },
-          orderBy: (eb) => eb.term,
-        })
-      ).map(({ term }) => term);
+      const db = drizzle(c.env.DB, { schema });
+      const terms = await getCachedFtsTerms(c, db);
       const items = await suggestEditorFtsTerms(terms, query.query, {
         limit,
         minScore: query.minScore ?? DEFAULT_SUGGESTION_MIN_SCORE,
