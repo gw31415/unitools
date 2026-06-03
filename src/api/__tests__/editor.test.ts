@@ -198,6 +198,9 @@ describe("editor search API", () => {
     expect(mocks.db.query.editorsFtsVocab.findMany).not.toHaveBeenCalled();
     expect(aiRun).not.toHaveBeenCalled();
     expect(vectorizeQuery).not.toHaveBeenCalled();
+    expect(mocks.db.query.editorsFtsIndex.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 100 }),
+    );
   });
 
   it("returns cached content search matches without rebuilding the FTS query", async () => {
@@ -314,20 +317,6 @@ describe("editor search API", () => {
 
     expect(res.status).toBe(200);
     expect(kvPut).toHaveBeenCalledTimes(1);
-  });
-
-  it("segments text with the same tokenizer used by the FTS index", async () => {
-    const { env } = createEnv([]);
-
-    const res = await requestEditorApi(
-      "http://localhost/segments?text=%E6%9D%B1%E4%BA%AC%E9%83%BD%E3%81%A7%E6%A4%9C%E7%B4%A2",
-      env,
-    );
-
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({
-      segments: ["東京", "都", "で", "検索"],
-    });
   });
 
   it("rejects search suggestion requests without a WebSocket upgrade", async () => {

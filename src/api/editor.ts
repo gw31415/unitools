@@ -17,7 +17,7 @@ import { requireUser, useUser } from "./auth";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
-const SEARCH_SUGGESTION_DEBOUNCE_MS = 600;
+const SEARCH_SUGGESTION_DEBOUNCE_MS = 200;
 const SEARCH_CACHE_TTL_SECONDS = 60;
 const CONTENT_SEARCH_CACHE_PREFIX = "editor:search:content:v1:";
 const R2_BULK_DELETE_LIMIT = 1000;
@@ -53,16 +53,9 @@ type EditorSearchQuery = {
   keyword?: string;
 };
 
-const searchSuggestionKeywordSchema = z.string().trim().max(200);
-
 type SearchSuggestionResponse =
   | (EditorSearchResponse & { type: "items"; keyword: string })
   | { type: "error"; keyword: string; message: string };
-
-const SEARCH_SUGGESTION_PAGE_INFO: EditorSearchResponse["pageInfo"] = {
-  hasMore: false,
-  nextCursor: null,
-};
 
 type CachedContentSearchMatch = {
   editorId: ULID;
@@ -144,13 +137,6 @@ function sendSearchSuggestionMessage(socket: WebSocket, message: SearchSuggestio
   socket.send(JSON.stringify(message));
 }
 
-function emptySearchResponse(): EditorSearchResponse {
-  return {
-    items: [],
-    pageInfo: SEARCH_SUGGESTION_PAGE_INFO,
-  };
-}
-
 export async function fetchEditorSearchItems(
   env: CloudflareBindings,
   query: EditorSearchQuery,
@@ -190,7 +176,7 @@ export async function fetchEditorSearchItems(
       const ftsMatches = await db.query.editorsFtsIndex.findMany({
         where: () => sql`editors_fts_index MATCH (${ftsQueryExpression})`,
         orderBy: () => sql`bm25(editors_fts_index)`,
-        limit,
+        limit: Math.min(limit * 5, MAX_PAGE_SIZE),
       });
 
       const allSearchTerms = scoredTermGroups
@@ -285,12 +271,12 @@ export async function fetchEditorSearchItems(
     where: (editors) =>
       query.cursor
         ? or(
-            lt(editors.createdAt, new Date(query.cursor.createdAt)),
-            and(
-              eq(editors.createdAt, new Date(query.cursor.createdAt)),
-              lt(editors.id, query.cursor.id as ULID),
-            ),
-          )
+          lt(editors.createdAt, new Date(query.cursor.createdAt)),
+          and(
+            eq(editors.createdAt, new Date(query.cursor.createdAt)),
+            lt(editors.id, query.cursor.id as ULID),
+          ),
+        )
         : undefined,
     orderBy: (editors) => [desc(editors.createdAt), desc(editors.id)],
     limit: take,
@@ -391,18 +377,15 @@ const editor = createApp()
       return c.json(await fetchEditorSearchItems(c.env, { limit, cursor: query.cursor }));
     },
   )
-  .get("/search-suggestions", useUser, async (c) => {
-    const user = c.get("user");
-
+  .get("/search-suggestions", requireUser, async (c) => {
     if (c.req.header("Upgrade")?.toLowerCase() !== "websocket") {
       return c.text("Expected WebSocket upgrade.", 426);
     }
 
-    const pair = new WebSocketPair();
-    const client = pair[0];
-    const server = pair[1];
+    const { 0: client, 1: server } = new WebSocketPair();
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     let latestSequence = 0;
+    const searchSuggestionKeywordSchema = z.string().trim().max(200);
 
     const clearDebounceTimer = () => {
       if (!debounceTimer) return;
@@ -410,33 +393,25 @@ const editor = createApp()
       debounceTimer = undefined;
     };
 
-    const runSearch = async (keyword: string, sequence: number) => {
-      if (!user) {
-        const result = emptySearchResponse();
-        if (sequence !== latestSequence) return;
-        sendSearchSuggestionMessage(server, { type: "items", keyword, ...result });
-        return;
-      }
-
+    async function runSearch(query: string, sequence: number) {
       try {
         const result = await fetchEditorSearchItems(c.env, {
           limit: DEFAULT_PAGE_SIZE,
-          keyword,
+          keyword: query,
         });
         if (sequence !== latestSequence) return;
-        sendSearchSuggestionMessage(server, { type: "items", keyword, ...result });
+        sendSearchSuggestionMessage(server, { type: "items", keyword: query, ...result });
       } catch (error) {
         console.error(error);
         if (sequence !== latestSequence) return;
         sendSearchSuggestionMessage(server, {
           type: "error",
-          keyword,
+          keyword: query,
           message: "Failed to load articles.",
         });
       }
     };
 
-    server.accept();
     server.addEventListener("message", (event) => {
       const parsed = searchSuggestionKeywordSchema.safeParse(event.data);
       if (!parsed.success) {
@@ -455,30 +430,12 @@ const editor = createApp()
         void runSearch(parsed.data, sequence);
       }, SEARCH_SUGGESTION_DEBOUNCE_MS);
     });
-
     server.addEventListener("close", clearDebounceTimer);
     server.addEventListener("error", clearDebounceTimer);
+    server.accept();
 
     return new Response(null, { status: 101, webSocket: client });
   })
-  .get(
-    "/segments",
-    useUser,
-    sValidator(
-      "query",
-      z.object({
-        text: z.string().trim().max(2000),
-      }),
-    ),
-    (c) => {
-      const user = c.get("user");
-      if (!user) {
-        return c.json({ segments: [] });
-      }
-
-      return c.json({ segments: segmentText(c.req.valid("query").text) });
-    },
-  )
   .post("/", requireUser, sValidator("json", editorInsertSchema), async (c) => {
     const id = ulid();
     const db = drizzle(c.env.DB, { schema });
