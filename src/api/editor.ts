@@ -1,19 +1,12 @@
 import { sValidator } from "@hono/standard-validator";
 import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type { Context, MiddlewareHandler } from "hono";
 import { yRoute } from "y-durableobjects";
 import z from "zod";
 import * as schema from "@/db/schema";
 import { b64urlToStruct, structToBase64Url } from "@/lib/base64";
-import {
-  buildExpandedFtsTermGroups,
-  FTS_VOCAB_CACHE_DO_NAME,
-  normalizeFtsTerm,
-  segmentText,
-  suggestEditorFtsTerms,
-} from "@/lib/editorFts";
+import { normalizeFtsTerm, segmentText } from "@/lib/editorFts";
 import { findContentMatchText } from "@/lib/editorSearchMatch";
 import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
@@ -24,11 +17,8 @@ import { requireUser, useUser } from "./auth";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
-const DEFAULT_SUGGESTION_LIMIT = 20;
-const MAX_SUGGESTION_LIMIT = 100;
-const DEFAULT_SUGGESTION_MIN_SCORE = 0.35;
+const SEARCH_SUGGESTION_DEBOUNCE_MS = 600;
 const SEARCH_CACHE_TTL_SECONDS = 60;
-const EDITOR_FTS_TERMS_CACHE_KEY = "editor:fts:vocab:terms:v1";
 const CONTENT_SEARCH_CACHE_PREFIX = "editor:search:content:v1:";
 const R2_BULK_DELETE_LIMIT = 1000;
 
@@ -42,6 +32,38 @@ type EditorSearchMatch = {
   text?: string;
 };
 
+type EditorSearchItem = {
+  id: ULID;
+  createdAt: number;
+  title: string;
+  match?: EditorSearchMatch;
+};
+
+type EditorSearchResponse = {
+  items: EditorSearchItem[];
+  pageInfo: {
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
+};
+
+type EditorSearchQuery = {
+  limit: number;
+  cursor?: z.infer<typeof cursorPayloadSchema>;
+  keyword?: string;
+};
+
+const searchSuggestionKeywordSchema = z.string().trim().max(200);
+
+type SearchSuggestionResponse =
+  | (EditorSearchResponse & { type: "items"; keyword: string })
+  | { type: "error"; keyword: string; message: string };
+
+const SEARCH_SUGGESTION_PAGE_INFO: EditorSearchResponse["pageInfo"] = {
+  hasMore: false,
+  nextCursor: null,
+};
+
 type CachedContentSearchMatch = {
   editorId: ULID;
   match: EditorSearchMatch;
@@ -52,10 +74,6 @@ type CachedContentSearchResult = {
 };
 
 const toTimestamp = (value: unknown) => (value instanceof Date ? value.getTime() : Number(value));
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
-}
 
 function isCachedContentSearchResult(value: unknown): value is CachedContentSearchResult {
   if (!value || typeof value !== "object") return false;
@@ -82,38 +100,19 @@ async function hashCacheKey(value: unknown) {
   return bytesToHex(new Uint8Array(hash));
 }
 
-async function getCachedFtsTerms<T extends Env>(
-  c: Context<T>,
-  db: DrizzleD1Database<typeof schema>,
-) {
-  const cachedTerms = await c.env.KV.get<string[]>(EDITOR_FTS_TERMS_CACHE_KEY, "json");
-  if (isStringArray(cachedTerms)) {
-    return cachedTerms;
-  }
-
-  const vocabCache = c.env.UNITOOLS_EDITORS.getByName(FTS_VOCAB_CACHE_DO_NAME);
-  const cachedDoTerms = await vocabCache.getFtsVocabTerms();
-  if (cachedDoTerms.length > 0) {
-    await c.env.KV.put(EDITOR_FTS_TERMS_CACHE_KEY, JSON.stringify(cachedDoTerms), {
-      expirationTtl: SEARCH_CACHE_TTL_SECONDS,
-    });
-    return cachedDoTerms;
-  }
-
-  const terms = (
-    await db.query.editorsFtsVocab.findMany({
-      columns: { term: true },
-      orderBy: (eb) => eb.term,
-    })
-  ).map(({ term }) => term);
-  await c.env.KV.put(EDITOR_FTS_TERMS_CACHE_KEY, JSON.stringify(terms), {
-    expirationTtl: SEARCH_CACHE_TTL_SECONDS,
-  });
-  return terms;
-}
-
 function contentSearchMatchesToMap(matches: CachedContentSearchMatch[]) {
   return new Map<ULID, EditorSearchMatch>(matches.map(({ editorId, match }) => [editorId, match]));
+}
+
+function buildDirectFtsTermGroups(keyword: string) {
+  return segmentText(keyword)
+    .map((segment) => ({
+      term: segment,
+      normalizedTerm: normalizeFtsTerm(segment),
+      score: 1,
+    }))
+    .filter((item) => item.normalizedTerm)
+    .map((item) => [item]);
 }
 
 function escapeSqlLikePattern(value: string) {
@@ -138,6 +137,184 @@ function buildFts5MatchExpression(termGroups: string[][]) {
   return groupExpressions.length === 0
     ? undefined
     : sql.join(groupExpressions, sql` || ' AND ' || `);
+}
+
+function sendSearchSuggestionMessage(socket: WebSocket, message: SearchSuggestionResponse) {
+  if (socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify(message));
+}
+
+function emptySearchResponse(): EditorSearchResponse {
+  return {
+    items: [],
+    pageInfo: SEARCH_SUGGESTION_PAGE_INFO,
+  };
+}
+
+export async function fetchEditorSearchItems(
+  env: CloudflareBindings,
+  query: EditorSearchQuery,
+): Promise<EditorSearchResponse> {
+  const db = drizzle(env.DB, { schema });
+  const { keyword, limit } = query;
+  const take = limit + 1;
+
+  if (keyword) {
+    const fetchTitleRows = () =>
+      db.query.editors.findMany({
+        where: (editors) =>
+          sql`${editors.title} LIKE ${`%${escapeSqlLikePattern(keyword)}%`} ESCAPE '\\'`,
+        orderBy: (editors) => [desc(editors.createdAt), desc(editors.id)],
+        limit,
+      }) as Promise<Editor[]>;
+
+    const fetchContentMatches = async () => {
+      const contentSearchCacheKey = `${CONTENT_SEARCH_CACHE_PREFIX}${await hashCacheKey({
+        keyword,
+        limit,
+      })}`;
+      const cachedContentMatches = await env.KV.get<CachedContentSearchResult>(
+        contentSearchCacheKey,
+        "json",
+      );
+      if (isCachedContentSearchResult(cachedContentMatches)) {
+        return contentSearchMatchesToMap(cachedContentMatches.matches);
+      }
+
+      const scoredTermGroups = buildDirectFtsTermGroups(keyword);
+      const termGroups = scoredTermGroups.map((group) => group.map((item) => item.term));
+
+      const ftsQueryExpression = buildFts5MatchExpression(termGroups);
+      if (!ftsQueryExpression) return new Map<ULID, EditorSearchMatch>();
+
+      const ftsMatches = await db.query.editorsFtsIndex.findMany({
+        where: () => sql`editors_fts_index MATCH (${ftsQueryExpression})`,
+        orderBy: () => sql`bm25(editors_fts_index)`,
+        limit,
+      });
+
+      const allSearchTerms = scoredTermGroups
+        .flat()
+        .sort((a, b) => b.score - a.score || a.term.localeCompare(b.term));
+
+      const findMatchedTerm = (content: string): { score: number; text?: string } => {
+        const normalizedContent = normalizeFtsTerm(content);
+        for (const item of allSearchTerms) {
+          if (normalizedContent.includes(item.normalizedTerm)) {
+            return { score: item.score, text: item.term };
+          }
+        }
+        return { score: 0 };
+      };
+
+      const contentMatches = ftsMatches
+        .map((match, index) => ({
+          match,
+          index,
+          matchedTerm: findMatchedTerm(match.content),
+        }))
+        .sort((a, b) => b.matchedTerm.score - a.matchedTerm.score || a.index - b.index)
+        .slice(0, limit)
+        .map(({ match, matchedTerm }) => ({
+          editorId: match.editorId,
+          match: {
+            source: "content" as const,
+            text:
+              findContentMatchText(match.content, termGroups) ??
+              (matchedTerm.text ? matchedTerm.text : undefined),
+          },
+        }));
+
+      await env.KV.put(
+        contentSearchCacheKey,
+        JSON.stringify({ matches: contentMatches satisfies CachedContentSearchMatch[] }),
+        { expirationTtl: SEARCH_CACHE_TTL_SECONDS },
+      );
+      return contentSearchMatchesToMap(contentMatches);
+    };
+
+    const titleRows = await fetchTitleRows();
+    const matchesById = await fetchContentMatches();
+
+    for (const editor of titleRows) {
+      matchesById.set(editor.id, { source: "title", text: editor.title });
+    }
+
+    const titleIds = titleRows.map((editor) => editor.id);
+    const ids = [
+      ...titleIds,
+      ...[...matchesById.keys()].filter((id) => !titleIds.includes(id)),
+    ].slice(0, limit);
+    if (ids.length === 0) {
+      return {
+        items: [],
+        pageInfo: {
+          hasMore: false,
+          nextCursor: null,
+        },
+      };
+    }
+
+    const rows: Editor[] = await db.query.editors.findMany({
+      where: (editors) => inArray(editors.id, ids),
+    });
+    const rowsById = new Map(rows.map((editor) => [editor.id, editor]));
+    const items = ids
+      .map((id) => rowsById.get(id))
+      .filter((editor): editor is Editor => Boolean(editor))
+      .map((editor) => {
+        const matchText = matchesById.get(editor.id);
+        return {
+          id: editor.id,
+          createdAt: toTimestamp(editor.createdAt),
+          title: editor.title,
+          match: matchText,
+        };
+      });
+
+    return {
+      items,
+      pageInfo: {
+        hasMore: false,
+        nextCursor: null,
+      },
+    };
+  }
+
+  const rows: Editor[] = await db.query.editors.findMany({
+    where: (editors) =>
+      query.cursor
+        ? or(
+            lt(editors.createdAt, new Date(query.cursor.createdAt)),
+            and(
+              eq(editors.createdAt, new Date(query.cursor.createdAt)),
+              lt(editors.id, query.cursor.id as ULID),
+            ),
+          )
+        : undefined,
+    orderBy: (editors) => [desc(editors.createdAt), desc(editors.id)],
+    limit: take,
+  });
+
+  const hasMore = rows.length > limit;
+  const pageItems = hasMore ? rows.slice(0, limit) : rows;
+  const items = pageItems.map((editor) => ({
+    id: editor.id,
+    createdAt: toTimestamp(editor.createdAt),
+    title: editor.title,
+  }));
+
+  const last = items.at(-1);
+  const nextCursor =
+    hasMore && last ? structToBase64Url({ id: last.id, createdAt: last.createdAt }) : null;
+
+  return {
+    items,
+    pageInfo: {
+      hasMore,
+      nextCursor,
+    },
+  };
 }
 
 const requireDocExists: MiddlewareHandler<Env> = async (c, next) => {
@@ -174,33 +351,28 @@ const editor = createApp()
     useUser,
     sValidator(
       "query",
-      z.object({
-        limit: z.coerce.number().int().nonnegative().optional(),
-        keyword: z
-          .string()
-          .trim()
-          .max(200)
-          .optional()
-          .transform((value) => (value ? value : undefined)),
-        cursor: z
-          .base64url()
-          .optional()
-          .transform((s, ctx) => {
-            if (!s) {
-              return undefined;
-            }
-            try {
-              return b64urlToStruct(s, cursorPayloadSchema);
-            } catch {
-              ctx.addIssue({
-                code: "custom",
-                message: "Invalid cursor payload",
-              });
-              return z.NEVER;
-            }
-          }),
-        searchMode: z.enum(["title", "content"]).optional(),
-      }),
+      z
+        .object({
+          limit: z.coerce.number().int().nonnegative().optional(),
+          cursor: z
+            .base64url()
+            .optional()
+            .transform((s, ctx) => {
+              if (!s) {
+                return undefined;
+              }
+              try {
+                return b64urlToStruct(s, cursorPayloadSchema);
+              } catch {
+                ctx.addIssue({
+                  code: "custom",
+                  message: "Invalid cursor payload",
+                });
+                return z.NEVER;
+              }
+            }),
+        })
+        .strict(),
     ),
     async (c) => {
       const user = c.get("user");
@@ -216,226 +388,79 @@ const editor = createApp()
 
       const query = c.req.valid("query");
       const limit = Math.min(Math.max(1, query.limit ?? DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
-      const take = limit + 1;
-
-      const db = drizzle(c.env.DB, { schema });
-      if (query.keyword) {
-        const keyword = query.keyword;
-
-        const fetchTitleRows = () =>
-          db.query.editors.findMany({
-            where: (editors) =>
-              sql`${editors.title} LIKE ${`%${escapeSqlLikePattern(keyword)}%`} ESCAPE '\\'`,
-            orderBy: (editors) => [desc(editors.createdAt), desc(editors.id)],
-            limit,
-          }) as Promise<Editor[]>;
-
-        const fetchContentMatches = async () => {
-          const contentSearchCacheKey = `${CONTENT_SEARCH_CACHE_PREFIX}${await hashCacheKey({
-            keyword,
-            limit,
-          })}`;
-          const cachedContentMatches = await c.env.KV.get<CachedContentSearchResult>(
-            contentSearchCacheKey,
-            "json",
-          );
-          if (isCachedContentSearchResult(cachedContentMatches)) {
-            return contentSearchMatchesToMap(cachedContentMatches.matches);
-          }
-
-          const terms = await getCachedFtsTerms(c, db);
-
-          // 拡張FTS用語をセグメントごとのグループで取得
-          const scoredTermGroups = await buildExpandedFtsTermGroups(
-            keyword,
-            {
-              limit: 5,
-              minScore: 0.05,
-              ai: c.env.AI,
-              vectorize: c.env.VECTORIZE_FTS_VOCAB_EMBEDDINGS,
-              includeLexicalSuggestions: false,
-            },
-            terms,
-          );
-          const termGroups = scoredTermGroups.map((group) => group.map((item) => item.term));
-
-          const ftsQueryExpression = buildFts5MatchExpression(termGroups);
-          if (!ftsQueryExpression) return new Map<ULID, EditorSearchMatch>();
-
-          const ftsLimit = Math.min(Math.max(limit * 5, limit), MAX_PAGE_SIZE);
-          const ftsMatches = await db.query.editorsFtsIndex.findMany({
-            where: () => sql`editors_fts_index MATCH (${ftsQueryExpression})`,
-            orderBy: () => sql`bm25(editors_fts_index)`,
-            limit: ftsLimit,
-          });
-
-          const allSearchTerms = scoredTermGroups
-            .flat()
-            .sort((a, b) => b.score - a.score || a.term.localeCompare(b.term));
-
-          // 各マッチに対して、コンテンツ内に実際に現れる用語を探す
-          const findMatchedTerm = (content: string): { score: number; text?: string } => {
-            const normalizedContent = normalizeFtsTerm(content);
-            for (const item of allSearchTerms) {
-              if (normalizedContent.includes(item.normalizedTerm)) {
-                return { score: item.score, text: item.term };
-              }
-            }
-            return { score: 0 };
-          };
-
-          const contentMatches = ftsMatches
-            .map((match, index) => ({
-              match,
-              index,
-              matchedTerm: findMatchedTerm(match.content),
-            }))
-            .sort((a, b) => b.matchedTerm.score - a.matchedTerm.score || a.index - b.index)
-            .slice(0, limit)
-            .map(({ match, matchedTerm }) => ({
-              editorId: match.editorId,
-              match: {
-                source: "content" as const,
-                text:
-                  findContentMatchText(match.content, termGroups) ??
-                  (matchedTerm.text ? matchedTerm.text : undefined),
-              },
-            }));
-
-          await c.env.KV.put(
-            contentSearchCacheKey,
-            JSON.stringify({ matches: contentMatches satisfies CachedContentSearchMatch[] }),
-            { expirationTtl: SEARCH_CACHE_TTL_SECONDS },
-          );
-          return contentSearchMatchesToMap(contentMatches);
-        };
-
-        const titleRows = query.searchMode === "content" ? [] : await fetchTitleRows();
-        const matchesById =
-          query.searchMode === "title"
-            ? new Map<ULID, EditorSearchMatch>()
-            : await fetchContentMatches();
-
-        if (query.searchMode !== "content") {
-          for (const editor of titleRows) {
-            matchesById.set(editor.id, { source: "title", text: editor.title });
-          }
-        }
-
-        const titleIds = titleRows.map((editor) => editor.id);
-        const ids =
-          query.searchMode === "content"
-            ? [...matchesById.keys()].slice(0, limit)
-            : [
-                ...titleIds,
-                ...[...matchesById.keys()].filter((id) => !titleIds.includes(id)),
-              ].slice(0, limit);
-        if (ids.length === 0) {
-          return c.json({
-            items: [],
-            pageInfo: {
-              hasMore: false,
-              nextCursor: null,
-            },
-          });
-        }
-
-        const rows: Editor[] = await db.query.editors.findMany({
-          where: (editors) => inArray(editors.id, ids),
-        });
-        const rowsById = new Map(rows.map((editor) => [editor.id, editor]));
-        const items = ids
-          .map((id) => rowsById.get(id))
-          .filter((editor): editor is Editor => Boolean(editor))
-          .map((editor) => {
-            const matchText = matchesById.get(editor.id);
-            return {
-              id: editor.id,
-              createdAt: toTimestamp(editor.createdAt),
-              title: editor.title,
-              match: matchText,
-            };
-          });
-
-        return c.json({
-          items,
-          pageInfo: {
-            hasMore: false,
-            nextCursor: null,
-          },
-        });
-      }
-
-      const rows: Editor[] = await db.query.editors.findMany({
-        where: (editors) =>
-          query.cursor
-            ? or(
-                lt(editors.createdAt, new Date(query.cursor.createdAt)),
-                and(
-                  eq(editors.createdAt, new Date(query.cursor.createdAt)),
-                  lt(editors.id, query.cursor.id as ULID),
-                ),
-              )
-            : undefined,
-        orderBy: (editors) => [desc(editors.createdAt), desc(editors.id)],
-        limit: take,
-      });
-
-      const hasMore = rows.length > limit;
-      const pageItems = hasMore ? rows.slice(0, limit) : rows;
-      const items = pageItems.map((editor) => ({
-        id: editor.id,
-        createdAt: toTimestamp(editor.createdAt),
-        title: editor.title,
-      }));
-
-      const last = items.at(-1);
-      const nextCursor =
-        hasMore && last ? structToBase64Url({ id: last.id, createdAt: last.createdAt }) : null;
-
-      return c.json({
-        items,
-        pageInfo: {
-          hasMore,
-          nextCursor,
-        },
-      });
+      return c.json(await fetchEditorSearchItems(c.env, { limit, cursor: query.cursor }));
     },
   )
-  .get(
-    "/keywords/suggest",
-    useUser,
-    sValidator(
-      "query",
-      z.object({
-        query: z.string().trim().max(200),
-        limit: z.coerce.number().int().nonnegative().optional(),
-        minScore: z.coerce.number().min(0).max(1).optional(),
-      }),
-    ),
-    async (c) => {
-      const user = c.get("user");
+  .get("/search-suggestions", useUser, async (c) => {
+    const user = c.get("user");
+
+    if (c.req.header("Upgrade")?.toLowerCase() !== "websocket") {
+      return c.text("Expected WebSocket upgrade.", 426);
+    }
+
+    const pair = new WebSocketPair();
+    const client = pair[0];
+    const server = pair[1];
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let latestSequence = 0;
+
+    const clearDebounceTimer = () => {
+      if (!debounceTimer) return;
+      clearTimeout(debounceTimer);
+      debounceTimer = undefined;
+    };
+
+    const runSearch = async (keyword: string, sequence: number) => {
       if (!user) {
-        return c.json({ items: [] });
+        const result = emptySearchResponse();
+        if (sequence !== latestSequence) return;
+        sendSearchSuggestionMessage(server, { type: "items", keyword, ...result });
+        return;
       }
 
-      const query = c.req.valid("query");
-      const limit = Math.min(
-        Math.max(1, query.limit ?? DEFAULT_SUGGESTION_LIMIT),
-        MAX_SUGGESTION_LIMIT,
-      );
-      const db = drizzle(c.env.DB, { schema });
-      const terms = await getCachedFtsTerms(c, db);
-      const items = await suggestEditorFtsTerms(terms, query.query, {
-        limit,
-        minScore: query.minScore ?? DEFAULT_SUGGESTION_MIN_SCORE,
-        ai: c.env.AI,
-        vectorize: c.env.VECTORIZE_FTS_VOCAB_EMBEDDINGS,
-      });
+      try {
+        const result = await fetchEditorSearchItems(c.env, {
+          limit: DEFAULT_PAGE_SIZE,
+          keyword,
+        });
+        if (sequence !== latestSequence) return;
+        sendSearchSuggestionMessage(server, { type: "items", keyword, ...result });
+      } catch (error) {
+        console.error(error);
+        if (sequence !== latestSequence) return;
+        sendSearchSuggestionMessage(server, {
+          type: "error",
+          keyword,
+          message: "Failed to load articles.",
+        });
+      }
+    };
 
-      return c.json({ items });
-    },
-  )
+    server.accept();
+    server.addEventListener("message", (event) => {
+      const parsed = searchSuggestionKeywordSchema.safeParse(event.data);
+      if (!parsed.success) {
+        sendSearchSuggestionMessage(server, {
+          type: "error",
+          keyword: "",
+          message: "Invalid search suggestion request.",
+        });
+        return;
+      }
+
+      clearDebounceTimer();
+      latestSequence += 1;
+      const sequence = latestSequence;
+      debounceTimer = setTimeout(() => {
+        void runSearch(parsed.data, sequence);
+      }, SEARCH_SUGGESTION_DEBOUNCE_MS);
+    });
+
+    server.addEventListener("close", clearDebounceTimer);
+    server.addEventListener("error", clearDebounceTimer);
+
+    return new Response(null, { status: 101, webSocket: client });
+  })
   .get(
     "/segments",
     useUser,

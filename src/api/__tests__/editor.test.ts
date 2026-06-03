@@ -1,20 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-type SearchResponse = {
-  items: Array<{
-    id: string;
-    title: string;
-    match?: {
-      source: "title" | "content";
-      text?: string;
-    };
-  }>;
-  pageInfo: {
-    hasMore: boolean;
-    nextCursor: string | null;
-  };
-};
-
 const userId = "01H00000000000000000000000";
 const sessionId = "01H00000000000000000000001";
 const sessionSecret = "secret";
@@ -49,7 +34,7 @@ vi.mock("y-durableobjects", async () => {
   };
 });
 
-const { default: editor } = await import("../editor");
+const { default: editor, fetchEditorSearchItems } = await import("../editor");
 
 function createEnv(
   ftsResults: Array<Record<string, unknown>> = [
@@ -150,13 +135,17 @@ function requestSearch(url: string, env: CloudflareBindings) {
   return editor.fetch(req, env);
 }
 
-function requestEditorApi(url: string, env: CloudflareBindings, cookie = true) {
+function requestEditorApi(
+  url: string,
+  env: CloudflareBindings,
+  cookie = true,
+  extraHeaders?: Record<string, string>,
+) {
   const urlObj = new URL(url);
-  const headers = cookie
-    ? {
-        Cookie: `sid=${userId}:${sessionId}:${sessionSecret}`,
-      }
-    : undefined;
+  const headers = {
+    ...(cookie ? { Cookie: `sid=${userId}:${sessionId}:${sessionSecret}` } : {}),
+    ...extraHeaders,
+  };
   const req = new Request(urlObj, { headers });
   return editor.fetch(req, env);
 }
@@ -172,55 +161,43 @@ describe("editor search API", () => {
     mocks.db.query.editorsFtsVocab.findMany.mockResolvedValue([]);
   });
 
-  it("returns title matches without querying FTS in title search mode", async () => {
-    const { env, ftsPrepare } = createEnv();
-    mocks.db.query.editors.findMany.mockResolvedValue([
-      { id: alphaId, createdAt: new Date("2026-01-01T00:00:00Z"), title: "Alpha title" },
-    ]);
+  it("does not accept search suggestions through REST query params", async () => {
+    const { env } = createEnv();
+    mocks.db.query.editors.findMany.mockResolvedValue([]);
 
     const res = await requestSearch("http://localhost/?keyword=Alpha&searchMode=title", env);
 
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({
-      items: [
-        {
-          id: alphaId,
-          title: "Alpha title",
-          match: { source: "title", text: "Alpha title" },
-        },
-      ],
-      pageInfo: { hasMore: false, nextCursor: null },
-    });
-    expect(ftsPrepare).not.toHaveBeenCalled();
+    expect(res.status).toBe(400);
+    expect(mocks.db.query.editors.findMany).not.toHaveBeenCalled();
   });
 
-  it("returns unique content matches in content search mode", async () => {
-    const { env, getFtsVocabTerms, kvPut } = createEnv();
+  it("returns unique content matches without vocab expansion", async () => {
+    const { env, getFtsVocabTerms, aiRun, vectorizeQuery } = createEnv();
     mocks.db.query.editorsFtsVocab.findMany.mockResolvedValue([]);
     mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([
       { editorId: betaId, content: "Beta content includes Alpha keyword" },
     ]);
-    mocks.db.query.editors.findMany.mockResolvedValue([
-      { id: betaId, createdAt: new Date("2026-01-02T00:00:00Z"), title: "Beta title" },
-    ]);
+    mocks.db.query.editors.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: betaId, createdAt: new Date("2026-01-02T00:00:00Z"), title: "Beta title" },
+      ]);
 
-    const res = await requestSearch("http://localhost/?keyword=Alpha&searchMode=content", env);
-    const body = (await res.json()) as SearchResponse;
+    const body = await fetchEditorSearchItems(env, {
+      limit: 20,
+      keyword: "Alpha",
+    });
 
-    expect(res.status).toBe(200);
     expect(body.items).toHaveLength(1);
     expect(body.items[0]).toMatchObject({
       id: betaId,
       title: "Beta title",
       match: { source: "content", text: "Alpha" },
     });
-    expect(getFtsVocabTerms).toHaveBeenCalledTimes(1);
+    expect(getFtsVocabTerms).not.toHaveBeenCalled();
     expect(mocks.db.query.editorsFtsVocab.findMany).not.toHaveBeenCalled();
-    expect(kvPut).toHaveBeenCalledWith(
-      "editor:fts:vocab:terms:v1",
-      expect.any(String),
-      expect.objectContaining({ expirationTtl: 60 }),
-    );
+    expect(aiRun).not.toHaveBeenCalled();
+    expect(vectorizeQuery).not.toHaveBeenCalled();
   });
 
   it("returns cached content search matches without rebuilding the FTS query", async () => {
@@ -237,14 +214,17 @@ describe("editor search API", () => {
         expirationRefreshedAt: undefined,
       });
     });
-    mocks.db.query.editors.findMany.mockResolvedValue([
-      { id: betaId, createdAt: new Date("2026-01-02T00:00:00Z"), title: "Beta title" },
-    ]);
+    mocks.db.query.editors.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: betaId, createdAt: new Date("2026-01-02T00:00:00Z"), title: "Beta title" },
+      ]);
 
-    const res = await requestSearch("http://localhost/?keyword=Alpha&searchMode=content", env);
-    const body = (await res.json()) as SearchResponse;
+    const body = await fetchEditorSearchItems(env, {
+      limit: 20,
+      keyword: "Alpha",
+    });
 
-    expect(res.status).toBe(200);
     expect(body.items[0]).toMatchObject({
       id: betaId,
       title: "Beta title",
@@ -261,17 +241,17 @@ describe("editor search API", () => {
     mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([
       { editorId: betaId, content: "Intro Alpha related keyword after" },
     ]);
-    mocks.db.query.editors.findMany.mockResolvedValue([
-      { id: betaId, createdAt: new Date("2026-01-02T00:00:00Z"), title: "Beta title" },
-    ]);
+    mocks.db.query.editors.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: betaId, createdAt: new Date("2026-01-02T00:00:00Z"), title: "Beta title" },
+      ]);
 
-    const res = await requestSearch(
-      "http://localhost/?keyword=Alpha%20keyword&searchMode=content",
-      env,
-    );
-    const body = (await res.json()) as SearchResponse;
+    const body = await fetchEditorSearchItems(env, {
+      limit: 20,
+      keyword: "Alpha keyword",
+    });
 
-    expect(res.status).toBe(200);
     expect(body.items[0]).toMatchObject({
       id: betaId,
       title: "Beta title",
@@ -279,7 +259,7 @@ describe("editor search API", () => {
     });
   });
 
-  it("keeps combined search behavior when searchMode is omitted", async () => {
+  it("returns Dock items with title matches before content matches", async () => {
     const { env } = createEnv();
     mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([
       { editorId: betaId, content: "Beta content includes Alpha keyword" },
@@ -293,10 +273,8 @@ describe("editor search API", () => {
         { id: betaId, createdAt: new Date("2026-01-02T00:00:00Z"), title: "Beta title" },
       ]);
 
-    const res = await requestSearch("http://localhost/?keyword=Alpha", env);
-    const body = (await res.json()) as SearchResponse;
+    const body = await fetchEditorSearchItems(env, { limit: 20, keyword: "Alpha" });
 
-    expect(res.status).toBe(200);
     expect(body.items.map((item: { id: string }) => item.id)).toEqual([alphaId, betaId]);
     expect(body.items[0].match).toEqual({ source: "title", text: "Alpha title" });
     expect(body.items[1]?.match?.source).toBe("content");
@@ -314,7 +292,7 @@ describe("editor search API", () => {
     mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([]);
     mocks.db.query.editors.findMany.mockResolvedValue([]);
 
-    const res = await requestSearch("http://localhost/?keyword=Alpha&searchMode=title", env);
+    const res = await requestSearch("http://localhost/", env);
 
     expect(res.status).toBe(200);
     expect(kvPut).not.toHaveBeenCalled();
@@ -332,53 +310,10 @@ describe("editor search API", () => {
     mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([]);
     mocks.db.query.editors.findMany.mockResolvedValue([]);
 
-    const res = await requestSearch("http://localhost/?keyword=Alpha&searchMode=title", env);
+    const res = await requestSearch("http://localhost/", env);
 
     expect(res.status).toBe(200);
     expect(kvPut).toHaveBeenCalledTimes(1);
-  });
-
-  it("returns keyword suggestions from indexed FTS terms", async () => {
-    const { env } = createEnv(
-      [], // FTS content results (not used for keyword suggestions)
-      [
-        { term: "コンピューター", doc: 2, cnt: 5 },
-        { term: "コンピューターサイエンス", doc: 1, cnt: 1 },
-        { term: "検索", doc: 3, cnt: 7 },
-      ], // Vocab results
-    );
-
-    // Set up the editorsFtsVocab mock for the new drizzle-based implementation
-    mocks.db.query.editorsFtsVocab.findMany.mockResolvedValue([
-      { term: "コンピューター" },
-      { term: "コンピューターサイエンス" },
-      { term: "検索" },
-    ]);
-
-    const res = await requestEditorApi(
-      "http://localhost/keywords/suggest?query=コンピュータ&limit=2",
-      env,
-    );
-    const body = (await res.json()) as {
-      items: Array<{
-        term: string;
-        normalizedTerm: string;
-        score: number;
-        metrics: { partial: number; embedding: number };
-      }>;
-    };
-
-    expect(res.status).toBe(200);
-    expect(body.items.map((item) => item.term)).toEqual([
-      "コンピューター",
-      "コンピューターサイエンス",
-    ]);
-    expect(body.items[0]).toMatchObject({
-      term: "コンピューター",
-      normalizedTerm: "コンピュタ",
-      score: expect.any(Number),
-    });
-    expect(body.items[0]?.score).toBeGreaterThan(body.items[1]?.score ?? 0);
   });
 
   it("segments text with the same tokenizer used by the FTS index", async () => {
@@ -395,13 +330,12 @@ describe("editor search API", () => {
     });
   });
 
-  it("returns empty keyword suggestions when signed out", async () => {
+  it("rejects search suggestion requests without a WebSocket upgrade", async () => {
     const { env, ftsPrepare } = createEnv([], [{ term: "Alpha", doc: 1, cnt: 1 }]);
 
-    const res = await requestEditorApi("http://localhost/keywords/suggest?query=Alpha", env, false);
+    const res = await requestEditorApi("http://localhost/search-suggestions", env, false);
 
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ items: [] });
+    expect(res.status).toBe(426);
     expect(ftsPrepare).not.toHaveBeenCalled();
   });
 });

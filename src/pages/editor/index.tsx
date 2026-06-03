@@ -17,7 +17,7 @@ import type { ServerAppType } from "@/server";
 import { currentUserAtom, editorStateAtom, markdownBootstrapAtom } from "@/store";
 
 const SIDEBAR_PAGE_SIZE = 20;
-const SEARCH_SUGGESTION_DEBOUNCE_MS = 600;
+const SEARCH_SUGGESTION_SOCKET_PATH = "/api/v1/editor/search-suggestions";
 const FOCUS_EDITOR_ON_LOAD_KEY = "focus-editor-on-load";
 const SCROLL_TO_SEARCH_TEXT_ON_LOAD_KEY = "scroll-to-search-text-on-load";
 const SCROLL_TO_IMAGE_ON_LOAD_KEY = "scroll-to-image-on-load";
@@ -39,19 +39,6 @@ function focusEditorElement() {
     return;
   }
   root.focus({ preventScroll: true });
-}
-
-function useDebouncedValue<T>(value: T, delayMs: number) {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDebouncedValue(value);
-    }, delayMs);
-    return () => window.clearTimeout(timer);
-  }, [delayMs, value]);
-
-  return debouncedValue;
 }
 
 function scrollToEditorText(searchText: string, attempt = 0) {
@@ -140,21 +127,29 @@ function scrollToEditorImage(imageId: string, attempt = 0) {
   return true;
 }
 
-function mergeSearchItems(primaryItems: SearchDockItem[], secondaryItems: SearchDockItem[]) {
-  const mergedItems = [...primaryItems];
-  for (const item of secondaryItems) {
-    if (mergedItems.some((existing) => existing.id === item.id)) continue;
-    mergedItems.push(item);
-  }
-  return mergedItems;
-}
+type SearchDockPageInfo = {
+  hasMore: boolean;
+  nextCursor: string | null;
+};
+
+type SearchSuggestionSocketMessage =
+  | {
+      type: "items";
+      keyword: string;
+      items: SearchDockItem[];
+      pageInfo: SearchDockPageInfo;
+    }
+  | {
+      type: "error";
+      keyword: string;
+      message?: string;
+    };
 
 export default function DocumentPage() {
   const editorState = useAtomValue(editorStateAtom);
   const user = useAtomValue(currentUserAtom);
   const bootstrap = useAtomValue(markdownBootstrapAtom);
   const [searchValue, setSearchValue] = useState("");
-  const debouncedSearchValue = useDebouncedValue(searchValue, SEARCH_SUGGESTION_DEBOUNCE_MS);
   const [searchItems, setSearchItems] = useState<SearchDockItem[]>([]);
   const [isSearchLoading, setIsSearchLoading] = useState(true);
   const [isSearchContentLoading, setIsSearchContentLoading] = useState(false);
@@ -164,18 +159,15 @@ export default function DocumentPage() {
   const [isSearchAuthRequired, setIsSearchAuthRequired] = useState(false);
   const [searchHasMore, setSearchHasMore] = useState(false);
   const [searchNextCursor, setSearchNextCursor] = useState<string | null>(null);
-  const searchRequestIdRef = useRef(0);
+  const searchValueRef = useRef("");
+  const searchSocketRef = useRef<WebSocket | null>(null);
 
   const fetchSearchItems = useCallback(
     async ({
       cursor,
-      keyword,
-      searchMode,
       append = false,
     }: {
       cursor?: string | null;
-      keyword?: string;
-      searchMode?: "title" | "content";
       append?: boolean;
     } = {}) => {
       const client = getClient();
@@ -191,8 +183,6 @@ export default function DocumentPage() {
           query: {
             limit: String(SIDEBAR_PAGE_SIZE),
             ...(cursor ? { cursor } : {}),
-            ...(keyword ? { keyword } : {}),
-            ...(searchMode ? { searchMode } : {}),
           },
         });
         if (res.status === 401) {
@@ -235,6 +225,95 @@ export default function DocumentPage() {
     [],
   );
 
+  useEffect(() => {
+    searchValueRef.current = searchValue.trim();
+  }, [searchValue]);
+
+  const handleSearchSuggestionMessage = useCallback((message: SearchSuggestionSocketMessage) => {
+    if (message.keyword !== searchValueRef.current) return;
+    switch (message.type) {
+      case "items":
+        setSearchItems(message.items);
+        setSearchHasMore(message.pageInfo.hasMore);
+        setSearchNextCursor(message.pageInfo.nextCursor);
+        setIsSearchLoading(false);
+        setIsSearchContentLoading(false);
+        setIsSearchAuthRequired(false);
+        break;
+      case "error":
+        console.error(message.message ?? "Failed to load search suggestions.");
+        setSearchError("Failed to load articles.");
+        setIsSearchLoading(false);
+        setIsSearchContentLoading(false);
+        break;
+    }
+  }, []);
+
+  const getSearchSuggestionSocket = useCallback(() => {
+    if (typeof window === "undefined") return null;
+
+    const currentSocket = searchSocketRef.current;
+    if (
+      currentSocket &&
+      (currentSocket.readyState === WebSocket.OPEN ||
+        currentSocket.readyState === WebSocket.CONNECTING)
+    ) {
+      return currentSocket;
+    }
+
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(
+      `${protocol}://${window.location.host}${SEARCH_SUGGESTION_SOCKET_PATH}`,
+    );
+    searchSocketRef.current = socket;
+
+    socket.addEventListener("message", (event) => {
+      try {
+        handleSearchSuggestionMessage(JSON.parse(String(event.data)));
+      } catch (error) {
+        console.error(error);
+        setSearchError("Failed to load articles.");
+        setIsSearchLoading(false);
+        setIsSearchContentLoading(false);
+      }
+    });
+    socket.addEventListener("close", () => {
+      if (searchSocketRef.current === socket) {
+        searchSocketRef.current = null;
+      }
+    });
+    socket.addEventListener("error", () => {
+      if (searchSocketRef.current !== socket) return;
+      setSearchError("Failed to load articles.");
+      setIsSearchLoading(false);
+      setIsSearchContentLoading(false);
+    });
+
+    return socket;
+  }, [handleSearchSuggestionMessage]);
+
+  const sendSearchSuggestionRequest = useCallback(
+    (keyword: string) => {
+      const socket = getSearchSuggestionSocket();
+      if (!socket) return;
+
+      const send = () => {
+        if (keyword !== searchValueRef.current) return;
+        socket.send(keyword);
+      };
+
+      if (socket.readyState === WebSocket.OPEN) {
+        send();
+        return;
+      }
+
+      if (socket.readyState === WebSocket.CONNECTING) {
+        socket.addEventListener("open", send, { once: true });
+      }
+    },
+    [getSearchSuggestionSocket],
+  );
+
   const loadMoreSearchItems = useCallback(async () => {
     if (isSearchLoading || isSearchLoadingMore || !searchHasMore || !searchNextCursor) {
       return;
@@ -243,19 +322,17 @@ export default function DocumentPage() {
   }, [fetchSearchItems, isSearchLoading, isSearchLoadingMore, searchHasMore, searchNextCursor]);
 
   const refreshSearchItems = useCallback(async () => {
-    const keyword = debouncedSearchValue.trim();
-    const requestId = searchRequestIdRef.current + 1;
-    searchRequestIdRef.current = requestId;
+    const keyword = searchValue.trim();
+    searchValueRef.current = keyword;
     setSearchContentError(null);
 
     if (!keyword) {
       setIsSearchContentLoading(false);
+      searchSocketRef.current?.close();
+      searchSocketRef.current = null;
       await fetchSearchItems();
       return;
     }
-
-    const client = getClient();
-    if (!client) return;
 
     setIsSearchLoading(true);
     setIsSearchContentLoading(true);
@@ -264,79 +341,19 @@ export default function DocumentPage() {
     setSearchHasMore(false);
     setSearchNextCursor(null);
 
-    const fetchSearchMode = async (searchMode: "title" | "content") => {
-      const res = await client.api.v1.editor.$get({
-        query: {
-          limit: String(SIDEBAR_PAGE_SIZE),
-          keyword,
-          searchMode,
-        },
-      });
-      if (res.status === 401) {
-        return { authRequired: true as const };
-      }
-      if (!res.ok) {
-        throw new Error(`Failed to load ${searchMode} search results.`);
-      }
-      return res.json();
-    };
-
-    const titlePromise = fetchSearchMode("title");
-    const contentPromise = fetchSearchMode("content");
-    void contentPromise.catch(() => undefined);
-    let titleItems: SearchDockItem[] = [];
-
-    try {
-      const titleResult = await titlePromise;
-      if (requestId !== searchRequestIdRef.current) return;
-      if ("authRequired" in titleResult) {
-        setIsSearchAuthRequired(true);
-        setSearchItems([]);
-        setSearchHasMore(false);
-        setSearchNextCursor(null);
-        setIsSearchContentLoading(false);
-        return;
-      }
-      titleItems = titleResult.items;
-      setSearchItems(titleItems);
-      setSearchHasMore(false);
-      setSearchNextCursor(null);
-      setIsSearchAuthRequired(false);
-    } catch (error) {
-      if (requestId !== searchRequestIdRef.current) return;
-      console.error(error);
-      setSearchError("Failed to load articles.");
-    } finally {
-      if (requestId === searchRequestIdRef.current) {
-        setIsSearchLoading(false);
-      }
-    }
-
-    try {
-      const contentResult = await contentPromise;
-      if (requestId !== searchRequestIdRef.current) return;
-      if ("authRequired" in contentResult) {
-        setIsSearchAuthRequired(true);
-        setSearchItems([]);
-        return;
-      }
-      setSearchItems((currentItems) =>
-        mergeSearchItems(titleItems.length > 0 ? titleItems : currentItems, contentResult.items),
-      );
-    } catch (error) {
-      if (requestId !== searchRequestIdRef.current) return;
-      console.error(error);
-      setSearchContentError("Content search failed.");
-    } finally {
-      if (requestId === searchRequestIdRef.current) {
-        setIsSearchContentLoading(false);
-      }
-    }
-  }, [debouncedSearchValue, fetchSearchItems]);
+    sendSearchSuggestionRequest(keyword);
+  }, [fetchSearchItems, searchValue, sendSearchSuggestionRequest]);
 
   useEffect(() => {
     void refreshSearchItems();
   }, [refreshSearchItems]);
+
+  useEffect(() => {
+    return () => {
+      searchSocketRef.current?.close();
+      searchSocketRef.current = null;
+    };
+  }, []);
 
   const handleRequestFocusEditor = (options?: { searchText?: string; imageId?: string }) => {
     if (options?.imageId && scrollToEditorImage(options.imageId)) {
