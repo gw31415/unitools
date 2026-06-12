@@ -15,8 +15,8 @@ export type KVStoreVariant = keyof typeof KVStoreExpiration;
 /////////////////////////////////////////////////////////////
 
 const KVStoreExpiration = {
-  FtsVocab: Temporal.Duration.from({ hours: 1 }),
-} as const satisfies Record<string, Temporal.Duration | undefined>;
+  FtsVocab: 3600, // 1時間
+} as const satisfies Record<string, number | undefined>;
 
 async function getter<V extends KVStoreVariant>(env: CloudflareBindings, variant: V) {
   switch (variant) {
@@ -43,7 +43,7 @@ async function setter<V extends KVStoreVariant>(
   switch (variant) {
     default:
       await env.KV.put(`${KVSTORE_PREFIX}${variant}`, JSON.stringify(value), {
-        expiration: KVStoreExpiration[variant]?.total({ unit: "seconds" }),
+        expiration: KVStoreExpiration[variant],
       });
   }
 }
@@ -67,7 +67,7 @@ export function store<V extends KVStoreVariant>(env: CloudflareBindings, variant
         }
         const value = getter(env, variant);
         await env.KV.put(kvKey, JSON.stringify(value), {
-          expiration: KVStoreExpiration[variant]?.total({ unit: "seconds" }),
+          expiration: KVStoreExpiration[variant],
         });
         return value;
       })();
