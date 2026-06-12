@@ -53,6 +53,16 @@ export type KVStoreValue<V extends KVStoreVariant> =
 
 const KVSTORE_PREFIX = "kvstore:";
 
+function isKVStoreValue<V extends KVStoreVariant>(
+  variant: V,
+  value: unknown,
+): value is KVStoreValue<V> {
+  switch (variant) {
+    case "FtsVocab":
+      return Array.isArray(value) && value.every((term) => typeof term === "string");
+  }
+}
+
 export function store<V extends KVStoreVariant>(env: CloudflareBindings, variant: V): KVStore<V> {
   const kvKey = `${KVSTORE_PREFIX}${variant}`;
   return {
@@ -61,11 +71,11 @@ export function store<V extends KVStoreVariant>(env: CloudflareBindings, variant
     },
     get value() {
       return (async () => {
-        const oldValue = await env.KV.get<KVStoreValue<V>>(kvKey);
-        if (oldValue) {
+        const oldValue = await env.KV.get<KVStoreValue<V>>(kvKey, "json");
+        if (isKVStoreValue(variant, oldValue)) {
           return oldValue;
         }
-        const value = getter(env, variant);
+        const value = await getter(env, variant);
         await env.KV.put(kvKey, JSON.stringify(value), {
           expirationTtl: KVStoreExpiration[variant],
         });
