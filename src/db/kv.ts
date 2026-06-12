@@ -43,7 +43,7 @@ async function setter<V extends KVStoreVariant>(
   switch (variant) {
     default:
       await env.KV.put(`${KVSTORE_PREFIX}${variant}`, JSON.stringify(value), {
-        expiration: KVStoreExpiration[variant],
+        expirationTtl: KVStoreExpiration[variant],
       });
   }
 }
@@ -67,7 +67,7 @@ export function store<V extends KVStoreVariant>(env: CloudflareBindings, variant
         }
         const value = getter(env, variant);
         await env.KV.put(kvKey, JSON.stringify(value), {
-          expiration: KVStoreExpiration[variant],
+          expirationTtl: KVStoreExpiration[variant],
         });
         return value;
       })();
