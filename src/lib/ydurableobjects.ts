@@ -236,7 +236,7 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
       doc.getXmlFragment("default"),
       getSchema(baseExtensions),
     ).descendants((node) => {
-      if (node.type.name === "paragraph" && node.textContent.length > 0) {
+      if (node.textContent.length > 0) {
         texts.push(node.textContent);
       }
     });
