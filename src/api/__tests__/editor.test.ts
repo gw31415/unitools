@@ -38,7 +38,7 @@ const { default: editor, fetchEditorSearchItems } = await import("../editor");
 
 function createEnv(
   ftsResults: Array<Record<string, unknown>> = [
-    { editor_id: betaId, content: "Beta content includes Alpha keyword" },
+    { editor_id: betaId, paragraph: "Beta content includes Alpha keyword" },
   ],
   vocabResults: Array<{ term: string; doc: number; cnt: number }> = [],
 ) {
@@ -156,9 +156,6 @@ describe("editor search API", () => {
     mocks.drizzle.mockReturnValue(mocks.db);
     mocks.db.query.editors.findMany.mockReset();
     mocks.db.query.editorsFtsIndex.findMany.mockReset();
-    mocks.db.query.editorsFtsVocab.findMany.mockReset();
-    // Default empty responses
-    mocks.db.query.editorsFtsVocab.findMany.mockResolvedValue([]);
   });
 
   it("does not accept search suggestions through REST query params", async () => {
@@ -172,10 +169,12 @@ describe("editor search API", () => {
   });
 
   it("returns unique content matches without vocab expansion", async () => {
-    const { env, getFtsVocabTerms, aiRun, vectorizeQuery } = createEnv();
-    mocks.db.query.editorsFtsVocab.findMany.mockResolvedValue([]);
+    const { env, kvGet, getFtsVocabTerms, aiRun, vectorizeQuery } = createEnv();
+    // 語彙が空の場合はフォールバック（DOから空配列が返る）
+    getFtsVocabTerms.mockResolvedValue([]);
+    kvGet.mockResolvedValue([]);
     mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([
-      { editorId: betaId, content: "Beta content includes Alpha keyword" },
+      { editorId: betaId, paragraph: "Beta content includes Alpha keyword" },
     ]);
     mocks.db.query.editors.findMany
       .mockResolvedValueOnce([])
@@ -194,12 +193,13 @@ describe("editor search API", () => {
       title: "Beta title",
       match: { source: "content", text: "Alpha" },
     });
+    // 語彙取得はKVストア経由で呼ばれるが、失敗時はAI/Vectorizeは呼ばれない
+    expect(kvGet).toHaveBeenCalledWith("kvstore:FtsVocab");
     expect(getFtsVocabTerms).not.toHaveBeenCalled();
-    expect(mocks.db.query.editorsFtsVocab.findMany).not.toHaveBeenCalled();
     expect(aiRun).not.toHaveBeenCalled();
     expect(vectorizeQuery).not.toHaveBeenCalled();
     expect(mocks.db.query.editorsFtsIndex.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ limit: 100 }),
+      expect.objectContaining({ limit: 20 }),
     );
   });
 
@@ -240,9 +240,8 @@ describe("editor search API", () => {
 
   it("returns the server-selected content phrase for content matches", async () => {
     const { env } = createEnv();
-    mocks.db.query.editorsFtsVocab.findMany.mockResolvedValue([]);
     mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([
-      { editorId: betaId, content: "Intro Alpha related keyword after" },
+      { editorId: betaId, paragraph: "Intro Alpha related keyword after" },
     ]);
     mocks.db.query.editors.findMany
       .mockResolvedValueOnce([])
@@ -265,7 +264,7 @@ describe("editor search API", () => {
   it("returns Dock items with title matches before content matches", async () => {
     const { env } = createEnv();
     mocks.db.query.editorsFtsIndex.findMany.mockResolvedValue([
-      { editorId: betaId, content: "Beta content includes Alpha keyword" },
+      { editorId: betaId, paragraph: "Beta content includes Alpha keyword" },
     ]);
     mocks.db.query.editors.findMany
       .mockResolvedValueOnce([
@@ -324,7 +323,7 @@ describe("editor search API", () => {
 
     const res = await requestEditorApi("http://localhost/search-suggestions", env, false);
 
-    expect(res.status).toBe(426);
+    expect(res.status).toBe(401);
     expect(ftsPrepare).not.toHaveBeenCalled();
   });
 });

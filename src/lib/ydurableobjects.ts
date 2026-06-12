@@ -1,17 +1,16 @@
 import { getSchema } from "@tiptap/core";
-import { renderToMarkdown } from "@tiptap/static-renderer";
 import { eq, inArray, notInArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { YDurableObjects as BaseYDurableObjects, WSSharedDoc } from "y-durableobjects";
 import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import type { Doc } from "yjs";
+import { store } from "@/db/kv";
 import * as schema from "@/db/schema";
 import type { Env } from "@/lib/hono";
 import type { ULID } from "@/lib/ulid";
 import { baseExtensions } from "./editorExtensions";
-import { FTS_VOCAB_CACHE_DO_NAME, FTS_VOCAB_DONE_STORAGE_KEY, tokenize } from "./editorFts";
+import { tokenize } from "./editorFts";
 import { collectReferencedImageIdsFromYXmlFragment } from "./editorImageCleanup";
-import { normalizeMarkdownExportContent } from "./markdownExport";
 
 const EXPORT_DEBOUNCE_MS = 60000; // 1分
 const R2_BULK_DELETE_LIMIT = 1000;
@@ -64,7 +63,6 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
 
   protected async onStart(): Promise<void> {
     await super.onStart();
-
     // デバウンス付きのupdateリスナー（DO Alarmで実装）
     this.doc.on("update", async (_update) => {
       // Update Debounce Alarm
@@ -81,67 +79,57 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     }
   }
 
-  async getFtsVocabTerms(): Promise<string[]> {
-    return (await this.state.storage.get<string[]>(FTS_VOCAB_DONE_STORAGE_KEY)) ?? [];
-  }
-
-  async addFtsVocabTerms(terms: string[]): Promise<void> {
-    const currentTerms = await this.getFtsVocabTerms();
-    const nextTerms = [...new Set([...currentTerms, ...terms])];
-    await this.state.storage.put(FTS_VOCAB_DONE_STORAGE_KEY, nextTerms);
-  }
-
   // 全員切断した時のコールバック
-
   async alarm(): Promise<void> {
-    try {
-      await this.updateFtsIndex();
-    } catch (error) {
-      console.error("Failed to update editor FTS index on alarm", {
-        editorId: this.state.id.name,
-        error,
-      });
-    }
-    try {
-      await this.collectConfigureFtsVocabEmbeddings();
-    } catch (error) {
-      console.error("Failed to collect and configure the FTS vocabulary", {
-        editorId: this.state.id.name,
-        error,
-      });
-    }
-    try {
-      await this.cleanupUnreferencedImages();
-    } catch (error) {
-      console.error("Failed to cleanup unreferenced images on cleanup", {
-        editorId: this.state.id.name,
-        error,
-      });
-    }
+    await Promise.all(
+      (
+        [
+          {
+            promise: this.updateFtsIndex(),
+            errMsg: "Failed to update editor FTS index on alarm",
+          },
+          {
+            promise: this.collectConfigureFtsVocabEmbeddings(),
+            errMsg: "Failed to collect and configure the FTS vocabulary",
+          },
+          {
+            promise: this.cleanupUnreferencedImages(),
+            errMsg: "Failed to cleanup unreferenced images on cleanup",
+          },
+        ] satisfies { promise: Promise<any>; errMsg: string }[]
+      ).map(async ({ promise, errMsg }) => {
+        try {
+          await promise;
+        } catch (error) {
+          console.error(errMsg, {
+            editorId: this.state.id.name,
+            error,
+          });
+        }
+      }),
+    );
   }
 
   private async updateFtsIndex(): Promise<void> {
-    const id = await this.resolveEditorId();
-    if (!id) {
-      return;
-    }
-    const markdown = this.convertToMarkdown(this.doc);
-    {
-      const db = drizzle(this.env.DB);
-      await db.delete(schema.editorsFtsIndex).where(eq(schema.editorsFtsIndex.editorId, id));
-
-      const content = tokenize(markdown);
-      if (content) {
-        await db.insert(schema.editorsFtsIndex).values({
-          editorId: id,
-          content,
-        });
-      }
+    const editorId = await this.resolveEditorId();
+    if (editorId) {
+      await drizzle(this.env.DB).transaction(async (db) => {
+        await db
+          .delete(schema.editorsFtsIndex)
+          .where(eq(schema.editorsFtsIndex.editorId, editorId));
+        await db.insert(schema.editorsFtsIndex).values(
+          this.getParagraphs(this.doc).map((paragraph) => ({
+            paragraph,
+            terms: tokenize(paragraph),
+            editorId,
+          })),
+        );
+      });
     }
   }
 
   private async collectConfigureFtsVocabEmbeddings(): Promise<void> {
-    const ftsVocabDone = await this.getSharedFtsVocabTerms();
+    const ftsVocabDone = await store(this.env, "FtsVocab").value;
 
     const db = drizzle(this.env.DB, { schema });
     const ftsVocabToProcess = (
@@ -169,27 +157,7 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
       });
     }
     await this.env.VECTORIZE_FTS_VOCAB_EMBEDDINGS.upsert(vectors);
-    await this.addSharedFtsVocabTerms(processedTerms);
-  }
-
-  private getFtsVocabCacheObject() {
-    return this.env.UNITOOLS_EDITORS.getByName(FTS_VOCAB_CACHE_DO_NAME);
-  }
-
-  private async getSharedFtsVocabTerms(): Promise<string[]> {
-    if (this.state.id.name === FTS_VOCAB_CACHE_DO_NAME) {
-      return this.getFtsVocabTerms();
-    }
-    return this.getFtsVocabCacheObject().getFtsVocabTerms();
-  }
-
-  private async addSharedFtsVocabTerms(terms: string[]): Promise<void> {
-    if (terms.length === 0) return;
-    if (this.state.id.name === FTS_VOCAB_CACHE_DO_NAME) {
-      await this.addFtsVocabTerms(terms);
-      return;
-    }
-    await this.getFtsVocabCacheObject().addFtsVocabTerms(terms);
+    store(this.env, "FtsVocab").value = [...ftsVocabDone, ...processedTerms];
   }
 
   private async cleanupUnreferencedImages(): Promise<void> {
@@ -241,15 +209,16 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     return storedId as ULID | undefined;
   }
 
-  private convertToMarkdown(doc: Doc): string {
-    const rootNode = yXmlFragmentToProseMirrorRootNode(
+  private getParagraphs(doc: Doc): string[] {
+    const texts: string[] = [];
+    yXmlFragmentToProseMirrorRootNode(
       doc.getXmlFragment("default"),
       getSchema(baseExtensions),
-    );
-    const normalizedContent = normalizeMarkdownExportContent(rootNode.toJSON());
-    return renderToMarkdown({
-      content: normalizedContent,
-      extensions: baseExtensions,
+    ).descendants((node) => {
+      if (node.type.name === "paragraph" && node.textContent.length > 0) {
+        texts.push(node.textContent);
+      }
     });
+    return texts;
   }
 }

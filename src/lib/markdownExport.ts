@@ -1,3 +1,17 @@
+// import { renderToMarkdown } from "@tiptap/static-renderer";
+// import { normalizeMarkdownExportContent } from "./markdownExport";
+// private convertToMarkdown(doc: Doc): string {
+//   const rootNode = yXmlFragmentToProseMirrorRootNode(
+//     doc.getXmlFragment("default"),
+//     getSchema(baseExtensions),
+//   );
+//   const normalizedContent = normalizeMarkdownExportContent(rootNode.toJSON());
+//   return renderToMarkdown({
+//     content: normalizedContent,
+//     extensions: baseExtensions,
+//   });
+// }
+
 import type { JSONContent } from "@tiptap/core";
 
 const DATA_IMAGE_PREFIX = "data:image/";

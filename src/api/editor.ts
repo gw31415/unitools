@@ -4,9 +4,10 @@ import { drizzle } from "drizzle-orm/d1";
 import type { Context, MiddlewareHandler } from "hono";
 import { yRoute } from "y-durableobjects";
 import z from "zod";
+import { store } from "@/db/kv";
 import * as schema from "@/db/schema";
 import { b64urlToStruct, structToBase64Url } from "@/lib/base64";
-import { normalizeFtsTerm, segmentText } from "@/lib/editorFts";
+import { buildExpandedFtsTermGroups, normalizeFtsTerm, segmentText } from "@/lib/editorFts";
 import { findContentMatchText } from "@/lib/editorSearchMatch";
 import { createApp, type Env } from "@/lib/hono";
 import { type ULID, ulid } from "@/lib/ulid";
@@ -167,7 +168,31 @@ export async function fetchEditorSearchItems(
         return contentSearchMatchesToMap(cachedContentMatches.matches);
       }
 
-      const scoredTermGroups = buildDirectFtsTermGroups(keyword);
+      // 語彙リストを取得
+      const allTerms = await store(env, "FtsVocab").value;
+
+      let scoredTermGroups: ReturnType<typeof buildDirectFtsTermGroups>;
+
+      // 語彙が空の場合はフォールバック
+      if (allTerms.length === 0) {
+        scoredTermGroups = buildDirectFtsTermGroups(keyword);
+      } else {
+        // Vectorizeで類語拡張を試み、失敗時はフォールバック
+        try {
+          scoredTermGroups = await buildExpandedFtsTermGroups(
+            keyword,
+            {
+              minScore: 0.3,
+              limit: 10,
+              ai: env.AI,
+              vectorize: env.VECTORIZE_FTS_VOCAB_EMBEDDINGS,
+            },
+            allTerms,
+          );
+        } catch {
+          scoredTermGroups = buildDirectFtsTermGroups(keyword);
+        }
+      }
       const termGroups = scoredTermGroups.map((group) => group.map((item) => item.term));
 
       const ftsQueryExpression = buildFts5MatchExpression(termGroups);
@@ -176,7 +201,7 @@ export async function fetchEditorSearchItems(
       const ftsMatches = await db.query.editorsFtsIndex.findMany({
         where: () => sql`editors_fts_index MATCH (${ftsQueryExpression})`,
         orderBy: () => sql`bm25(editors_fts_index)`,
-        limit: Math.min(limit * 5, MAX_PAGE_SIZE),
+        limit,
       });
 
       const allSearchTerms = scoredTermGroups
@@ -197,7 +222,7 @@ export async function fetchEditorSearchItems(
         .map((match, index) => ({
           match,
           index,
-          matchedTerm: findMatchedTerm(match.content),
+          matchedTerm: findMatchedTerm(match.paragraph),
         }))
         .sort((a, b) => b.matchedTerm.score - a.matchedTerm.score || a.index - b.index)
         .slice(0, limit)
@@ -206,7 +231,7 @@ export async function fetchEditorSearchItems(
           match: {
             source: "content" as const,
             text:
-              findContentMatchText(match.content, termGroups) ??
+              findContentMatchText(match.paragraph, termGroups) ??
               (matchedTerm.text ? matchedTerm.text : undefined),
           },
         }));
@@ -271,12 +296,12 @@ export async function fetchEditorSearchItems(
     where: (editors) =>
       query.cursor
         ? or(
-          lt(editors.createdAt, new Date(query.cursor.createdAt)),
-          and(
-            eq(editors.createdAt, new Date(query.cursor.createdAt)),
-            lt(editors.id, query.cursor.id as ULID),
-          ),
-        )
+            lt(editors.createdAt, new Date(query.cursor.createdAt)),
+            and(
+              eq(editors.createdAt, new Date(query.cursor.createdAt)),
+              lt(editors.id, query.cursor.id as ULID),
+            ),
+          )
         : undefined,
     orderBy: (editors) => [desc(editors.createdAt), desc(editors.id)],
     limit: take,
@@ -410,7 +435,7 @@ const editor = createApp()
           message: "Failed to load articles.",
         });
       }
-    };
+    }
 
     server.addEventListener("message", (event) => {
       const parsed = searchSuggestionKeywordSchema.safeParse(event.data);

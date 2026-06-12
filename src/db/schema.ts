@@ -44,7 +44,8 @@ export const editors = sqliteTable("editors", {
 
 export const editorsFtsIndex = sqliteTable("editors_fts_index", {
   editorId: ulid("editor_id").primaryKey(),
-  content: text("content").notNull(),
+  paragraph: text("paragraph").notNull(),
+  terms: text("terms").notNull(),
 });
 
 export const editorsFtsVocab = sqliteTable("editors_fts_vocab", {
