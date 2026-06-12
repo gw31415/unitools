@@ -19,6 +19,13 @@ const mocks = vi.hoisted(() => ({
         findMany: vi.fn(),
       },
     },
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          all: vi.fn(() => Promise.resolve([])),
+        })),
+      })),
+    })),
   },
   drizzle: vi.fn(),
 }));
@@ -194,7 +201,7 @@ describe("editor search API", () => {
       match: { source: "content", text: "Alpha" },
     });
     // 語彙取得はKVストア経由で呼ばれるが、失敗時はAI/Vectorizeは呼ばれない
-    expect(kvGet).toHaveBeenCalledWith("kvstore:FtsVocab");
+    expect(kvGet).toHaveBeenCalledWith("kvstore:FtsVocab", "json");
     expect(getFtsVocabTerms).not.toHaveBeenCalled();
     expect(aiRun).not.toHaveBeenCalled();
     expect(vectorizeQuery).not.toHaveBeenCalled();
