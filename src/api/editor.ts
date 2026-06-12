@@ -437,6 +437,7 @@ const editor = createApp()
       }
     }
 
+    server.accept();
     server.addEventListener("message", (event) => {
       const parsed = searchSuggestionKeywordSchema.safeParse(event.data);
       if (!parsed.success) {
@@ -457,7 +458,6 @@ const editor = createApp()
     });
     server.addEventListener("close", clearDebounceTimer);
     server.addEventListener("error", clearDebounceTimer);
-    server.accept();
 
     return new Response(null, { status: 101, webSocket: client });
   })

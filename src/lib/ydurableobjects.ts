@@ -117,13 +117,20 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
         await db
           .delete(schema.editorsFtsIndex)
           .where(eq(schema.editorsFtsIndex.editorId, editorId));
-        await db.insert(schema.editorsFtsIndex).values(
-          this.getParagraphs(this.doc).map((paragraph) => ({
-            paragraph,
-            terms: tokenize(paragraph),
-            editorId,
-          })),
-        );
+
+        const paragraphs = this.getParagraphs(this.doc).map((paragraph) => ({
+          paragraph,
+          terms: tokenize(paragraph),
+          editorId,
+        }));
+
+        const BATCH_SIZE = 100;
+        for (let i = 0; i < paragraphs.length; i += BATCH_SIZE) {
+          const batch = paragraphs.slice(i, i + BATCH_SIZE);
+          if (batch.length > 0) {
+            await db.insert(schema.editorsFtsIndex).values(batch);
+          }
+        }
       });
     }
   }
@@ -132,12 +139,26 @@ export class YDurableObjects extends BaseYDurableObjects<Env> {
     const ftsVocabDone = await store(this.env, "FtsVocab").value;
 
     const db = drizzle(this.env.DB, { schema });
-    const ftsVocabToProcess = (
-      await db.query.editorsFtsVocab.findMany({
-        columns: { term: true },
-        where: (vocab) => notInArray(vocab.term, ftsVocabDone),
-      })
-    ).map(({ term }) => term);
+    let ftsVocabToProcess: string[];
+
+    if (ftsVocabDone.length === 0) {
+      ftsVocabToProcess = (
+        await db.query.editorsFtsVocab.findMany({
+          columns: { term: true },
+        })
+      ).map(({ term }) => term);
+    } else {
+      ftsVocabToProcess = [];
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < ftsVocabDone.length; i += BATCH_SIZE) {
+        const batch = ftsVocabDone.slice(i, i + BATCH_SIZE);
+        const results = await db.query.editorsFtsVocab.findMany({
+          columns: { term: true },
+          where: (vocab) => notInArray(vocab.term, batch),
+        });
+        ftsVocabToProcess.push(...results.map(({ term }) => term));
+      }
+    }
 
     const vectors: VectorizeVector[] = [];
     const processedTerms: string[] = [];
