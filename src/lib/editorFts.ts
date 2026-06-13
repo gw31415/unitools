@@ -92,9 +92,16 @@ export async function suggestEditorFtsTerms(
   const suggestionsByTerm = new Map<string, EditorFtsVocabSuggestion>();
   const useAsciiLexicalScoring = isAsciiSearchTerm(normalizedQuery);
 
+  function isValidTermLength(normalizedTerm: string): boolean {
+    const termLength = toCharacters(normalizedTerm).length;
+    return termLength >= 2 && termLength <= 50;
+  }
+
   const addSuggestion = (term: string, embeddingScore: number) => {
     const normalizedTerm = normalizeFtsTerm(term);
     if (!normalizedTerm) return;
+
+    if (!isValidTermLength(normalizedTerm)) return;
 
     const partial = partialSimilarity(normalizedQuery, normalizedTerm);
     const score = useAsciiLexicalScoring
@@ -185,6 +192,11 @@ export async function buildExpandedFtsTermGroups(
       ),
     );
 
+    function isValidTermLength(normalizedTerm: string): boolean {
+      const termLength = toCharacters(normalizedTerm).length;
+      return termLength >= 2 && termLength <= 50;
+    }
+
     return segments.map((segment, i) => {
       const group = new Map<string, EditorFtsTermGroupItem>();
       const normalizedSegment = normalizedSegments[i] ?? normalizeFtsTerm(segment);
@@ -200,6 +212,7 @@ export async function buildExpandedFtsTermGroups(
 
         const normalizedTerm = normalizeFtsTerm(term);
         if (!normalizedTerm) continue;
+        if (!isValidTermLength(normalizedTerm)) continue;
 
         const score = Math.max(partialSimilarity(normalizedSegment, normalizedTerm), match.score);
         if (score < options.minScore) continue;

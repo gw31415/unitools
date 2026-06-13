@@ -103,7 +103,7 @@ describe("EditorSearchDock", () => {
           id: "editor-1",
           createdAt: Date.UTC(2026, 0, 1),
           title: "Article 01",
-          match: { source: "content", text: "Alpha related keyword" },
+          match: { source: "content", text: "Alpha related keyword", paragraph: "Intro Alpha related keyword after" },
         },
       ],
     });
@@ -114,7 +114,7 @@ describe("EditorSearchDock", () => {
     fireEvent.click(resultButton);
 
     expect(onRequestFocusEditor).toHaveBeenCalledWith({
-      searchText: "Alpha related keyword",
+      searchText: "Intro Alpha related keyword after",
     });
   });
 });

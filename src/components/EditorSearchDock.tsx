@@ -34,6 +34,7 @@ export type SearchDockItem = {
   match?: {
     source?: "title" | "content" | "image";
     text?: string | null;
+    paragraph?: string | null;
     imageId?: string;
   };
 };
@@ -202,10 +203,8 @@ export function EditorSearchDock({
   };
   const selectItem = (item: SearchDockItem, focusEditor = true) => {
     const imageId = item.match?.source === "image" ? item.match.imageId : undefined;
-    const queryText = value.trim();
-    const matchText = item.match?.text?.trim();
-    const searchText =
-      matchText || (queryText && normalizedQuery.length > 0 && !imageId ? queryText : undefined);
+    const matchParagraph = item.match?.paragraph?.trim();
+    const searchText = matchParagraph ?? undefined;
     if (item.id === currentEditorId) {
       closeSearch({ restoreDockButtonFocus: !focusEditor });
       if (imageId) {

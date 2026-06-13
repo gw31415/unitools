@@ -31,6 +31,7 @@ const cursorPayloadSchema = z.object({
 type EditorSearchMatch = {
   source: "title" | "content";
   text?: string;
+  paragraph?: string;
 };
 
 type EditorSearchItem = {
@@ -78,8 +79,8 @@ function isCachedContentSearchResult(value: unknown): value is CachedContentSear
       if (!item || typeof item !== "object") return false;
       const { editorId, match } = item as { editorId?: unknown; match?: unknown };
       if (typeof editorId !== "string" || !match || typeof match !== "object") return false;
-      const { source, text } = match as { source?: unknown; text?: unknown };
-      return source === "content" && (typeof text === "string" || typeof text === "undefined");
+      const { source, text, paragraph } = match as { source?: unknown; text?: unknown; paragraph?: unknown };
+      return source === "content" && (typeof text === "string" || typeof text === "undefined") && (typeof paragraph === "string" || typeof paragraph === "undefined");
     })
   );
 }
@@ -168,18 +169,21 @@ export async function fetchEditorSearchItems(
         return contentSearchMatchesToMap(cachedContentMatches.matches);
       }
 
-      // 語彙リストを取得
-      const allTerms = await store(env, "FtsVocab").value;
+      const FTS_RESULT_THRESHOLD = Math.ceil(limit / 2);
 
-      let scoredTermGroups: ReturnType<typeof buildDirectFtsTermGroups>;
+      const buildScoredTermGroupsWithoutSynonyms = () => {
+        return buildDirectFtsTermGroups(keyword);
+      };
 
-      // 語彙が空の場合はフォールバック
-      if (allTerms.length === 0) {
-        scoredTermGroups = buildDirectFtsTermGroups(keyword);
-      } else {
-        // Vectorizeで類語拡張を試み、失敗時はフォールバック
+      const buildScoredTermGroupsWithSynonyms = async () => {
+        const allTerms = await store(env, "FtsVocab").value;
+
+        if (allTerms.length === 0) {
+          return buildDirectFtsTermGroups(keyword);
+        }
+
         try {
-          scoredTermGroups = await buildExpandedFtsTermGroups(
+          return await buildExpandedFtsTermGroups(
             keyword,
             {
               minScore: 0.3,
@@ -190,58 +194,84 @@ export async function fetchEditorSearchItems(
             allTerms,
           );
         } catch {
-          scoredTermGroups = buildDirectFtsTermGroups(keyword);
+          return buildDirectFtsTermGroups(keyword);
         }
-      }
-      const termGroups = scoredTermGroups.map((group) => group.map((item) => item.term));
-
-      const ftsQueryExpression = buildFts5MatchExpression(termGroups);
-      if (!ftsQueryExpression) return new Map<ULID, EditorSearchMatch>();
-
-      const ftsMatches = await db.query.editorsFtsIndex.findMany({
-        where: () => sql`editors_fts_index MATCH (${ftsQueryExpression})`,
-        orderBy: () => sql`bm25(editors_fts_index)`,
-        limit,
-      });
-
-      const allSearchTerms = scoredTermGroups
-        .flat()
-        .sort((a, b) => b.score - a.score || a.term.localeCompare(b.term));
-
-      const findMatchedTerm = (content: string): { score: number; text?: string } => {
-        const normalizedContent = normalizeFtsTerm(content);
-        for (const item of allSearchTerms) {
-          if (normalizedContent.includes(item.normalizedTerm)) {
-            return { score: item.score, text: item.term };
-          }
-        }
-        return { score: 0 };
       };
 
-      const contentMatches = ftsMatches
-        .map((match, index) => ({
-          match,
-          index,
-          matchedTerm: findMatchedTerm(match.paragraph),
-        }))
-        .sort((a, b) => b.matchedTerm.score - a.matchedTerm.score || a.index - b.index)
-        .slice(0, limit)
-        .map(({ match, matchedTerm }) => ({
-          editorId: match.editorId,
-          match: {
-            source: "content" as const,
-            text:
-              findContentMatchText(match.paragraph, termGroups) ??
-              (matchedTerm.text ? matchedTerm.text : undefined),
-          },
-        }));
+      const searchWithTermGroups = async (
+        scoredTermGroups: ReturnType<typeof buildDirectFtsTermGroups>,
+      ) => {
+        const termGroups = scoredTermGroups.map((group) => group.map((item) => item.term));
+
+        const ftsQueryExpression = buildFts5MatchExpression(termGroups);
+        if (!ftsQueryExpression) return new Map<ULID, EditorSearchMatch>();
+
+        const ftsMatches = await db.query.editorsFtsIndex.findMany({
+          where: () => sql`editors_fts_index MATCH (${ftsQueryExpression})`,
+          orderBy: () => sql`bm25(editors_fts_index)`,
+          limit,
+        });
+
+        if (ftsMatches.length === 0) return new Map<ULID, EditorSearchMatch>();
+
+        const allSearchTerms = scoredTermGroups
+          .flat()
+          .sort((a, b) => b.score - a.score || a.term.localeCompare(b.term));
+
+        const findMatchedTerm = (content: string): { score: number; text?: string } => {
+          const normalizedContent = normalizeFtsTerm(content);
+          for (const item of allSearchTerms) {
+            if (normalizedContent.includes(item.normalizedTerm)) {
+              return { score: item.score, text: item.term };
+            }
+          }
+          return { score: 0 };
+        };
+
+        const contentMatches = ftsMatches
+          .map((match, index) => ({
+            match,
+            index,
+            matchedTerm: findMatchedTerm(match.paragraph),
+          }))
+          .sort((a, b) => b.matchedTerm.score - a.matchedTerm.score || a.index - b.index)
+          .slice(0, limit)
+          .map(({ match, matchedTerm }) => ({
+            editorId: match.editorId,
+            match: {
+              source: "content" as const,
+              paragraph: match.paragraph,
+              text:
+                findContentMatchText(match.paragraph, termGroups) ??
+                (matchedTerm.text ? matchedTerm.text : undefined),
+            },
+          }));
+
+        return contentSearchMatchesToMap(contentMatches);
+      };
+
+      let scoredTermGroups = buildScoredTermGroupsWithoutSynonyms();
+      let contentMatches = await searchWithTermGroups(scoredTermGroups);
+
+      if (contentMatches.size < FTS_RESULT_THRESHOLD) {
+        const expandedTermGroups = await buildScoredTermGroupsWithSynonyms();
+        const expandedMatches = await searchWithTermGroups(expandedTermGroups);
+        if (expandedMatches.size > contentMatches.size) {
+          contentMatches = expandedMatches;
+        }
+      }
 
       await env.KV.put(
         contentSearchCacheKey,
-        JSON.stringify({ matches: contentMatches satisfies CachedContentSearchMatch[] }),
+        JSON.stringify({
+          matches: Array.from(contentMatches.entries()).map(([editorId, match]) => ({
+            editorId,
+            match,
+          })) satisfies CachedContentSearchMatch[],
+        }),
         { expirationTtl: SEARCH_CACHE_TTL_SECONDS },
       );
-      return contentSearchMatchesToMap(contentMatches);
+      return contentMatches;
     };
 
     const titleRows = await fetchTitleRows();

@@ -186,15 +186,15 @@ describe("editor FTS helpers", () => {
   });
 
   it("limits vector-only search term groups", async () => {
-    const terms = ["マス", "測定", "水", "機", "ス", "ガス", "人"];
+    const terms = ["マス", "測定", "水道", "機械", "スタート", "ガス", "人生"];
     const ai = createAiMock([Array.from({ length: 1024 }, () => 0)]);
     const vectorize = createVectorizeMock([
       { id: "測定", score: 0.9 },
-      { id: "水", score: 0.8 },
-      { id: "機", score: 0.7 },
-      { id: "ス", score: 0.6 },
+      { id: "水道", score: 0.8 },
+      { id: "機械", score: 0.7 },
+      { id: "スタート", score: 0.6 },
       { id: "ガス", score: 0.5 },
-      { id: "人", score: 0.4 },
+      { id: "人生", score: 0.4 },
     ]);
 
     const termGroups = await buildExpandedFtsTerms(
@@ -212,5 +212,36 @@ describe("editor FTS helpers", () => {
     expect(termGroups).toHaveLength(1);
     expect(termGroups[0]).toHaveLength(5);
     expect(termGroups[0]).toContain("マス");
+  });
+
+  it("filters terms that are too short or too long as synonyms", async () => {
+    const terms = [
+      "a",
+      "Alpha",
+      "Alphabet",
+      "verylongtermthatexceedsfiftycharacterlimitandshouldnotbeconsidered",
+    ];
+    const ai = createAiMock([Array.from({ length: 1024 }, () => 0)]);
+    const vectorize = createVectorizeMock([
+      { id: "a", score: 0.9 },
+      { id: "alpha", score: 0.8 },
+      { id: "alphabet", score: 0.7 },
+      { id: "verylongtermthatexceedsfiftycharacterlimitandshouldnotbeconsidered", score: 0.6 },
+    ]);
+
+    const suggestions = await suggestEditorFtsTerms(terms, "alpha", {
+      limit: 5,
+      minScore: 0.05,
+      ai,
+      vectorize,
+    });
+
+    const suggestionTerms = suggestions.map((s) => s.term);
+    expect(suggestionTerms).not.toContain("a");
+    expect(suggestionTerms).not.toContain(
+      "verylongtermthatexceedsfiftycharacterlimitandshouldnotbeconsidered",
+    );
+    expect(suggestionTerms).toContain("Alpha");
+    expect(suggestionTerms).toContain("Alphabet");
   });
 });

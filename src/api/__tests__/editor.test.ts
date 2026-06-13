@@ -198,7 +198,7 @@ describe("editor search API", () => {
     expect(body.items[0]).toMatchObject({
       id: betaId,
       title: "Beta title",
-      match: { source: "content", text: "Alpha" },
+      match: { source: "content", text: "Alpha", paragraph: "Beta content includes Alpha keyword" },
     });
     // 語彙取得はKVストア経由で呼ばれるが、失敗時はAI/Vectorizeは呼ばれない
     expect(kvGet).toHaveBeenCalledWith("kvstore:FtsVocab", "json");
@@ -215,7 +215,7 @@ describe("editor search API", () => {
     kvGet.mockImplementation((key?: string) => {
       if (key?.startsWith("editor:search:content:v1:")) {
         return Promise.resolve({
-          matches: [{ editorId: betaId, match: { source: "content", text: "Cached Alpha" } }],
+          matches: [{ editorId: betaId, match: { source: "content", text: "Cached Alpha", paragraph: "Cached paragraph text" } }],
         });
       }
       return Promise.resolve({
@@ -238,7 +238,7 @@ describe("editor search API", () => {
     expect(body.items[0]).toMatchObject({
       id: betaId,
       title: "Beta title",
-      match: { source: "content", text: "Cached Alpha" },
+      match: { source: "content", text: "Cached Alpha", paragraph: "Cached paragraph text" },
     });
     expect(mocks.db.query.editorsFtsIndex.findMany).not.toHaveBeenCalled();
     expect(aiRun).not.toHaveBeenCalled();
@@ -264,7 +264,7 @@ describe("editor search API", () => {
     expect(body.items[0]).toMatchObject({
       id: betaId,
       title: "Beta title",
-      match: { source: "content", text: "Alpha related keyword" },
+      match: { source: "content", text: "Alpha related keyword", paragraph: "Intro Alpha related keyword after" },
     });
   });
 
