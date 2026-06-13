@@ -79,8 +79,16 @@ function isCachedContentSearchResult(value: unknown): value is CachedContentSear
       if (!item || typeof item !== "object") return false;
       const { editorId, match } = item as { editorId?: unknown; match?: unknown };
       if (typeof editorId !== "string" || !match || typeof match !== "object") return false;
-      const { source, text, paragraph } = match as { source?: unknown; text?: unknown; paragraph?: unknown };
-      return source === "content" && (typeof text === "string" || typeof text === "undefined") && (typeof paragraph === "string" || typeof paragraph === "undefined");
+      const { source, text, paragraph } = match as {
+        source?: unknown;
+        text?: unknown;
+        paragraph?: unknown;
+      };
+      return (
+        source === "content" &&
+        (typeof text === "string" || typeof text === "undefined") &&
+        (typeof paragraph === "string" || typeof paragraph === "undefined")
+      );
     })
   );
 }

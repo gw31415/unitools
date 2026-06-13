@@ -103,7 +103,11 @@ describe("EditorSearchDock", () => {
           id: "editor-1",
           createdAt: Date.UTC(2026, 0, 1),
           title: "Article 01",
-          match: { source: "content", text: "Alpha related keyword", paragraph: "Intro Alpha related keyword after" },
+          match: {
+            source: "content",
+            text: "Alpha related keyword",
+            paragraph: "Intro Alpha related keyword after",
+          },
         },
       ],
     });

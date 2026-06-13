@@ -545,14 +545,23 @@ export function EditorSearchDock({
                           {formatEditorLabel(item)}
                         </span>
                         {item.match?.text ? (
-                          <span className="[display:-webkit-box] min-w-0 overflow-hidden text-xs leading-snug text-muted-foreground [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
-                            {item.match.source === "title"
-                              ? "Title: "
-                              : item.match.source === "image"
-                                ? "Image: "
-                                : "Content: "}
-                            {item.match.text}
-                          </span>
+                          <>
+                            <span className="min-w-0 overflow-hidden text-xs text-muted-foreground">
+                              {item.match.source === "title"
+                                ? "Title: "
+                                : item.match.source === "image"
+                                  ? "Image: "
+                                  : "Content: "}
+                              <code className="rounded bg-accent px-1">{item.match.text}</code>
+                            </span>
+                            {item.match.paragraph ? (
+                              <span className="min-w-0 truncate text-xs text-muted-foreground">
+                                <code className="rounded bg-accent px-1">
+                                  {item.match.paragraph}
+                                </code>
+                              </span>
+                            ) : null}
+                          </>
                         ) : null}
                       </span>
                     </Button>

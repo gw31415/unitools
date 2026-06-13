@@ -215,7 +215,16 @@ describe("editor search API", () => {
     kvGet.mockImplementation((key?: string) => {
       if (key?.startsWith("editor:search:content:v1:")) {
         return Promise.resolve({
-          matches: [{ editorId: betaId, match: { source: "content", text: "Cached Alpha", paragraph: "Cached paragraph text" } }],
+          matches: [
+            {
+              editorId: betaId,
+              match: {
+                source: "content",
+                text: "Cached Alpha",
+                paragraph: "Cached paragraph text",
+              },
+            },
+          ],
         });
       }
       return Promise.resolve({
@@ -264,7 +273,11 @@ describe("editor search API", () => {
     expect(body.items[0]).toMatchObject({
       id: betaId,
       title: "Beta title",
-      match: { source: "content", text: "Alpha related keyword", paragraph: "Intro Alpha related keyword after" },
+      match: {
+        source: "content",
+        text: "Alpha related keyword",
+        paragraph: "Intro Alpha related keyword after",
+      },
     });
   });
 
